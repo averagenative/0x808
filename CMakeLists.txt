@@ -104,6 +104,9 @@ target_link_libraries(sequencer_standalone PRIVATE
     sq_engine
     ${PLATFORM_LIBS}
 )
+set_target_properties(sequencer_standalone PROPERTIES
+    OUTPUT_NAME "0x808_cli"
+)
 
 # ─── GUI executable (Phase 3+: requires SDL2 and OpenGL) ─────────────────────
 
@@ -168,6 +171,9 @@ if(SDL2_FOUND AND OpenGL_FOUND)
             ${CMAKE_DL_LIBS}
         )
     endif()
+    set_target_properties(sequencer_gui PROPERTIES
+        OUTPUT_NAME "0x808"
+    )
 else()
     message(STATUS "SDL2 or OpenGL not found — skipping GUI target")
     message(STATUS "  Install with: sudo apt-get install pkg-config libsdl2-dev libgl-dev")
