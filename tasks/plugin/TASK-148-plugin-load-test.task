@@ -1,0 +1,24 @@
+status: done
+priority: medium
+depends: none
+agent: plugin
+ref: TASK-148
+---
+Create plugin load test.
+
+Automated test that loads the VST3 plugin binary, verifies it initializes
+correctly, processes a buffer of audio, and shuts down cleanly.
+
+## Acceptance Criteria
+- [ ] Test loads VST3 shared library dynamically
+- [ ] Calls plugin init/create entry points
+- [ ] Processes at least one audio buffer (256 frames)
+- [ ] Verifies output buffer is non-zero (for active pattern)
+- [ ] Calls shutdown/destroy, verifies clean exit
+- [ ] No memory leaks (ASan clean)
+
+## Test Plan
+- [ ] Build and run plugin_load_test target
+- [ ] Verify plugin initializes without error
+- [ ] Verify audio processing produces output
+- [ ] Verify shutdown is clean (no leaks, no crashes)

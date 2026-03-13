@@ -1,0 +1,21 @@
+status: done
+priority: high
+depends: none
+agent: infra
+ref: TASK-173
+---
+Add UndefinedBehaviorSanitizer (UBSan) build target.
+
+CMake build configuration that enables UBSan for detecting undefined behavior.
+
+## Acceptance Criteria
+- [ ] cmake -DCMAKE_BUILD_TYPE=UBSan (or combined with ASan) enables UBSan
+- [ ] -fsanitize=undefined added to compile and link flags
+- [ ] Signed integer overflow, null pointer deref, alignment detected
+- [ ] All test targets build and run with UBSan
+- [ ] UBSan findings fixed or suppressed with justification
+
+## Test Plan
+- [ ] Build with UBSan, run all tests, verify clean report
+- [ ] Verify audio path has no undefined behavior
+- [ ] Fix any UBSan findings

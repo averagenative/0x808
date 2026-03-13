@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+build_win/
+build-win64/
+build_asan/
+build_ubsan/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Environment / secrets
+.env
+.env.*
+
+# Test outputs
+*.wav
+*.mp3
+*.sqproj
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots / temp images
+*.png
+
+# Claude Code
+.claude/
+
+# Compiled test binaries
+*_test

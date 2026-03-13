@@ -1,0 +1,21 @@
+status: done
+priority: high
+depends: none
+agent: security
+ref: TASK-166
+---
+Audit and fix all strncpy calls.
+
+strncpy does not guarantee null-termination when source is longer than
+the buffer. All uses must explicitly null-terminate the destination.
+
+## Acceptance Criteria
+- [x] Every strncpy call followed by explicit null-termination (buf[size-1] = '\0')
+- [x] Or replaced with snprintf which always null-terminates
+- [x] No buffer overflow possible from unterminated strings
+- [x] Applies to all source files
+
+## Test Plan
+- [ ] grep all strncpy calls, verify each has null-termination
+- [ ] Test with strings exactly at buffer size, verify no overflow
+- [ ] Test with strings longer than buffer, verify truncation + null termination

@@ -1,0 +1,22 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-151
+---
+Create snapshot regression test.
+
+Render a reference project and compare output against a known-good
+snapshot to detect audio regressions.
+
+## Acceptance Criteria
+- [ ] Reference .sqproj file checked into repo
+- [ ] Test renders project to WAV
+- [ ] Compares output against stored reference WAV (bit-exact or within tolerance)
+- [ ] Fails if output differs beyond threshold
+- [ ] Reference can be updated with a flag (--update-snapshot)
+
+## Test Plan
+- [ ] Run snapshot test, verify passes against reference
+- [ ] Intentionally break DSP code, verify test fails
+- [ ] Update reference, verify test passes again

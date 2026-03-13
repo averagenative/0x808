@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-127
+---
+Make BPM/Swing/Volume sliders interactive in toolbar.
+
+Currently these display values but cannot be dragged to change them.
+Implement click-drag interaction for BPM, swing, and master volume controls.
+
+## Acceptance Criteria
+- [ ] BPM slider: click-drag changes BPM in real time
+- [ ] Swing slider: click-drag changes swing amount
+- [ ] Volume slider: click-drag changes master volume
+- [ ] Values clamped to valid ranges (BPM 20-300, Swing 0-100%, Vol 0-100%)
+- [ ] Value displays update during drag
+- [ ] Changes take effect immediately in audio engine
+
+## Test Plan
+- [ ] Drag each slider, verify value changes and audio responds
+- [ ] Drag to extremes, verify clamping
+- [ ] Visual: slider position matches displayed value

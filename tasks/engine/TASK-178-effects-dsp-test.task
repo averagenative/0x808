@@ -1,0 +1,25 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-178
+---
+Create DSP unit tests for effects (filter, delay, reverb).
+
+Verify effects produce correct output and handle edge cases.
+
+## Acceptance Criteria
+- [ ] Test biquad filter: impulse response matches expected coefficients
+- [ ] Test delay: output delayed by correct number of samples
+- [ ] Test delay: BPM sync calculates correct delay time
+- [ ] Test reverb: output is non-zero for impulse input
+- [ ] Test reverb: output decays to near-zero after sufficient time
+- [ ] Test effects chain: multiple effects in series produce expected output
+- [ ] All effects handle zero-length buffers without crash
+
+## Test Plan
+- [ ] Build and run effects_test target
+- [ ] Filter: process impulse, verify frequency response shape
+- [ ] Delay: process impulse, verify delayed copy at correct offset
+- [ ] Reverb: process impulse, verify decay envelope
+- [ ] Chain: filter+delay+reverb, verify non-zero output

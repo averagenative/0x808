@@ -1,0 +1,22 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-150
+---
+Set up CI matrix build verification.
+
+GitHub Actions workflow that builds on multiple platforms and compilers.
+
+## Acceptance Criteria
+- [ ] CI builds on Ubuntu (GCC, Clang)
+- [ ] CI builds on macOS (Apple Clang)
+- [ ] CI builds on Windows (MSVC or MinGW)
+- [ ] All build targets compile without errors
+- [ ] Tests run and pass on all platforms
+- [ ] Build matrix defined in .github/workflows/
+
+## Test Plan
+- [ ] Push to PR branch, verify all matrix jobs pass
+- [ ] Verify each platform produces working executables
+- [ ] Verify test results reported correctly

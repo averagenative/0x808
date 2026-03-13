@@ -1,0 +1,22 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-206
+---
+Add smooth playhead animation in drum grid.
+
+Show a vertical line or highlight that moves across the drum grid
+in sync with playback position.
+
+## Acceptance Criteria
+- [ ] Playhead line visible during playback
+- [ ] Position interpolated between steps for smooth movement
+- [ ] Playhead color contrasts with grid background
+- [ ] Playhead stops/resets when playback stops
+- [ ] Works in both pattern and song mode
+
+## Test Plan
+- [ ] Start playback, verify playhead moves smoothly
+- [ ] Stop playback, verify playhead stops
+- [ ] Change BPM, verify playhead speed changes accordingly

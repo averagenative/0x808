@@ -1,0 +1,30 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-198
+---
+Implement arc/radial knob rendering for synth parameters.
+
+Replace flat slider-based knobs with circular arc knobs drawn on Nuklear canvas.
+Mouse drag up/down to rotate. Show value label below. Used for volume, pan,
+filter cutoff, resonance, ADSR, LFO rate, etc.
+
+## Design
+- Draw arc from ~225 degrees to ~315 degrees (270 degree sweep)
+- Fill arc proportional to parameter value (0.0 to 1.0)
+- Mouse drag: vertical movement maps to value change
+- Double-click to reset to default (stretch goal)
+- Colors: track color for active arc, dark gray for inactive
+
+## Acceptance Criteria
+- [ ] knob_draw() function in knobs.c that renders arc on canvas
+- [ ] Mouse interaction: click-drag vertically to change value
+- [ ] Value label below the knob
+- [ ] Used in synth editor for at least: cutoff, resonance, attack, release
+- [ ] Looks good at different sizes (30px to 60px diameter)
+
+## Test Plan
+- [ ] Visual inspection: knobs render correctly at various sizes
+- [ ] Interaction: drag produces smooth value changes
+- [ ] Edge cases: min/max clamping, rapid drag

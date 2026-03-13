@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-180
+---
+Create unit tests for wavetable synth engine.
+
+Verify wavetable scanning, interpolation, and position modulation.
+
+## Acceptance Criteria
+- [ ] Test wavetable bank loading (all 4 bundled banks)
+- [ ] Test position scanning produces different timbres at different positions
+- [ ] Test interpolation between adjacent frames is smooth
+- [ ] Test position modulation via envelope changes timbre over note duration
+- [ ] Test position modulation via LFO produces cyclic timbre change
+- [ ] Test wavetable presets produce non-zero audio
+
+## Test Plan
+- [ ] Build and run wavetable_test target
+- [ ] Render notes at position 0.0, 0.5, 1.0 and verify different spectra
+- [ ] Render note with position envelope, verify timbre evolves
+- [ ] Load each bundled bank, render a note, verify output

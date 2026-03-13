@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: TASK-198
+agent: gui
+ref: TASK-199
+---
+Add per-track volume and pan knobs.
+
+Each track in the drum grid / mixer should have individual volume
+and pan controls using arc knobs.
+
+## Acceptance Criteria
+- [ ] Each track displays a volume knob and a pan knob
+- [ ] Volume range 0.0 to 1.0, default 0.8
+- [ ] Pan range -1.0 (left) to 1.0 (right), default 0.0 (center)
+- [ ] Changes reflected in audio output immediately
+- [ ] Values saved/loaded with project
+
+## Test Plan
+- [ ] Adjust track volume, verify audio level changes
+- [ ] Adjust track pan, verify stereo position changes
+- [ ] Save project, reload, verify per-track values preserved
+- [ ] Verify all 16 tracks can have independent volume/pan

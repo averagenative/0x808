@@ -1,0 +1,22 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-163
+---
+Fix integer overflow in export calculations.
+
+Large export durations or high sample rates can cause integer overflow
+in buffer size calculations, leading to undersized allocations and
+buffer overflows.
+
+## Acceptance Criteria
+- [ ] All buffer size calculations use size_t or uint64_t where appropriate
+- [ ] Overflow checks before multiplication (num_frames * channels * bytes_per_sample)
+- [ ] Export refuses gracefully if calculated size exceeds reasonable limits
+- [ ] WAV header size fields handled correctly for large files
+
+## Test Plan
+- [ ] Export a long project (e.g. 60 minutes), verify correct file size
+- [ ] Export at high sample rate (96kHz), verify no overflow
+- [ ] Test with edge case durations that would overflow 32-bit math

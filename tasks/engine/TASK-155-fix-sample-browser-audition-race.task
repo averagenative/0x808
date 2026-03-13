@@ -1,0 +1,22 @@
+status: done
+priority: high
+depends: none
+agent: engine
+ref: TASK-155
+---
+Fix sample browser audition race condition.
+
+When clicking a sample in the browser to preview it, the audition triggers
+a sample load on the GUI thread while the audio thread may be reading
+the same sample slot. This can cause use-after-free or torn reads.
+
+## Acceptance Criteria
+- [ ] Audition sample loading does not race with audio thread reads
+- [ ] Audition uses a dedicated buffer or double-buffering approach
+- [ ] No glitch or crash when rapidly clicking different samples to preview
+- [ ] Previous audition is cleanly stopped before starting a new one
+
+## Test Plan
+- [ ] Rapid-click through 10+ samples in browser, verify no crash
+- [ ] TSan run: audition during playback shows no data races
+- [ ] Audition while pattern is playing, verify both sound correctly

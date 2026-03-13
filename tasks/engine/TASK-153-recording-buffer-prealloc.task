@@ -1,0 +1,22 @@
+status: done
+priority: critical
+depends: TASK-152
+agent: engine
+ref: TASK-153
+---
+Move recording buffer realloc out of audio thread.
+
+Pre-allocate recording buffer at record-start (e.g., 10 min at 44100 Hz stereo = ~200MB).
+Fail gracefully if exceeded. Remove realloc from sq_engine_process().
+
+## Acceptance Criteria
+- [ ] No malloc/realloc/free calls in sq_engine_process()
+- [ ] Recording buffer pre-allocated when recording starts
+- [ ] Max recording duration enforced (configurable, default 10 min)
+- [ ] Status bar shows recording time remaining
+- [ ] Graceful stop when buffer is full
+
+## Test Plan
+- [ ] Unit test: start recording, verify buffer allocated
+- [ ] Unit test: fill buffer to capacity, verify graceful stop
+- [ ] ASan run: no heap operations in audio callback path

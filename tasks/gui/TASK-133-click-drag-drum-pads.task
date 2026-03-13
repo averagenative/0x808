@@ -1,0 +1,21 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-133
+---
+Implement click-drag across drum pads in plugin_gui.c.
+
+Allow holding mouse button and dragging across drum grid cells to toggle
+multiple steps in one gesture, like painting.
+
+## Acceptance Criteria
+- [ ] Mouse down on a pad sets the "paint mode" (toggle on or off based on first cell)
+- [ ] Dragging across pads applies same toggle to all crossed cells
+- [ ] Mouse up ends paint gesture
+- [ ] Works in both plugin and standalone GUI
+
+## Test Plan
+- [ ] Click-drag across a row, verify all crossed cells toggled
+- [ ] Click-drag on active cells, verify all turned off
+- [ ] Rapid drag across full row, verify no missed cells

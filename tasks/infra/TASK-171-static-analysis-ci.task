@@ -1,0 +1,27 @@
+status: pending
+priority: high
+depends: none
+agent: infra
+ref: TASK-171
+---
+Add static analysis to CI pipeline.
+
+Integrate cppcheck and/or clang-tidy with security-focused checks.
+Fail build on critical findings.
+
+## Tools
+- cppcheck: --enable=warning,style,performance,portability --error-exitcode=1
+- clang-tidy: cert-*, bugprone-*, security-*, misc-* checks
+- Pick one or both for CI, run the other locally
+
+## Acceptance Criteria
+- [ ] Static analysis runs in GitHub Actions CI
+- [ ] Critical/error findings fail the build
+- [ ] Warnings are reported but don't fail
+- [ ] Suppressions file for known false positives (vendored deps)
+- [ ] Local run script: ./scripts/lint.sh
+
+## Test Plan
+- [ ] Introduce a known bug (buffer overflow), verify CI catches it
+- [ ] Verify vendored code (deps/) is excluded from analysis
+- [ ] Verify all src/ files are analyzed

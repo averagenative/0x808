@@ -1,0 +1,23 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-140
+---
+Package standalone distribution.
+
+Create a packaging script that bundles the standalone executable with
+required assets (samples, presets) into a distributable archive.
+
+## Acceptance Criteria
+- [ ] Script produces a self-contained directory or archive
+- [ ] Includes sequencer_standalone executable
+- [ ] Includes bundled 808 samples
+- [ ] Includes any required shared libraries (or statically linked)
+- [ ] README with basic usage instructions included
+- [ ] Works on Linux (tar.gz), Windows (zip) outputs
+
+## Test Plan
+- [ ] Run packaging script, verify archive created
+- [ ] Extract archive on clean system, verify executable runs
+- [ ] Verify samples load from bundled paths

@@ -1,0 +1,23 @@
+status: done
+priority: high
+depends: none
+agent: engine
+ref: TASK-157
+---
+Create effect_free() function to properly release heap-allocated effect buffers.
+
+Currently effect_init() memsets the slot to zero, destroying heap pointers for
+delay buffers and reverb comb/allpass arrays. This leaks memory every time an
+effect type is changed or a project is loaded.
+
+## Acceptance Criteria
+- [ ] effect_free() function that frees delay.buffer, reverb.combs, reverb.allpasses
+- [ ] effect_init() calls effect_free() before memset
+- [ ] mixer_view type change calls effect_free() before reinit
+- [ ] project_load frees existing effects before loading new ones
+- [ ] sq_engine_shutdown() walks all effect slots and frees them
+
+## Test Plan
+- [ ] Unit test: init delay, free, verify no leak (valgrind/ASan)
+- [ ] Unit test: init reverb, change to delay, verify old reverb freed
+- [ ] Integration: load project twice, verify no memory growth

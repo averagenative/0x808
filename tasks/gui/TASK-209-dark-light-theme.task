@@ -1,0 +1,22 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-209
+---
+Add dark/light theme toggle.
+
+Allow switching between dark and light color themes for the entire GUI.
+
+## Acceptance Criteria
+- [ ] Dark theme (current default) and light theme available
+- [ ] Toggle button or menu option to switch
+- [ ] All GUI elements (toolbar, grid, panels, editors) respect theme
+- [ ] Theme preference saved to config/project
+- [ ] Nuklear style colors updated atomically (no partial theme)
+
+## Test Plan
+- [ ] Toggle to light theme, verify all panels use light colors
+- [ ] Toggle back to dark, verify restoration
+- [ ] Verify text readable in both themes
+- [ ] Save and reload, verify theme persists

@@ -1,0 +1,21 @@
+status: done
+priority: high
+depends: none
+agent: engine
+ref: TASK-156
+---
+Fix calloc/malloc calls in the audio-critical path.
+
+Memory allocation in the audio callback causes priority inversion and
+potential glitches. Pre-allocate all buffers at init time.
+
+## Acceptance Criteria
+- [ ] No malloc/calloc/realloc/free calls in engine_process() or anything it calls
+- [ ] Effects buffers pre-allocated at engine init
+- [ ] Synth voice buffers pre-allocated at engine init
+- [ ] Verified with grep or static analysis that audio path is allocation-free
+
+## Test Plan
+- [ ] grep -r "malloc\|calloc\|realloc\|free" in audio path functions
+- [ ] Run engine_render_test under ASan, verify no allocations during process
+- [ ] Play complex pattern (all tracks active, effects on), verify no glitches

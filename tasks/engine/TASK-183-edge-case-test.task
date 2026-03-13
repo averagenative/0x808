@@ -1,0 +1,24 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-183
+---
+Create edge case test suite for engine.
+
+Test boundary conditions and unusual but valid inputs.
+
+## Acceptance Criteria
+- [ ] Test BPM at minimum (20) and maximum (300) values
+- [ ] Test zero-length pattern
+- [ ] Test all 16 tracks active simultaneously
+- [ ] Test maximum polyphony (all synth voices active)
+- [ ] Test export with 0 sections in song mode
+- [ ] Test rapid play/stop toggling
+- [ ] Test loading empty project file
+- [ ] No crashes or undefined behavior in any edge case
+
+## Test Plan
+- [ ] Build and run edge_case_test target
+- [ ] Each edge case produces expected behavior (no crash, correct output or graceful error)
+- [ ] Run under ASan and UBSan

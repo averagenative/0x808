@@ -1,0 +1,22 @@
+status: done
+priority: medium
+depends: none
+agent: security
+ref: TASK-165
+---
+Add cJSON NULL checks in project_save.
+
+cJSON creation functions (cJSON_CreateObject, cJSON_CreateArray, etc.)
+can return NULL on allocation failure. Current save code doesn't check,
+leading to NULL pointer dereference crashes.
+
+## Acceptance Criteria
+- [ ] Every cJSON_Create* call checked for NULL return
+- [ ] On NULL: clean up partially built JSON tree, return error
+- [ ] LOG_ERROR on allocation failure
+- [ ] Save function returns error code (not void) on failure
+
+## Test Plan
+- [ ] Audit all cJSON calls in project_save
+- [ ] Verify each has NULL check
+- [ ] Optional: inject allocation failure, verify graceful error

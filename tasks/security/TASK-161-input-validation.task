@@ -1,0 +1,34 @@
+status: done
+priority: high
+depends: none
+agent: security
+ref: TASK-161
+---
+Validate all JSON fields in project_load to prevent buffer overflows.
+
+Malformed .sqproj files can contain out-of-range values that cause
+array out-of-bounds access, integer overflow, or undefined behavior.
+
+## Fields to validate
+- num_tracks: clamp to 0..SQ_MAX_TRACKS (16)
+- track.length: clamp to 1..SQ_MAX_STEPS (64)
+- num_sections: clamp to 0..SQ_MAX_SECTIONS (32)
+- unison_voices: clamp to 1..7
+- synth_mode: validate enum range 0..2
+- fm_algorithm: clamp to 0..7
+- sample_index: clamp to 0..num_samples-1
+- synth_preset: clamp to 0..num_synth_presets-1
+- velocity: clamp to 0..127
+- All float params: clamp to reasonable ranges (0..1 for most, 20..20000 for freq)
+
+## Acceptance Criteria
+- [ ] Every JSON field read in project.c has bounds checking
+- [ ] Invalid values are clamped (not rejected) so partial projects still load
+- [ ] LOG_WARN for each clamped value
+- [ ] No crash when loading a project with any out-of-range value
+
+## Test Plan
+- [ ] Malformed project test: create .sqproj with num_tracks=999, verify loads without crash
+- [ ] Malformed project test: negative values, verify clamped to 0
+- [ ] Malformed project test: missing fields, verify defaults applied
+- [ ] ASan run: load malformed project, no buffer overflow

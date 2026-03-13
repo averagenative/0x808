@@ -1,0 +1,22 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-203
+---
+Draw FM algorithm routing diagram in synth editor.
+
+Show a visual diagram of the current FM algorithm's operator routing
+(which operators modulate which, which are carriers).
+
+## Acceptance Criteria
+- [ ] Diagram shows 4 operator boxes
+- [ ] Arrows indicate modulation routing for current algorithm
+- [ ] Carrier operators visually distinct from modulators
+- [ ] Diagram updates when algorithm is changed
+- [ ] All 8 algorithms render correctly
+
+## Test Plan
+- [ ] Switch through all 8 algorithms, verify diagram matches expected routing
+- [ ] Verify carriers highlighted differently from modulators
+- [ ] Visual: compare diagrams to DX7 algorithm reference

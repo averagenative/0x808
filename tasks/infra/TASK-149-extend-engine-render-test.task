@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-149
+---
+Extend engine_render_test with more coverage.
+
+Add test cases for all synth modes, effects, song mode, and edge cases.
+
+## Acceptance Criteria
+- [ ] Test renders audio with subtractive synth
+- [ ] Test renders audio with FM synth
+- [ ] Test renders audio with wavetable synth
+- [ ] Test renders audio with effects enabled (filter, delay, reverb)
+- [ ] Test renders song mode (multiple sections)
+- [ ] Test renders with all 16 tracks active
+- [ ] All render outputs are non-zero and reasonable
+
+## Test Plan
+- [ ] Build and run extended engine_render_test
+- [ ] Verify each test case produces non-silent output
+- [ ] Verify output WAVs are valid (correct header, expected duration)

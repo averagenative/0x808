@@ -1,0 +1,23 @@
+status: pending
+priority: medium
+depends: none
+agent: gui
+ref: TASK-202
+---
+Add waveform oscilloscope display.
+
+Show real-time waveform visualization of the audio output or selected
+track's output in a small panel.
+
+## Acceptance Criteria
+- [ ] Oscilloscope panel shows current audio waveform
+- [ ] Updates at display frame rate (not audio rate)
+- [ ] Waveform is stable (trigger-based display, not free-running)
+- [ ] Ring buffer captures audio data for display without blocking audio thread
+- [ ] Reasonable CPU usage (<1% for visualization)
+
+## Test Plan
+- [ ] Play audio, verify waveform displayed
+- [ ] Verify waveform matches expected shape (sine = smooth, drum = transient)
+- [ ] Stop playback, verify display goes flat
+- [ ] Verify no audio glitches caused by visualization

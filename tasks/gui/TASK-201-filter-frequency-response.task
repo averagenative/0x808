@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-201
+---
+Draw filter frequency response curve in synth editor.
+
+Show a visual representation of the biquad filter's frequency response
+so users can see the effect of cutoff and resonance.
+
+## Acceptance Criteria
+- [ ] Frequency response curve drawn on Nuklear canvas
+- [ ] X axis: frequency (log scale, 20Hz to 20kHz)
+- [ ] Y axis: amplitude (dB, -24dB to +12dB)
+- [ ] Curve updates in real time as cutoff/resonance change
+- [ ] Shows correct shape for LP, HP, BP filter types
+
+## Test Plan
+- [ ] Adjust cutoff, verify curve moves horizontally
+- [ ] Adjust resonance, verify peak at cutoff frequency
+- [ ] Switch filter types, verify curve shape changes
+- [ ] Visual: curve looks correct for known filter settings

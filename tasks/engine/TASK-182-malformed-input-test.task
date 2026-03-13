@@ -1,0 +1,25 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-182
+---
+Create malformed input test suite.
+
+Feed invalid/corrupt data to project_load, sample_io_load, and other
+input parsers to verify they handle it gracefully without crashes.
+
+## Acceptance Criteria
+- [ ] Test loading truncated .sqproj files
+- [ ] Test loading .sqproj with invalid JSON
+- [ ] Test loading .sqproj with missing required fields
+- [ ] Test loading .sqproj with out-of-range numeric values
+- [ ] Test loading truncated/corrupt WAV files
+- [ ] Test loading WAV with invalid header fields
+- [ ] All tests pass without crashes, ASan violations, or undefined behavior
+
+## Test Plan
+- [ ] Create corpus of malformed .sqproj files (truncated, invalid JSON, missing fields, overflow values)
+- [ ] Create corpus of malformed WAV files (truncated, bad headers, zero-length)
+- [ ] Feed each to respective loader, verify graceful failure
+- [ ] Run under ASan and UBSan

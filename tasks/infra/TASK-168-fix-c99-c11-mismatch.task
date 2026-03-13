@@ -1,0 +1,20 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-168
+---
+Fix C99 vs C11 standard mismatch.
+
+Some files use C11 features (atomics, static_assert) while the project
+targets C99. Either upgrade to C11 or provide C99 fallbacks.
+
+## Acceptance Criteria
+- [ ] Consistent C standard across all targets (C11 recommended)
+- [ ] CMakeLists.txt sets CMAKE_C_STANDARD consistently
+- [ ] All files compile cleanly with chosen standard
+- [ ] Atomic operations use correct headers (<stdatomic.h> for C11)
+
+## Test Plan
+- [ ] Build with -std=c11 -pedantic, verify no warnings
+- [ ] Build with both GCC and Clang, verify clean compilation

@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-174
+---
+Add fuzz testing for project_load.
+
+Use libFuzzer or AFL to fuzz the project JSON parser with random inputs.
+
+## Acceptance Criteria
+- [ ] Fuzz harness for sq_project_load() created
+- [ ] Harness accepts arbitrary byte input as project data
+- [ ] Corpus seeded with valid .sqproj files
+- [ ] Runs for at least 10 minutes without crashes
+- [ ] Any crashes found are fixed
+
+## Test Plan
+- [ ] Build fuzz target with -fsanitize=fuzzer,address
+- [ ] Run fuzzer with seed corpus, verify no crashes after 10 min
+- [ ] Triage and fix any crash inputs found

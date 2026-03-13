@@ -1,0 +1,20 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-177
+---
+Audit and document all third-party dependencies.
+
+Review all dependencies for known vulnerabilities and license compatibility.
+
+## Acceptance Criteria
+- [ ] All dependencies listed with version and license (SDL2, cJSON, Nuklear, etc.)
+- [ ] No known CVEs in current dependency versions
+- [ ] All licenses compatible with project license
+- [ ] Dependency update process documented
+
+## Test Plan
+- [ ] Review each dependency for latest version and CVEs
+- [ ] Verify license compatibility
+- [ ] Document findings

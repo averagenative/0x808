@@ -1,0 +1,22 @@
+status: pending
+priority: medium
+depends: TASK-140
+agent: infra
+ref: TASK-189
+---
+Create Windows installer/zip script.
+
+Package the Windows standalone build into an installer (NSIS/WiX) or
+distributable zip file.
+
+## Acceptance Criteria
+- [ ] Script produces Windows-ready zip or installer
+- [ ] Includes executable, samples, and required DLLs
+- [ ] Works on Windows 10/11 without additional installs
+- [ ] Installer creates Start Menu shortcut (if NSIS/WiX)
+- [ ] Zip version runs directly after extraction
+
+## Test Plan
+- [ ] Build on Windows (MinGW cross-compile or native MSVC)
+- [ ] Run installer/extract zip on clean Windows machine
+- [ ] Verify application launches and produces audio

@@ -1,0 +1,22 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-207
+---
+Color piano roll notes by velocity.
+
+Notes in the piano roll should be colored based on their velocity value,
+from dim (low velocity) to bright (high velocity).
+
+## Acceptance Criteria
+- [ ] Note color intensity varies with velocity (0-127)
+- [ ] Low velocity = darker/dimmer color
+- [ ] High velocity = brighter/more saturated color
+- [ ] Color scale visually intuitive
+- [ ] Works with track color customization if implemented
+
+## Test Plan
+- [ ] Place notes with different velocities, verify color difference visible
+- [ ] Verify max velocity is brightest, min is dimmest
+- [ ] Verify colors readable against piano roll background

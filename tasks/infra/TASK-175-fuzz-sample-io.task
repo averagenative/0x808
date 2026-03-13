@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-175
+---
+Add fuzz testing for sample_io_load.
+
+Use libFuzzer or AFL to fuzz the WAV file parser with random inputs.
+
+## Acceptance Criteria
+- [ ] Fuzz harness for sample_io_load() created
+- [ ] Harness accepts arbitrary byte input as WAV data
+- [ ] Corpus seeded with valid WAV files
+- [ ] Runs for at least 10 minutes without crashes
+- [ ] Any crashes found are fixed
+
+## Test Plan
+- [ ] Build fuzz target with -fsanitize=fuzzer,address
+- [ ] Run fuzzer with seed corpus, verify no crashes after 10 min
+- [ ] Triage and fix any crash inputs found

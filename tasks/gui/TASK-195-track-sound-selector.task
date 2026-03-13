@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-195
+---
+Add track sound selector dropdown.
+
+Each track should have a dropdown to select its sample (for sampler tracks)
+or synth preset (for synth tracks).
+
+## Acceptance Criteria
+- [ ] Sampler tracks show dropdown listing available samples
+- [ ] Synth tracks show dropdown listing available presets
+- [ ] Selecting an item loads the sample/preset for that track
+- [ ] Current selection displayed when dropdown is closed
+- [ ] Dropdown closes on selection or click outside
+
+## Test Plan
+- [ ] Click dropdown on sampler track, verify sample list shown
+- [ ] Select a sample, verify it loads and plays correctly
+- [ ] Click dropdown on synth track, verify preset list shown
+- [ ] Select a preset, verify synth parameters update

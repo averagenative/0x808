@@ -1,0 +1,22 @@
+status: done
+priority: high
+depends: none
+agent: security
+ref: TASK-162
+---
+Fix ftell() error handling.
+
+ftell() can return -1L on error, but current code uses the return value
+without checking, leading to incorrect file size calculations or
+underflow when cast to unsigned.
+
+## Acceptance Criteria
+- [ ] All ftell() calls check for -1L return value
+- [ ] On ftell failure: log error, close file, return error code
+- [ ] No unsigned cast of unchecked ftell return value
+- [ ] Applies to sample_io.c, project.c, and any other file I/O
+
+## Test Plan
+- [ ] Audit all ftell() calls in codebase
+- [ ] Test with unreadable file (permissions), verify graceful error
+- [ ] Verify no negative-to-unsigned conversion warnings with -Wsign-conversion

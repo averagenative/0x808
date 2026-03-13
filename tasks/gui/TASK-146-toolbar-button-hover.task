@@ -1,0 +1,21 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-146
+---
+Add visual feedback for toolbar button hover state.
+
+Toolbar buttons currently show no hover indication. Add a subtle
+highlight or color change on mouse hover.
+
+## Acceptance Criteria
+- [ ] All toolbar buttons show hover highlight
+- [ ] Hover color distinct from active/pressed state
+- [ ] Hover feedback is subtle (not distracting)
+- [ ] Works for all button types (toggle, momentary)
+
+## Test Plan
+- [ ] Hover over each toolbar button, verify visual change
+- [ ] Verify hover clears when mouse leaves button area
+- [ ] Verify active state still visually distinct from hover

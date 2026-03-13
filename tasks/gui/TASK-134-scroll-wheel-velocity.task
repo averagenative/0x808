@@ -1,0 +1,23 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-134
+---
+Implement scroll wheel velocity adjustment on drum grid steps.
+
+Hovering over an active step and scrolling the mouse wheel adjusts
+that step's velocity up or down.
+
+## Acceptance Criteria
+- [ ] Scroll up increases velocity (clamped to 127)
+- [ ] Scroll down decreases velocity (clamped to 1 or 0)
+- [ ] Velocity change reflected in cell color immediately
+- [ ] Only affects active (toggled on) steps
+- [ ] Step size: ~8 velocity units per scroll tick
+
+## Test Plan
+- [ ] Hover over active step, scroll up, verify velocity increases
+- [ ] Scroll to max (127), verify clamped
+- [ ] Scroll to min, verify clamped
+- [ ] Verify inactive steps are not affected

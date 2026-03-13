@@ -1,0 +1,31 @@
+status: done
+priority: critical
+depends: none
+agent: engine
+ref: TASK-152
+---
+Implement lock-free command queue from GUI to audio thread.
+
+GUI pushes commands (play/stop, BPM change, step toggle, pattern switch, etc.),
+audio thread polls and applies. Eliminates all direct GUI->engine writes during playback.
+
+## Design
+- Ring buffer of command structs (256 slots, power-of-2)
+- Atomic read/write indices (single producer, single consumer)
+- Command types: PLAY, STOP, SET_BPM, SET_VOLUME, TOGGLE_STEP, SET_PATTERN, etc.
+- GUI writes to ring buffer instead of engine directly
+- Audio thread drains queue at start of each process() call
+
+## Acceptance Criteria
+- [ ] No direct engine mutation from GUI thread during playback
+- [ ] Command queue ring buffer implemented with atomics
+- [ ] All toolbar actions (play/stop/bpm/vol) go through queue
+- [ ] Step toggle in drum grid goes through queue
+- [ ] Pattern switch goes through queue
+- [ ] No audio glitches during rapid GUI interaction
+
+## Test Plan
+- [ ] Unit test: queue push/pop with single producer/single consumer
+- [ ] Unit test: queue full behavior (drop or block)
+- [ ] Integration: toggle play while audio thread is running
+- [ ] ASan run: no data races detected under ThreadSanitizer

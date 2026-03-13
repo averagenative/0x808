@@ -1,0 +1,19 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-185
+---
+Default synth preset selected in virtual keyboard.
+
+Ensure a synth preset is loaded by default so the virtual keyboard
+produces sound immediately without manually selecting a preset.
+
+## Acceptance Criteria
+- [ ] On startup, synth tracks have a default preset loaded (preset 0)
+- [ ] Virtual keyboard produces sound immediately
+- [ ] Preset name displayed in synth editor
+
+## Test Plan
+- [ ] Launch app, click virtual keyboard keys, verify sound output
+- [ ] Verify preset name shown in editor matches loaded preset

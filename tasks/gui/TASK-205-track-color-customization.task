@@ -1,0 +1,21 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-205
+---
+Add track color customization.
+
+Allow users to set a custom color for each track, used in the drum grid,
+mixer, and piano roll.
+
+## Acceptance Criteria
+- [ ] Right-click track header opens color picker
+- [ ] 8-16 preset colors available
+- [ ] Selected color used for track's grid cells, mixer strip, piano roll notes
+- [ ] Track colors saved/loaded with project
+
+## Test Plan
+- [ ] Right-click track, select color, verify grid cells change color
+- [ ] Save project, reload, verify colors preserved
+- [ ] Verify color appears in mixer and piano roll

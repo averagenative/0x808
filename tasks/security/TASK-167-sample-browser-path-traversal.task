@@ -1,0 +1,23 @@
+status: done
+priority: high
+depends: none
+agent: security
+ref: TASK-167
+---
+Fix sample_browser path traversal bounds checking.
+
+The sample browser may allow navigating outside intended directories
+via ".." traversal. Add bounds checking to prevent access to
+sensitive system files.
+
+## Acceptance Criteria
+- [x] Browser cannot navigate above a configured root directory
+- [x] ".." at root level is a no-op (stays at root)
+- [x] Symlinks that escape root are not followed (or are blocked)
+- [x] Path buffer overflow prevented (check path length before concatenation)
+
+## Test Plan
+- [ ] Navigate to root, press "..", verify stays at root
+- [ ] Attempt to construct path with many ".." components, verify blocked
+- [ ] Verify path length limit enforced
+- [ ] Test with symlink pointing outside root (if applicable)

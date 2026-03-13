@@ -1,0 +1,21 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-192
+---
+Verify sample browser scrolling works correctly. (Verify only)
+
+The sample browser file list should scroll when there are more files
+than fit in the panel. This may already work via Nuklear's group widget.
+
+## Acceptance Criteria
+- [ ] File list scrolls when entries exceed visible area
+- [ ] Scroll bar visible and functional
+- [ ] Selected file stays visible after scroll
+- [ ] No rendering issues at scroll boundaries
+
+## Test Plan
+- [ ] Navigate to directory with 50+ files, verify scrolling works
+- [ ] Scroll to bottom, verify last file visible and clickable
+- [ ] Select a file, scroll away and back, verify selection preserved

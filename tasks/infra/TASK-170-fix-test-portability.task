@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-170
+---
+Fix test portability across platforms.
+
+Tests may use Linux-specific paths, APIs, or assumptions. Make them
+portable to macOS and Windows.
+
+## Acceptance Criteria
+- [ ] Tests use portable path separators (or abstraction)
+- [ ] No Linux-specific system calls in test code
+- [ ] Test data paths resolved relative to executable or project root
+- [ ] Tests pass on Linux, macOS, and Windows
+
+## Test Plan
+- [ ] Run tests on Linux, verify pass
+- [ ] Run tests on macOS, verify pass
+- [ ] Run tests on Windows (MinGW or MSVC), verify pass

@@ -1,0 +1,21 @@
+status: pending
+priority: low
+depends: TASK-195
+agent: gui
+ref: TASK-196
+---
+Add sample preview in track sound selector.
+
+When hovering over or clicking a sample in the selector dropdown,
+play a preview of that sample.
+
+## Acceptance Criteria
+- [ ] Hovering or clicking a sample in dropdown triggers audition
+- [ ] Preview stops when moving to next item or closing dropdown
+- [ ] Preview uses audition system (not track slot)
+- [ ] No audio glitch when previewing rapidly
+
+## Test Plan
+- [ ] Open selector, hover over samples, verify preview plays
+- [ ] Close dropdown, verify preview stops
+- [ ] Rapid hover across items, verify no crash or glitch

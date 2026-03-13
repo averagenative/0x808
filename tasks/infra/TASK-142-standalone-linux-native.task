@@ -1,0 +1,21 @@
+status: pending
+priority: low
+depends: none
+agent: infra
+ref: TASK-142
+---
+Build and package standalone GUI for Linux native (non-WSL).
+
+Ensure the standalone builds and runs on native Linux with ALSA or
+PulseAudio audio backend.
+
+## Acceptance Criteria
+- [ ] CMake builds on Ubuntu 22.04+ natively
+- [ ] Audio output works via ALSA or PulseAudio (through SDL2)
+- [ ] AppImage or .deb packaging script
+- [ ] Desktop entry file included
+
+## Test Plan
+- [ ] Build on native Linux, verify executable runs
+- [ ] Verify audio output works (not just WSLg)
+- [ ] Package as AppImage, test on clean Ubuntu install

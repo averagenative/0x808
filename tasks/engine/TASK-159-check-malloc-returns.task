@@ -1,0 +1,20 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-159
+---
+Check all malloc/calloc return values for NULL.
+
+Unchecked allocation failures cause NULL pointer dereference crashes.
+Every allocation must be checked and handled gracefully.
+
+## Acceptance Criteria
+- [ ] Every malloc/calloc/realloc call checks for NULL return
+- [ ] On allocation failure: log error, return error code or use fallback
+- [ ] No crash when allocation fails (graceful degradation)
+
+## Test Plan
+- [ ] Audit all malloc/calloc/realloc calls in src/engine/ and src/formats/
+- [ ] Verify each has a NULL check with appropriate error handling
+- [ ] Optional: inject allocation failures with a test allocator

@@ -1,0 +1,21 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-188
+---
+Bundle samples with VST3 plugin.
+
+Include the default sample kit inside the VST3 bundle so the plugin
+works in any DAW without external file dependencies.
+
+## Acceptance Criteria
+- [ ] Samples embedded in VST3 bundle (Resources/ directory)
+- [ ] Plugin locates samples relative to its own bundle path
+- [ ] Works on Linux, macOS, and Windows VST3 paths
+- [ ] No hardcoded absolute paths
+
+## Test Plan
+- [ ] Install VST3, load in DAW, verify samples available
+- [ ] Move VST3 to different location, verify still works
+- [ ] Test on at least 2 platforms

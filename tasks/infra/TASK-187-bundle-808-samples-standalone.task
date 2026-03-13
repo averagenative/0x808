@@ -1,0 +1,21 @@
+status: pending
+priority: medium
+depends: TASK-140
+agent: infra
+ref: TASK-187
+---
+Bundle 808 samples with standalone executable.
+
+Include the default 808 sample kit in the standalone distribution so
+it works out of the box without requiring separate sample downloads.
+
+## Acceptance Criteria
+- [ ] 808 samples included in build output or install directory
+- [ ] Engine finds samples at runtime via relative path from executable
+- [ ] Samples load on first launch without configuration
+- [ ] CMake install target copies samples to correct location
+
+## Test Plan
+- [ ] Build and install, verify samples present in output directory
+- [ ] Launch from install directory, verify 808 kit loads
+- [ ] Launch from different working directory, verify samples still found

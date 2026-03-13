@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-191
+---
+Make drum grid scrollable. (Partially done)
+
+When there are more tracks or steps than fit on screen, the drum grid
+should scroll vertically (tracks) and horizontally (steps).
+
+## Acceptance Criteria
+- [ ] Vertical scroll when tracks exceed visible area
+- [ ] Horizontal scroll when steps exceed visible area (64-step patterns)
+- [ ] Scroll bars or scroll wheel support
+- [ ] Current playhead position stays visible during playback
+- [ ] Grid layout stable during scroll
+
+## Test Plan
+- [ ] Create 16 tracks, verify vertical scrolling works
+- [ ] Create 64-step pattern, verify horizontal scrolling works
+- [ ] Play pattern, verify playhead visible as it advances
+- [ ] Scroll to edge, verify no rendering glitches

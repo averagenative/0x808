@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-204
+---
+Draw wavetable position visualizer in synth editor.
+
+Show the current wavetable waveform at the selected position,
+with an indicator showing which frame is active.
+
+## Acceptance Criteria
+- [ ] Waveform display shows current wavetable frame
+- [ ] Position indicator shows location within bank (0..num_frames)
+- [ ] Waveform updates when position knob changes
+- [ ] During playback, position indicator follows modulation envelope/LFO
+- [ ] Works for all 4 bundled wavetable banks
+
+## Test Plan
+- [ ] Adjust position knob, verify waveform changes
+- [ ] Play note with position envelope, verify indicator moves
+- [ ] Switch banks, verify waveform updates
+- [ ] Visual: waveform shape matches expected bank content

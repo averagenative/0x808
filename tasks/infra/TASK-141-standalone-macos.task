@@ -1,0 +1,21 @@
+status: pending
+priority: low
+depends: none
+agent: infra
+ref: TASK-141
+---
+Build and package standalone GUI for macOS.
+
+Create a macOS .app bundle with proper Info.plist, icon, and code signing.
+
+## Acceptance Criteria
+- [ ] CMake builds on macOS (Homebrew SDL2)
+- [ ] .app bundle created with proper structure
+- [ ] Info.plist with correct bundle ID and version
+- [ ] Application icon included
+- [ ] Runs on macOS 12+ (Apple Silicon and Intel)
+
+## Test Plan
+- [ ] Build on macOS, verify .app bundle created
+- [ ] Double-click .app, verify launches correctly
+- [ ] Test on both Apple Silicon and Intel (if available)

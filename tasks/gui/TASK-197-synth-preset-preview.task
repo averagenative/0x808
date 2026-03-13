@@ -1,0 +1,21 @@
+status: pending
+priority: low
+depends: TASK-195
+agent: gui
+ref: TASK-197
+---
+Add synth preset preview in track sound selector.
+
+When hovering or clicking a synth preset in the selector dropdown,
+play a short preview note with that preset.
+
+## Acceptance Criteria
+- [ ] Clicking a preset in dropdown triggers a preview note (e.g. C4, 0.5s)
+- [ ] Preview uses temporary voice, not track voice pool
+- [ ] Preview stops when dropdown closes
+- [ ] All preset types (subtractive, FM, wavetable) preview correctly
+
+## Test Plan
+- [ ] Open synth selector, click presets, verify preview note plays
+- [ ] Verify preview works for sub, FM, and WT presets
+- [ ] Close dropdown, verify preview stops cleanly

@@ -1,0 +1,19 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-145
+---
+Add an exit/close button to the sample browser panel.
+
+Currently the browser can only be closed via the toolbar toggle.
+Add an X button in the browser panel header.
+
+## Acceptance Criteria
+- [ ] Close button visible in top-right of sample browser panel
+- [ ] Clicking it closes the browser (same as toolbar toggle)
+- [ ] Browser state preserved when reopened
+
+## Test Plan
+- [ ] Open browser, click X, verify it closes
+- [ ] Reopen browser, verify state (current directory) preserved

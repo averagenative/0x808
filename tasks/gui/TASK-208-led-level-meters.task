@@ -1,0 +1,24 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-208
+---
+Add LED-style level meters to mixer view.
+
+Show per-track and master output level meters with segmented LED
+appearance (green/yellow/red).
+
+## Acceptance Criteria
+- [ ] Per-track level meters in mixer view
+- [ ] Master output level meter
+- [ ] Segmented LED appearance (8-12 segments)
+- [ ] Green for low levels, yellow for medium, red for clipping
+- [ ] Peak hold indicator (brief hold at peak, then decay)
+- [ ] Meters driven by actual audio levels (RMS or peak)
+
+## Test Plan
+- [ ] Play audio, verify meters respond to level
+- [ ] Verify clipping shows red segment
+- [ ] Verify meters decay when audio stops
+- [ ] Verify per-track meters independent from each other

@@ -1,0 +1,20 @@
+status: done
+priority: medium
+depends: TASK-184
+agent: gui
+ref: TASK-186
+---
+Show synth editor panel on startup.
+
+The synth editor should be visible by default when the application
+launches, not hidden until a synth track is clicked.
+
+## Acceptance Criteria
+- [ ] Synth editor panel visible on first frame after startup
+- [ ] Correct synth parameters shown for the auto-selected track
+- [ ] Mode selector (Sub/FM/WT) functional immediately
+
+## Test Plan
+- [ ] Launch app, verify synth editor visible
+- [ ] Verify synth controls are interactive immediately
+- [ ] Verify mode selector works on first click

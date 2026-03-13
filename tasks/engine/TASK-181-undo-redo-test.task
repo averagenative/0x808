@@ -1,0 +1,23 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-181
+---
+Create unit tests for undo/redo system.
+
+Verify state snapshots, undo stack, and redo after undo work correctly.
+
+## Acceptance Criteria
+- [ ] Test undo reverses last action (step toggle, BPM change, etc.)
+- [ ] Test redo re-applies undone action
+- [ ] Test undo stack depth limit (no unbounded memory growth)
+- [ ] Test redo stack cleared on new action after undo
+- [ ] Test undo at empty stack is a no-op
+- [ ] Test redo at empty stack is a no-op
+
+## Test Plan
+- [ ] Toggle step, undo, verify step reverted
+- [ ] Change BPM, undo, verify BPM reverted
+- [ ] Undo+redo cycle, verify state matches original
+- [ ] Fill undo stack to limit, verify oldest entries discarded

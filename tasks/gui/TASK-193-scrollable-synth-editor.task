@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-193
+---
+Make synth editor scrollable. (Partially done)
+
+FM and wavetable synth modes have many parameters that may not fit
+in the panel. Add vertical scrolling.
+
+## Acceptance Criteria
+- [ ] Synth editor panel scrolls vertically when content exceeds height
+- [ ] All parameters accessible via scrolling
+- [ ] Scroll position resets when switching synth modes
+- [ ] No layout glitches during scroll
+
+## Test Plan
+- [ ] Select FM mode, verify all 4 operator controls accessible via scroll
+- [ ] Select WT mode, verify all controls accessible
+- [ ] Resize window smaller, verify scroll still works

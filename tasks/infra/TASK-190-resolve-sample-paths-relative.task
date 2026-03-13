@@ -1,0 +1,22 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-190
+---
+Resolve sample paths relative to executable. (Partially done)
+
+Sample loading should resolve paths relative to the executable location,
+not the current working directory, so the app works when launched from
+any directory.
+
+## Acceptance Criteria
+- [ ] Helper function to get executable directory (Linux, macOS, Windows)
+- [ ] Sample paths resolved relative to exe dir, then fallback to absolute
+- [ ] Project file sample paths stored as relative when possible
+- [ ] Works on all three platforms
+
+## Test Plan
+- [ ] Launch from different working directory, verify samples load
+- [ ] Save project with samples, move exe, verify relative paths resolve
+- [ ] Test on Linux and Windows at minimum

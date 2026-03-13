@@ -1,0 +1,22 @@
+status: pending
+priority: low
+depends: none
+agent: plugin
+ref: TASK-144
+---
+Implement dynamic resize for plugin GUI on Linux/macOS.
+
+Plugin window should support host-initiated resize and user-initiated
+resize on Linux and macOS platforms.
+
+## Acceptance Criteria
+- [ ] Plugin GUI resizes when host sends resize request
+- [ ] User can drag plugin window edges to resize (if host supports it)
+- [ ] Layout recalculates on resize (no clipping or overlap)
+- [ ] Minimum size enforced
+- [ ] Works on Linux (X11) and macOS (Cocoa)
+
+## Test Plan
+- [ ] Load plugin in REAPER on Linux, resize, verify layout adapts
+- [ ] Load plugin in a macOS host, resize, verify layout adapts
+- [ ] Resize to minimum, verify no layout breakage

@@ -1,0 +1,20 @@
+status: done
+priority: low
+depends: none
+agent: gui
+ref: TASK-194
+---
+Enforce minimum window size to prevent layout breakage.
+
+Set SDL minimum window size so the GUI doesn't break when resized
+too small.
+
+## Acceptance Criteria
+- [ ] Minimum window size set (e.g. 800x600)
+- [ ] SDL_SetWindowMinimumSize called at window creation
+- [ ] Window cannot be resized below minimum
+- [ ] Layout remains functional at minimum size
+
+## Test Plan
+- [ ] Try to resize window below minimum, verify it stops
+- [ ] Verify layout at minimum size is usable

@@ -1,0 +1,19 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-169
+---
+Remove -w (suppress all warnings) from plugin targets.
+
+Plugin build targets use -w which hides all compiler warnings.
+Remove it and fix any resulting warnings.
+
+## Acceptance Criteria
+- [ ] -w flag removed from plugin CMake targets
+- [ ] Plugin code compiles warning-free with -Wall -Wextra
+- [ ] Any new warnings fixed (not suppressed)
+
+## Test Plan
+- [ ] Build plugin targets without -w, verify clean compilation
+- [ ] Verify plugin still functions correctly after warning fixes

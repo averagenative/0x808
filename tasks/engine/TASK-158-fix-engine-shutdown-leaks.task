@@ -1,0 +1,22 @@
+status: done
+priority: high
+depends: none
+agent: engine
+ref: TASK-158
+---
+Fix sq_engine_shutdown() to free all heap-allocated memory.
+
+Currently some allocations (effects buffers, wavetable banks, sample data)
+may not be freed on shutdown, causing memory leaks.
+
+## Acceptance Criteria
+- [ ] sq_engine_shutdown() frees all effect delay/reverb buffers
+- [ ] sq_engine_shutdown() frees all wavetable bank data
+- [ ] sq_engine_shutdown() frees all loaded sample data
+- [ ] Valgrind/ASan reports zero leaks after init+shutdown cycle
+- [ ] No double-free or use-after-free
+
+## Test Plan
+- [ ] Run engine init+shutdown under Valgrind, verify 0 bytes leaked
+- [ ] Run engine init+load_project+shutdown under Valgrind
+- [ ] ASan leak checker: no leaks reported

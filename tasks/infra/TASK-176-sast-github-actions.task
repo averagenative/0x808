@@ -1,0 +1,20 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-176
+---
+Add SAST (Static Application Security Testing) to GitHub Actions.
+
+Integrate a static analysis tool into CI to catch security issues automatically.
+
+## Acceptance Criteria
+- [ ] SAST tool runs on every PR (CodeQL, Semgrep, or cppcheck)
+- [ ] Findings reported as PR annotations or comments
+- [ ] No critical/high findings in current codebase (or documented exceptions)
+- [ ] Workflow defined in .github/workflows/
+
+## Test Plan
+- [ ] Push PR, verify SAST job runs
+- [ ] Introduce a known issue (buffer overflow), verify it's flagged
+- [ ] Verify no false positives blocking PRs

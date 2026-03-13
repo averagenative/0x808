@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-164
+---
+Fix sample_io uint64 to uint32 truncation.
+
+File size and sample count values read as uint64 are silently truncated
+to uint32 in sample_io, causing incorrect behavior for large files.
+
+## Acceptance Criteria
+- [ ] sample_io uses consistent integer types for file sizes and sample counts
+- [ ] No implicit narrowing conversions from 64-bit to 32-bit
+- [ ] Large WAV files (>2GB) either load correctly or are rejected with a clear error
+- [ ] Compiler warnings (-Wconversion) clean for sample_io.c
+
+## Test Plan
+- [ ] Compile with -Wconversion and verify no warnings in sample_io.c
+- [ ] Load a WAV file with >2^31 samples worth of data, verify correct behavior
+- [ ] Verify normal-sized samples still load correctly

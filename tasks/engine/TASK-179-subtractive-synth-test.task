@@ -1,0 +1,24 @@
+status: done
+priority: medium
+depends: none
+agent: engine
+ref: TASK-179
+---
+Create unit tests for subtractive synth engine.
+
+Verify oscillators, ADSR, filter, LFO, and unison work correctly.
+
+## Acceptance Criteria
+- [ ] Test each waveform (sine, saw, square, triangle) produces non-zero output
+- [ ] Test ADSR envelope shape: attack ramps up, decay ramps down, sustain holds, release ramps to zero
+- [ ] Test biquad filter attenuates frequencies above cutoff
+- [ ] Test LFO modulates target parameter
+- [ ] Test unison detuning produces wider stereo image
+- [ ] Test note-on/note-off lifecycle
+
+## Test Plan
+- [ ] Build and run synth_test target
+- [ ] Render single notes with each waveform, verify waveform shape
+- [ ] Render note with known ADSR, verify amplitude envelope
+- [ ] Render note with low cutoff filter, verify high frequencies attenuated
+- [ ] Compare mono vs unison output

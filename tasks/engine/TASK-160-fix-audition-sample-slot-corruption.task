@@ -1,0 +1,22 @@
+status: done
+priority: high
+depends: none
+agent: engine
+ref: TASK-160
+---
+Fix audition sample slot corruption.
+
+The audition feature overwrites a sample slot that may be in use by
+a track, corrupting the track's sample data. Use a dedicated audition
+slot separate from the track sample array.
+
+## Acceptance Criteria
+- [ ] Audition uses a dedicated sample slot (not shared with tracks)
+- [ ] Track sample data is never overwritten by audition
+- [ ] Audition playback stops cleanly when a new audition starts
+- [ ] No corruption after multiple audition+track interactions
+
+## Test Plan
+- [ ] Load project with samples, audition a different sample, verify track samples unchanged
+- [ ] Audition while track is playing, verify track audio unaffected
+- [ ] Rapid audition switching, verify no corruption

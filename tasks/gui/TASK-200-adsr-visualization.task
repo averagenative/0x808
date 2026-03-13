@@ -1,0 +1,28 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-200
+---
+Draw live ADSR envelope visualization in synth editor.
+
+Show the attack/decay/sustain/release curve as a canvas graphic.
+Updates in real-time as the user adjusts ADSR parameters.
+
+## Design
+- Canvas area ~200x60px in synth editor
+- X-axis: time (attack + decay + sustain_hold + release)
+- Y-axis: amplitude (0 to 1)
+- Draw polyline: (0,0) -> (A, 1.0) -> (A+D, S) -> (A+D+hold, S) -> (A+D+hold+R, 0)
+- Fill under the curve with semi-transparent color
+- Vertical lines at phase boundaries
+
+## Acceptance Criteria
+- [ ] ADSR curve drawn correctly for all presets
+- [ ] Updates live as sliders are adjusted
+- [ ] Handles edge cases: zero attack, zero decay, sustain=1.0, zero release
+- [ ] Visible in both standalone and plugin GUI
+
+## Test Plan
+- [ ] Visual: curve matches expected shape for known ADSR values
+- [ ] Visual: real-time update while dragging sliders

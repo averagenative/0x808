@@ -1,0 +1,21 @@
+status: done
+priority: high
+depends: none
+agent: infra
+ref: TASK-172
+---
+Add AddressSanitizer (ASan) build target.
+
+CMake build configuration that enables ASan for detecting memory errors.
+
+## Acceptance Criteria
+- [ ] cmake -DCMAKE_BUILD_TYPE=ASan (or similar) enables ASan
+- [ ] -fsanitize=address -fno-omit-frame-pointer added to compile and link flags
+- [ ] All test targets build with ASan configuration
+- [ ] ASan output readable (symbolized with -fno-omit-frame-pointer)
+- [ ] Documented in build instructions
+
+## Test Plan
+- [ ] Build with ASan, run all tests, verify ASan report clean
+- [ ] Intentionally introduce use-after-free, verify ASan detects it
+- [ ] Verify no false positives

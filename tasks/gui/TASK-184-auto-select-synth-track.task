@@ -1,0 +1,21 @@
+status: done
+priority: medium
+depends: none
+agent: gui
+ref: TASK-184
+---
+Auto-select first synth track on startup. (Partially done)
+
+On startup, automatically select the first synth track so the synth
+editor and piano roll are visible without manual track selection.
+
+## Acceptance Criteria
+- [ ] On engine init, first synth track is selected as active track
+- [ ] Synth editor panel visible immediately on startup
+- [ ] Piano roll visible immediately on startup
+- [ ] If no synth tracks exist, no track is selected (no crash)
+
+## Test Plan
+- [ ] Launch app, verify synth editor visible without clicking anything
+- [ ] Launch with project that has no synth tracks, verify no crash
+- [ ] Launch with project where first track is sampler, verify correct synth track found

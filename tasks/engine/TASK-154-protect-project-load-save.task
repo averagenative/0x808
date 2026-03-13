@@ -1,0 +1,23 @@
+status: done
+priority: critical
+depends: TASK-152
+agent: engine
+ref: TASK-154
+---
+Protect project load/save during playback.
+
+Stop playback before loading or saving a project to prevent data races.
+With the command queue (TASK-152), send a STOP command and wait for
+acknowledgement before performing any project I/O.
+
+## Acceptance Criteria
+- [ ] Project save stops playback first, then serializes state
+- [ ] Project load stops playback first, then deserializes state
+- [ ] Playback resumes (or stays stopped) after load/save completes
+- [ ] No crash or corruption when Ctrl+S pressed during playback
+- [ ] No crash or corruption when Ctrl+O pressed during playback
+
+## Test Plan
+- [ ] Start playback, press Ctrl+S, verify no crash and project saved correctly
+- [ ] Start playback, press Ctrl+O, verify no crash and project loaded correctly
+- [ ] TSan run: save/load during playback shows no data races

@@ -1,0 +1,22 @@
+status: done
+priority: medium
+depends: none
+agent: infra
+ref: TASK-147
+---
+Create gui_feature_test for automated GUI testing.
+
+Headless or screenshot-based test that exercises GUI code paths without
+requiring manual interaction.
+
+## Acceptance Criteria
+- [ ] Test initializes GUI in headless/offscreen mode
+- [ ] Simulates key presses and mouse clicks
+- [ ] Exercises major GUI flows: track select, step toggle, mode switch
+- [ ] Verifies no crashes during GUI frame rendering
+- [ ] Can run in CI (no display required)
+
+## Test Plan
+- [ ] Build and run gui_feature_test target
+- [ ] Verify all simulated interactions complete without crash
+- [ ] Run under ASan, verify no memory errors
