@@ -181,6 +181,7 @@ static void draw_effect_slot(struct nk_context *ctx, sq_effect_slot_t *slot,
 void mixer_view_draw(struct nk_context *ctx, sq_engine_t *engine,
                      float x, float y, float w, float h)
 {
+    nk_window_set_bounds(ctx, "MasterFX", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "MasterFX",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))

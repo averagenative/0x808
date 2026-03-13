@@ -47,6 +47,7 @@ int arrangement_draw(struct nk_context *ctx, sq_engine_t *engine,
 {
     int pattern_changed = 0;
 
+    nk_window_set_bounds(ctx, "Arrangement", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "Arrangement",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))

@@ -124,6 +124,8 @@ void piano_roll_draw(struct nk_context *ctx, sq_engine_t *engine,
     char title[64];
     snprintf(title, sizeof(title), "PianoRoll_%d", track_index);
 
+    /* Force bounds every frame so window resizing works */
+    nk_window_set_bounds(ctx, title, nk_rect(x, y, w, h));
     if (nk_begin(ctx, title,
                  nk_rect(x, y, w, h),
                  NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER))
