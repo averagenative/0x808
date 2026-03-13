@@ -179,7 +179,12 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
         }
     }
 #endif
-    SDL_GetWindowSize(gui->window, &g_win_width, &g_win_height);
+    {
+        int prev_w = g_win_width, prev_h = g_win_height;
+        SDL_GetWindowSize(gui->window, &g_win_width, &g_win_height);
+        if (g_win_width != prev_w || g_win_height != prev_h)
+            nk_clear(gui->nk_ctx);
+    }
 
     /* Poll SDL events */
     SDL_Event evt;
@@ -336,6 +341,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     /* ── Determine if synth editor should be shown ──────────── */
     bool show_synth_editor = false;
     int synth_preset_idx = -1;
+    int *synth_preset_ptr = NULL;
     if (g_selected_track >= 0) {
         int pi = engine->transport.current_pattern;
         if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
@@ -343,7 +349,8 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
             if ((uint32_t)g_selected_track < pat->num_tracks &&
                 pat->tracks[g_selected_track].type == TRACK_SYNTH) {
                 show_synth_editor = true;
-                synth_preset_idx = pat->tracks[g_selected_track].synth_preset;
+                synth_preset_ptr = &pat->tracks[g_selected_track].synth_preset;
+                synth_preset_idx = *synth_preset_ptr;
             }
         }
     }
@@ -379,7 +386,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
             float mx_w = main_w - pr_w - se_w;
             piano_roll_draw(gui->nk_ctx, engine, g_selected_track,
                             0.0f, grid_y, pr_w, total_h);
-            synth_editor_draw(gui->nk_ctx, engine, synth_preset_idx,
+            synth_editor_draw(gui->nk_ctx, engine, synth_preset_ptr,
                               pr_w, grid_y, se_w, total_h);
             mixer_view_draw(gui->nk_ctx, engine,
                             pr_w + se_w, grid_y, mx_w, total_h);
@@ -388,7 +395,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
             float se_w = main_w - pr_w;
             piano_roll_draw(gui->nk_ctx, engine, g_selected_track,
                             0.0f, grid_y, pr_w, total_h);
-            synth_editor_draw(gui->nk_ctx, engine, synth_preset_idx,
+            synth_editor_draw(gui->nk_ctx, engine, synth_preset_ptr,
                               pr_w, grid_y, se_w, total_h);
         }
     } else {
@@ -419,7 +426,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
                 float mx_w = main_w - pr_w - se_w;
                 piano_roll_draw(gui->nk_ctx, engine, g_selected_track,
                                 0.0f, bottom_y, pr_w, bottom_h);
-                synth_editor_draw(gui->nk_ctx, engine, synth_preset_idx,
+                synth_editor_draw(gui->nk_ctx, engine, synth_preset_ptr,
                                   pr_w, bottom_y, se_w, bottom_h);
                 mixer_view_draw(gui->nk_ctx, engine,
                                 pr_w + se_w, bottom_y, mx_w, bottom_h);
@@ -428,7 +435,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
                 float se_w = main_w - pr_w;
                 piano_roll_draw(gui->nk_ctx, engine, g_selected_track,
                                 0.0f, bottom_y, pr_w, bottom_h);
-                synth_editor_draw(gui->nk_ctx, engine, synth_preset_idx,
+                synth_editor_draw(gui->nk_ctx, engine, synth_preset_ptr,
                                   pr_w, bottom_y, se_w, bottom_h);
             } else if (gui->show_mixer) {
                 mixer_view_draw(gui->nk_ctx, engine,
