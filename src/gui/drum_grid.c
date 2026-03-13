@@ -99,8 +99,6 @@ void drum_grid_draw(struct nk_context *ctx, sq_engine_t *engine,
      * thread's current_step — avoids audio device/RDP/WSL latency issues */
     int current_step = g_visual_step;
 
-    /* Main grid window — force bounds every frame so resizing works */
-    nk_window_set_bounds(ctx, "DrumGrid", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "DrumGrid",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_BORDER))

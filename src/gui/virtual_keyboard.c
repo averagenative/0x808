@@ -128,7 +128,6 @@ void virtual_keyboard_draw(struct nk_context *ctx, sq_engine_t *engine,
                            int synth_preset,
                            float x, float y, float w, float h)
 {
-    nk_window_set_bounds(ctx, "VirtualKeyboard", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "VirtualKeyboard",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BORDER))

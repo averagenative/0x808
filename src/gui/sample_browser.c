@@ -239,7 +239,6 @@ int sample_browser_draw(struct nk_context *ctx, sq_engine_t *engine,
         refresh_directory();
     }
 
-    nk_window_set_bounds(ctx, "SampleBrowser", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "SampleBrowser",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE))

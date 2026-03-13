@@ -733,7 +733,6 @@ int synth_editor_draw(struct nk_context *ctx, sq_engine_t *engine,
 
     sq_synth_preset_t *p = &engine->synth_presets[preset_index];
 
-    nk_window_set_bounds(ctx, "SynthEditor", nk_rect(x, y, w, h));
     if (nk_begin(ctx, "SynthEditor",
                  nk_rect(x, y, w, h),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE))
