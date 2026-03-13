@@ -177,6 +177,43 @@ int gui_frame(sq_engine_t *engine)
             quit = 1;
         }
         /* Keyboard shortcuts */
+        /* QWERTY piano: intercept keydown/keyup for musical typing */
+        if (g_show_keyboard && !(evt.key.keysym.mod & (KMOD_CTRL | KMOD_ALT)) &&
+            (evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP))
+        {
+            /* Find synth preset for keyboard */
+            int kb_preset_key = -1;
+            if (g_selected_track >= 0) {
+                int kpi = engine->transport.current_pattern;
+                if (kpi >= 0 && (uint32_t)kpi < engine->num_patterns) {
+                    sq_pattern_t *kpat = &engine->patterns[kpi];
+                    if ((uint32_t)g_selected_track < kpat->num_tracks &&
+                        kpat->tracks[g_selected_track].type == TRACK_SYNTH)
+                        kb_preset_key = kpat->tracks[g_selected_track].synth_preset;
+                }
+            }
+            if (kb_preset_key < 0) {
+                /* Fallback: first synth track */
+                int kpi = engine->transport.current_pattern;
+                if (kpi >= 0 && (uint32_t)kpi < engine->num_patterns) {
+                    for (uint32_t tt = 0; tt < engine->patterns[kpi].num_tracks; tt++) {
+                        if (engine->patterns[kpi].tracks[tt].type == TRACK_SYNTH) {
+                            kb_preset_key = engine->patterns[kpi].tracks[tt].synth_preset;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (kb_preset_key < 0) kb_preset_key = 0;
+
+            if (virtual_keyboard_key_event(engine, kb_preset_key,
+                                           evt.key.keysym.sym,
+                                           evt.type == SDL_KEYDOWN))
+            {
+                continue; /* key consumed by piano — skip other handlers */
+            }
+        }
+
         if (evt.type == SDL_KEYDOWN) {
             switch (evt.key.keysym.sym) {
             case SDLK_SPACE:

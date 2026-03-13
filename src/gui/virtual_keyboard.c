@@ -307,3 +307,132 @@ void virtual_keyboard_draw(struct nk_context *ctx, sq_engine_t *engine,
     }
     nk_end(ctx);
 }
+
+/* ─── QWERTY keyboard → MIDI note mapping ────────────────────────────────── */
+
+#include <SDL2/SDL_keycode.h>
+
+/* Two octaves mapped across QWERTY keyboard:
+ *
+ * Lower octave (Z row = white keys, A/S row = black keys):
+ *   Z  X  C  V  B  N  M  ,  .  /
+ *   C  D  E  F  G  A  B  C  D  E
+ *     S  D     G  H  J     L  ;
+ *     C# D#    F# G# A#    C# D#
+ *
+ * Upper octave (Q row = white keys, number row = black keys):
+ *   Q  W  E  R  T  Y  U  I  O  P
+ *   C  D  E  F  G  A  B  C  D  E
+ *     2  3     5  6  7     9  0
+ *     C# D#    F# G# A#    C# D#
+ */
+
+/* Map SDL keycode to semitone offset from base octave.
+ * Returns -1 if the key is not mapped.
+ * octave_out: 0 = lower octave (Z row), 1 = upper octave (Q row) */
+static int keycode_to_semitone(int keycode, int *octave_out)
+{
+    *octave_out = 0;
+    switch (keycode) {
+    /* Lower octave — white keys (Z row) */
+    case SDLK_z: return 0;   /* C */
+    case SDLK_x: return 2;   /* D */
+    case SDLK_c: return 4;   /* E */
+    case SDLK_v: return 5;   /* F */
+    case SDLK_b: return 7;   /* G */
+    case SDLK_n: return 9;   /* A */
+    case SDLK_m: return 11;  /* B */
+    case SDLK_COMMA:  return 12; /* C+1 */
+    case SDLK_PERIOD: return 14; /* D+1 */
+    case SDLK_SLASH:  return 16; /* E+1 */
+
+    /* Lower octave — black keys (A/S row) */
+    case SDLK_s: return 1;   /* C# */
+    case SDLK_d: return 3;   /* D# */
+    case SDLK_g: return 6;   /* F# */
+    case SDLK_h: return 8;   /* G# */
+    case SDLK_j: return 10;  /* A# */
+    case SDLK_l:         return 13; /* C#+1 */
+    case SDLK_SEMICOLON: return 15; /* D#+1 */
+
+    /* Upper octave — white keys (Q row) */
+    case SDLK_q: *octave_out = 1; return 0;
+    case SDLK_w: *octave_out = 1; return 2;
+    case SDLK_e: *octave_out = 1; return 4;
+    case SDLK_r: *octave_out = 1; return 5;
+    case SDLK_t: *octave_out = 1; return 7;
+    case SDLK_y: *octave_out = 1; return 9;
+    case SDLK_u: *octave_out = 1; return 11;
+    case SDLK_i: *octave_out = 1; return 12;
+    case SDLK_o: *octave_out = 1; return 14;
+    case SDLK_p: *octave_out = 1; return 16;
+
+    /* Upper octave — black keys (number row) */
+    case SDLK_2: *octave_out = 1; return 1;
+    case SDLK_3: *octave_out = 1; return 3;
+    case SDLK_5: *octave_out = 1; return 6;
+    case SDLK_6: *octave_out = 1; return 8;
+    case SDLK_7: *octave_out = 1; return 10;
+    case SDLK_9: *octave_out = 1; return 13;
+    case SDLK_0: *octave_out = 1; return 15;
+
+    default: return -1;
+    }
+}
+
+/* Track which MIDI notes are currently held by keyboard keys */
+#define MAX_KB_HELD 16
+static struct { int keycode; int midi_note; } s_kb_held[MAX_KB_HELD];
+static int s_kb_held_count = 0;
+
+int virtual_keyboard_key_event(sq_engine_t *engine, int synth_preset,
+                               int sdl_keycode, int pressed)
+{
+    if (synth_preset < 0) return 0;
+
+    int octave;
+    int semitone = keycode_to_semitone(sdl_keycode, &octave);
+    if (semitone < 0) return 0;
+
+    /* Base MIDI note from current octave offset */
+    int base = kb_start_note() + octave * 12;
+    int midi_note = base + semitone;
+    if (midi_note < 0 || midi_note > 127) return 0;
+
+    if (pressed) {
+        /* Don't re-trigger if already held (key repeat) */
+        for (int i = 0; i < s_kb_held_count; i++) {
+            if (s_kb_held[i].keycode == sdl_keycode) return 1;
+        }
+
+        /* Trigger note */
+        synth_trigger(engine, synth_preset,
+                      0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note);
+
+        if (s_kb_held_count < MAX_KB_HELD) {
+            s_kb_held[s_kb_held_count].keycode = sdl_keycode;
+            s_kb_held[s_kb_held_count].midi_note = midi_note;
+            s_kb_held_count++;
+        }
+    } else {
+        /* Release: find and remove from held list, send note-off */
+        for (int i = 0; i < s_kb_held_count; i++) {
+            if (s_kb_held[i].keycode == sdl_keycode) {
+                int note = s_kb_held[i].midi_note;
+                float freq = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
+                for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++) {
+                    if (engine->synth_voices[v].active &&
+                        fabsf(engine->synth_voices[v].frequency - freq) < 0.1f) {
+                        engine->synth_voices[v].amp_env.stage = ENV_RELEASE;
+                    }
+                }
+                /* Remove from held list */
+                s_kb_held[i] = s_kb_held[s_kb_held_count - 1];
+                s_kb_held_count--;
+                break;
+            }
+        }
+    }
+
+    return 1; /* consumed */
+}
