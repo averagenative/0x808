@@ -1,5 +1,5 @@
 /*
- * plugin.c — CPLUG plugin implementation for Sequencer_C.
+ * plugin.c — CPLUG plugin implementation for 0x808.
  *
  * Implements all CPLUG callbacks: lifecycle, audio processing, parameters,
  * host transport sync, state persistence, and GUI stubs.
@@ -36,7 +36,7 @@
 
 const char *sq_plugin_log_path(void)
 {
-    return "C:\\Users\\Public\\sequencer_c.log";
+    return "C:\\Users\\Public\\0x808.log";
 }
 
 static void sq_plugin_log(const char *level, const char *tag, const char *fmt, ...)

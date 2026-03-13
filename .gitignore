@@ -28,11 +28,13 @@ build_ubsan/
 .DS_Store
 Thumbs.db
 
-# Screenshots / temp images
+# Screenshots / temp images (allow repo screenshot)
 *.png
+!0x808_demo.png
 
 # Claude Code
 .claude/
 
 # Compiled test binaries
 *_test
+deps/SDL2-2.30.12/test/sample.wav

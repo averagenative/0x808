@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(sequencer_c VERSION 0.1.0 LANGUAGES C)
+project(0x808 VERSION 0.1.0 LANGUAGES C)
 
 # Use C11 standard (future-proofs for stdatomic.h, static_assert, etc.)
 set(CMAKE_C_STANDARD 11)
@@ -260,25 +260,25 @@ if(BUILD_PLUGINS)
     )
     configure_plugin_target(sequencer_vst3)
     set_target_properties(sequencer_vst3 PROPERTIES
-        OUTPUT_NAME "Sequencer_C"
+        OUTPUT_NAME "0x808"
         PREFIX ""
     )
 
     # Post-build: create VST3 bundle structure
     if(WIN32)
-        # Windows: .vst3/Contents/x86_64-win/Sequencer_C.vst3
-        set(VST3_BUNDLE "${CMAKE_BINARY_DIR}/Sequencer_C.vst3")
+        # Windows: .vst3/Contents/x86_64-win/0x808.vst3
+        set(VST3_BUNDLE "${CMAKE_BINARY_DIR}/0x808.vst3")
         add_custom_command(TARGET sequencer_vst3 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${VST3_BUNDLE}/Contents/x86_64-win"
-            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:sequencer_vst3>" "${VST3_BUNDLE}/Contents/x86_64-win/Sequencer_C.vst3"
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:sequencer_vst3>" "${VST3_BUNDLE}/Contents/x86_64-win/0x808.vst3"
             COMMENT "Creating VST3 bundle: ${VST3_BUNDLE}"
         )
     elseif(NOT APPLE)
-        # Linux: .vst3/Contents/x86_64-linux/Sequencer_C.so
-        set(VST3_BUNDLE "${CMAKE_BINARY_DIR}/Sequencer_C.vst3")
+        # Linux: .vst3/Contents/x86_64-linux/0x808.so
+        set(VST3_BUNDLE "${CMAKE_BINARY_DIR}/0x808.vst3")
         add_custom_command(TARGET sequencer_vst3 POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${VST3_BUNDLE}/Contents/x86_64-linux"
-            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:sequencer_vst3>" "${VST3_BUNDLE}/Contents/x86_64-linux/Sequencer_C.so"
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:sequencer_vst3>" "${VST3_BUNDLE}/Contents/x86_64-linux/0x808.so"
             COMMENT "Creating VST3 bundle: ${VST3_BUNDLE}"
         )
     endif()
@@ -290,12 +290,12 @@ if(BUILD_PLUGINS)
     )
     configure_plugin_target(sequencer_clap)
     set_target_properties(sequencer_clap PROPERTIES
-        OUTPUT_NAME "Sequencer_C"
+        OUTPUT_NAME "0x808"
         PREFIX ""
         SUFFIX ".clap"
     )
 
-    message(STATUS "Plugin targets: sequencer_vst3, sequencer_clap")
+    message(STATUS "Plugin targets: 0x808 VST3, 0x808 CLAP")
 endif()
 
 # ─── Engine render test (offline WAV export, no audio device needed) ─────────

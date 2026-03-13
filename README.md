@@ -1,6 +1,10 @@
-# Sequencer_C
+# 0x808
 
-A cross-platform drum/sample sequencer and synthesizer written in C99. Combines a drum grid, piano roll, section-based song arrangement, multi-type synthesis, and sample browsing in a single lightweight package.
+**Drum machine & synth workstation written in C**
+
+![0x808 screenshot](0x808_demo.png)
+
+A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV export. All dependencies vendored, zero external runtime dependencies.
 
 ## Features
 
@@ -17,6 +21,16 @@ A cross-platform drum/sample sequencer and synthesizer written in C99. Combines 
 - **Swing/shuffle** — per-transport swing control (0-100%)
 - **Velocity humanization** — per-track random velocity variation
 
+## Plugin Formats
+
+0x808 builds as a standalone application and as an audio plugin:
+
+| Format | Target | Notes |
+|--------|--------|-------|
+| **Standalone** | `sequencer_gui` | SDL2 + OpenGL + miniaudio |
+| **VST3** | `sequencer_vst3` | Works in any VST3-compatible DAW |
+| **CLAP** | `sequencer_clap` | Works in Bitwig, Reaper, and other CLAP hosts |
+
 ## Keyboard Shortcuts
 
 | Key | Action |
@@ -30,16 +44,17 @@ A cross-platform drum/sample sequencer and synthesizer written in C99. Combines 
 | Ctrl+V | Paste pattern |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
+| Ctrl+T | Toggle theme |
 | Escape | Quit |
 
 ## Building
 
 ### Requirements
 
-- C99 compiler (GCC, Clang, or MSVC)
+- C11 compiler (GCC, Clang, or MSVC)
 - CMake 3.16+
-- SDL2 (for GUI)
-- OpenGL 3.3 (for GUI)
+- SDL2 (for GUI targets)
+- OpenGL 3.3 (for GUI targets)
 
 All other dependencies are vendored single-header libraries in `deps/`.
 
@@ -67,53 +82,68 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INST
 cmake --build build --config Release
 ```
 
+### Windows (MinGW cross-compile from Linux)
+
+```bash
+cmake -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake
+cmake --build build_win -j$(nproc)
+```
+
 ### Build Targets
 
 | Target | Description |
 |--------|-------------|
 | `sequencer_gui` | Full GUI application (SDL2 + OpenGL + Nuklear) |
 | `sequencer_standalone` | Terminal-only audio engine (miniaudio) |
-| `fm_synth_test` | Synthesis test — all 50 presets |
-| `project_test` | Save/load round-trip test |
-| `swing_humanize_test` | Swing timing + humanization test |
+| `sequencer_vst3` | VST3 plugin |
+| `sequencer_clap` | CLAP plugin |
 
 ## Running
 
 ```bash
-# GUI version
+# GUI application
 ./build/sequencer_gui
 
-# Terminal version (triggers samples on keypress)
+# Terminal mode
 ./build/sequencer_standalone
+```
 
-# Run tests
-./build/fm_synth_test && ./build/project_test && ./build/swing_humanize_test
+## Testing
+
+16 test targets covering DSP, synthesis, effects, project I/O, undo, edge cases, fuzzing, plugin loading, and snapshot regression.
+
+```bash
+# Run the full test suite
+./scripts/test_all.sh
+
+# Full mode includes AddressSanitizer + UBSan
+./scripts/test_all.sh full
 ```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│  Layer 3: Host Wrapper                      │
-│  Standalone (miniaudio) OR Plugin (CPLUG)   │
-├─────────────────────────────────────────────┤
-│  Layer 2: GUI (Nuklear + SDL2 + OpenGL)     │
-│  Drum grid, piano roll, knobs, arrangement  │
-├─────────────────────────────────────────────┤
-│  Layer 1: DSP Engine (pure C, zero deps)    │
-│  Sequencer, sampler, synth, mixer, effects  │
-│  Input: transport state → Output: float buf │
-└─────────────────────────────────────────────┘
++---------------------------------------------+
+|  Layer 3: Host Wrapper                      |
+|  Standalone (miniaudio) | VST3 | CLAP      |
++---------------------------------------------+
+|  Layer 2: GUI (Nuklear + SDL2 + OpenGL)     |
+|  Drum grid, piano roll, knobs, arrangement  |
++---------------------------------------------+
+|  Layer 1: DSP Engine (pure C, zero deps)    |
+|  Sequencer, sampler, synth, mixer, effects  |
+|  Input: transport state -> Output: float buf|
++---------------------------------------------+
 ```
 
-The engine (Layer 1) has zero knowledge of GUI or audio drivers. It receives transport info and produces float audio buffers. Audio runs on a separate thread from the GUI.
+The engine (Layer 1) has zero knowledge of GUI or audio drivers. It receives transport state and produces float audio buffers. Audio runs on a separate thread from the GUI.
 
 ## Bundled Samples
 
 72 CC0 drum samples from classic machines:
-- **TR-808** — bass drum, snare, clap, hi-hat, cowbell, cymbal, toms, etc.
+- **TR-808** — bass drum, snare, clap, hi-hat, cowbell, cymbal, toms
 - **TR-909** — bass drum, snare, clap, hi-hat, ride, crash, toms
-- **TR-505** — bass drum, snare, hi-hat, toms, clap, rimshot, etc.
+- **TR-505** — bass drum, snare, hi-hat, toms, clap, rimshot
 - **MRK-2** — kicks, snares, hi-hats, claps, toms
 - **CR-78 / LM-2** — additional percussion
 

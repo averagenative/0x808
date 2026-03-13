@@ -745,7 +745,7 @@ int plugin_gui_attach(sq_plugin_gui_t *gui, void *native_handle)
     GLOG_INFO("Creating SDL GL window to embed in host HWND %p...", native_handle);
 
     gui->window = SDL_CreateWindow(
-        "Sequencer_C",
+        "0x808",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         (int)gui->width, (int)gui->height,
         SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS | SDL_WINDOW_HIDDEN);

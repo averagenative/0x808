@@ -117,7 +117,7 @@ static void setup_demo_pattern(void)
 
 int main(int argc, char *argv[])
 {
-    printf("Sequencer_C v0.2 — Phase 2: It Has a Beat\n");
+    printf("0x808 v0.9\n");
     printf("==========================================\n\n");
 
     /* Initialize engine at 44100 Hz */

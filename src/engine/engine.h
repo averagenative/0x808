@@ -1,5 +1,5 @@
 /*
- * engine.h — Core data structures and API for the Sequencer_C DSP engine.
+ * engine.h — Core data structures and API for the 0x808 DSP engine.
  *
  * This is the central header that defines every type the engine uses.
  * The engine (Layer 1) has ZERO knowledge of GUI, audio drivers, or plugin

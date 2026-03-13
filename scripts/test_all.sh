@@ -19,7 +19,7 @@ fail() { echo -e "${RED}FAIL${NC}: $1"; exit 1; }
 skip() { echo -e "${YELLOW}SKIP${NC}: $1"; }
 
 echo "============================================"
-echo "  Sequencer_C Test Suite (mode: ${MODE})"
+echo "  0x808 Test Suite (mode: ${MODE})"
 echo "============================================"
 echo ""
 

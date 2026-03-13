@@ -234,12 +234,12 @@ int main(int argc, char *argv[])
 {
 #ifdef _WIN32
     /* Redirect stderr to a log file so we can read it after a crash */
-    freopen("sequencer_c_log.txt", "w", stderr);
+    freopen("0x808_log.txt", "w", stderr);
 #endif
 
     sq_log_init();
 
-    LOG_INFO("Sequencer_C v0.3 — Phase 3: GUI");
+    LOG_INFO("0x808 v0.9");
     LOG_INFO("================================");
 
     /* Initialize engine */
@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
 
     /* Initialize GUI (also initializes SDL2 with VIDEO + AUDIO) */
     LOG_INFO("Initializing GUI...");
-    if (gui_init(1280, 720, "Sequencer_C") != 0) {
+    if (gui_init(1280, 720, "0x808") != 0) {
         LOG_ERROR("Failed to initialize GUI");
         sq_engine_shutdown(&g_engine);
         return 1;

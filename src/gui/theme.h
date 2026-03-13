@@ -1,5 +1,5 @@
 /*
- * theme.h — Dark/light theme system for the Sequencer_C GUI.
+ * theme.h — Dark/light theme system for the 0x808 GUI.
  */
 
 #ifndef SQ_THEME_H
