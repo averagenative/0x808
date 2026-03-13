@@ -1,0 +1,20 @@
+status: pending
+priority: high
+depends: none
+agent: gui
+ref: TASK-210
+---
+FX panel becomes unclickable when virtual keyboard is open.
+
+The bottom panels (synth editor, mixer/FX) overlap with the virtual keyboard
+when both are visible. The keyboard's Nuklear window steals input from panels
+behind it. Fixed: bottom_h now shrinks when keyboard is visible.
+
+## Acceptance Criteria
+- [x] Bottom panels shrink to make room for keyboard
+- [ ] All FX controls are clickable with keyboard open
+- [ ] Layout doesn't break at small window sizes
+
+## Test Plan
+- [ ] Open FX + PIANO, verify FX sliders work
+- [ ] Resize window small with both open, verify no overlap

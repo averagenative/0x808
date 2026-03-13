@@ -1,0 +1,32 @@
+status: pending
+priority: low
+depends: none
+agent: engine
+ref: TASK-217
+---
+Implement phaser effect (allpass filter sweep).
+
+Classic phaser using cascaded allpass filters with LFO modulation.
+Creates the characteristic sweeping comb filter sound.
+
+## Parameters
+- rate: LFO frequency (0.05-5 Hz, default 0.5)
+- depth: Sweep range (0-1, default 0.7)
+- feedback: Output fed back to input (0-0.95, default 0.5)
+- stages: Number of allpass stages (2-12, default 6)
+- wet: Wet/dry mix (0-1, default 0.5)
+
+## Implementation
+- N cascaded first-order allpass filters
+- LFO modulates allpass cutoff frequencies
+- Logarithmic frequency sweep (200-4000 Hz range)
+
+## Acceptance Criteria
+- [ ] EFFECT_PHASER added to effect type enum
+- [ ] Sweeping notch/peak pattern audible
+- [ ] Feedback increases resonance at notch points
+- [ ] Stage count changes character of effect
+
+## Test Plan
+- [ ] Verify sweep is audible on broadband signal
+- [ ] Verify no instability at max feedback

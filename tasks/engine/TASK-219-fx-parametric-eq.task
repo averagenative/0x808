@@ -1,0 +1,33 @@
+status: pending
+priority: high
+depends: none
+agent: engine
+ref: TASK-219
+---
+Implement 3-band parametric EQ effect.
+
+Three configurable bands (low/mid/high) with frequency, gain, and Q.
+Most important mixing tool after the compressor.
+
+## Parameters (per band × 3)
+- frequency: Center frequency (20-20000 Hz)
+- gain: Boost/cut in dB (-12 to +12)
+- q: Bandwidth / Q factor (0.1-10)
+- type: Low shelf / Peaking / High shelf
+
+## Implementation
+- 3 cascaded biquad filters
+- Robert Bristow-Johnson's Audio EQ Cookbook formulae
+- Smooth parameter interpolation to avoid clicks
+
+## Acceptance Criteria
+- [ ] EFFECT_EQ added to effect type enum
+- [ ] 3 independently configurable bands
+- [ ] Shelf and peaking modes per band
+- [ ] No audible artifacts during parameter sweeps
+- [ ] Flat response when all gains = 0 dB
+
+## Test Plan
+- [ ] Boost 1kHz by 12dB, verify on exported WAV
+- [ ] Cut bass with low shelf, verify audible change
+- [ ] All-flat = bit-perfect passthrough

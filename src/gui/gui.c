@@ -561,6 +561,10 @@ int gui_frame(sq_engine_t *engine)
         bool has_bottom = show_synth_editor || g_show_mixer;
         if (has_bottom) {
             bottom_h = 280.0f;
+            /* Shrink bottom panel when keyboard is also visible */
+            if (g_show_keyboard && bottom_h > total_h - 150.0f)
+                bottom_h = total_h - 150.0f;
+            if (bottom_h < 120.0f) bottom_h = 120.0f;
             grid_h = total_h - bottom_h;
             if (grid_h < 150.0f) grid_h = 150.0f;
             bottom_h = total_h - grid_h;

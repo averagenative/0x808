@@ -1,0 +1,26 @@
+status: pending
+priority: low
+depends: none
+agent: engine
+ref: TASK-218
+---
+Implement flanger effect (short modulated delay with feedback).
+
+Like chorus but shorter delay times (0.1-10ms) and feedback
+creates the metallic "jet engine" sweep.
+
+## Parameters
+- rate: LFO speed (0.05-5 Hz, default 0.3)
+- depth: Modulation depth in ms (0-5ms, default 2.0)
+- feedback: Feedback amount (-0.95 to 0.95, default 0.5)
+- wet: Wet/dry mix (0-1, default 0.5)
+
+## Acceptance Criteria
+- [ ] EFFECT_FLANGER added to effect type enum
+- [ ] Metallic sweep audible
+- [ ] Negative feedback inverts comb pattern
+- [ ] No instability at max feedback
+
+## Test Plan
+- [ ] Verify flanging on drum loop
+- [ ] Positive vs negative feedback sound different

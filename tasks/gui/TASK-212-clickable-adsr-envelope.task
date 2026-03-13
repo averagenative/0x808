@@ -1,0 +1,30 @@
+status: pending
+priority: medium
+depends: none
+agent: gui
+ref: TASK-212
+---
+Make ADSR envelope visualization interactive (click-drag to adjust values).
+
+The synth editor draws ADSR curves as read-only canvas graphics.
+Make the control points draggable to adjust A/D/S/R values directly
+on the graph instead of only via sliders.
+
+## Design
+- Draw handle dots at each phase boundary
+- Horizontal drag on A handle: adjusts attack time
+- Horizontal drag on D handle: adjusts decay time
+- Vertical drag on S handle: adjusts sustain level
+- Horizontal drag on R handle: adjusts release time
+- Show value tooltip while dragging
+
+## Acceptance Criteria
+- [ ] Each ADSR point has a visible grab handle
+- [ ] Dragging handles updates the corresponding parameter
+- [ ] Sliders and graph stay in sync
+- [ ] Works for both amp envelope and filter envelope
+
+## Test Plan
+- [ ] Drag attack handle, verify attack slider updates
+- [ ] Drag sustain handle vertically, verify level changes
+- [ ] Verify graph matches slider values after adjustment

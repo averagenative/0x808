@@ -1,0 +1,22 @@
+status: in-progress
+priority: high
+depends: none
+agent: gui
+ref: TASK-211
+---
+Synth preset dropdown closes immediately after opening.
+
+Switched from nk_combo_begin_label to nk_combobox API. If still broken,
+investigate whether Nuklear popup state is being reset by something
+(focus steal, window clear, etc).
+
+## Acceptance Criteria
+- [ ] Preset dropdown stays open when clicked
+- [ ] Can scroll through and select any of 50 presets
+- [ ] Mode dropdown also stays open and is selectable
+- [ ] Works after window resize
+
+## Test Plan
+- [ ] Click preset dropdown, verify it stays open
+- [ ] Select different preset, verify synth parameters update
+- [ ] Click mode dropdown, verify it works

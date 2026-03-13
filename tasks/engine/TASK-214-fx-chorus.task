@@ -1,0 +1,33 @@
+status: pending
+priority: medium
+depends: none
+agent: engine
+ref: TASK-214
+---
+Implement chorus effect (modulated delay for thickening).
+
+Classic chorus using a short modulated delay line. Two voices with
+LFO-modulated delay times create a thicker, wider sound.
+
+## Parameters
+- rate: LFO speed (0.1-10 Hz, default 1.5)
+- depth: Modulation depth in ms (0-10ms, default 3.0)
+- wet: Wet/dry mix (0-1, default 0.5)
+- voices: Number of chorus voices (1-4, default 2)
+
+## Implementation
+- Short delay buffer (~50ms max)
+- Per-voice LFO with phase offset (120° apart for 3 voices)
+- Linear interpolation for fractional delay reads
+- Stereo spread: voices panned L/R
+
+## Acceptance Criteria
+- [ ] EFFECT_CHORUS added to effect type enum
+- [ ] Smooth modulation with no zipper noise
+- [ ] Works in effect chain (per-track and master)
+- [ ] Parameters exposed in mixer view
+
+## Test Plan
+- [ ] Verify chorus thickens a simple sine wave
+- [ ] Verify no clicks/pops during parameter changes
+- [ ] ASan: no buffer overflows with extreme depth values

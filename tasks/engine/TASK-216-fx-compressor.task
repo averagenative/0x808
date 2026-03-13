@@ -1,0 +1,37 @@
+status: pending
+priority: medium
+depends: none
+agent: engine
+ref: TASK-216
+---
+Implement dynamic range compressor effect.
+
+Feed-forward compressor with sidechain detection.
+Essential for tightening drum mixes and bus compression.
+
+## Parameters
+- threshold: Level where compression starts (-60 to 0 dB, default -20)
+- ratio: Compression ratio (1:1 to 20:1, default 4:1)
+- attack: Attack time (0.1-100 ms, default 10)
+- release: Release time (10-1000 ms, default 100)
+- makeup: Output gain (0-24 dB, default 0)
+- wet: Wet/dry mix (0-1, default 1.0)
+
+## Implementation
+- RMS or peak envelope detection (configurable)
+- Smooth gain computation with attack/release envelope
+- Log-domain gain calculation
+- Soft knee option (0-6 dB knee width)
+
+## Acceptance Criteria
+- [ ] EFFECT_COMPRESSOR added to effect type enum
+- [ ] Reduces dynamic range above threshold
+- [ ] Attack/release timing is accurate
+- [ ] Makeup gain compensates for gain reduction
+- [ ] Gain reduction amount available for metering
+
+## Test Plan
+- [ ] Loud signal compressed, quiet signal unaffected
+- [ ] Fast attack catches transients
+- [ ] Slow release creates pumping effect
+- [ ] 1:1 ratio = no effect (passthrough)

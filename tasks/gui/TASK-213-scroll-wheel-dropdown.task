@@ -1,0 +1,21 @@
+status: pending
+priority: low
+depends: TASK-211
+agent: gui
+ref: TASK-213
+---
+Add scroll wheel support for cycling through dropdown values on hover.
+
+When hovering over a combo dropdown (preset selector, mode selector),
+scroll wheel should cycle through the available options without
+opening the dropdown menu.
+
+## Acceptance Criteria
+- [ ] Scroll wheel on preset combo cycles through presets
+- [ ] Scroll wheel on mode combo cycles through modes
+- [ ] Visual feedback shows the current selection changing
+- [ ] Works in both standalone and plugin
+
+## Test Plan
+- [ ] Hover preset, scroll up/down, verify preset changes
+- [ ] Hover mode, scroll, verify mode changes

@@ -740,24 +740,20 @@ int synth_editor_draw(struct nk_context *ctx, sq_engine_t *engine,
         /* Header: preset selector + mode selector */
         nk_layout_row_dynamic(ctx, 22, 4);
 
-        /* Preset dropdown */
+        /* Preset dropdown — build string pointer array */
         nk_label(ctx, "Preset:", NK_TEXT_LEFT);
         {
-            /* Build label for current preset */
-            char current_label[64];
-            snprintf(current_label, sizeof(current_label), "%s", p->name);
-            float combo_h = (float)engine->num_synth_presets * 22.0f;
-            if (combo_h > 300.0f) combo_h = 300.0f;
-            if (nk_combo_begin_label(ctx, current_label, nk_vec2(200, combo_h))) {
-                nk_layout_row_dynamic(ctx, 20, 1);
-                for (uint32_t i = 0; i < engine->num_synth_presets; i++) {
-                    if (nk_combo_item_label(ctx, engine->synth_presets[i].name, NK_TEXT_LEFT)) {
-                        *preset_index_ptr = (int)i;
-                        preset_index = (int)i;
-                        p = &engine->synth_presets[preset_index];
-                    }
-                }
-                nk_combo_end(ctx);
+            static const char *preset_names[64];
+            int count = (int)engine->num_synth_presets;
+            if (count > 64) count = 64;
+            for (int i = 0; i < count; i++)
+                preset_names[i] = engine->synth_presets[i].name;
+            int sel = preset_index;
+            nk_combobox(ctx, preset_names, count, &sel, 20, nk_vec2(200, 300));
+            if (sel != preset_index) {
+                *preset_index_ptr = sel;
+                preset_index = sel;
+                p = &engine->synth_presets[preset_index];
             }
         }
 

@@ -1,0 +1,34 @@
+status: pending
+priority: medium
+depends: none
+agent: engine
+ref: TASK-215
+---
+Implement distortion/saturation effect.
+
+Multiple distortion modes for adding harmonics and grit.
+Essential for 808 bass processing and lo-fi aesthetics.
+
+## Parameters
+- drive: Input gain / distortion amount (0-10, default 1.0)
+- mode: Distortion algorithm (soft clip, hard clip, foldback, bitcrush)
+- tone: Post-distortion LP filter frequency (200-20000 Hz)
+- wet: Wet/dry mix (0-1, default 0.5)
+
+## Algorithms
+- Soft clip: tanh(x * drive)
+- Hard clip: clamp(x * drive, -1, 1)
+- Foldback: triangle wave folding at ±1
+- Bitcrush: reduce bit depth (1-16 bits) + sample rate reduction
+
+## Acceptance Criteria
+- [ ] EFFECT_DISTORTION added to effect type enum
+- [ ] 4 distortion modes implemented
+- [ ] No DC offset introduced (subtract mean if needed)
+- [ ] Tone control smooths harsh harmonics
+- [ ] Works in effect chain (per-track and master)
+
+## Test Plan
+- [ ] Verify each mode produces audible distortion
+- [ ] Verify bitcrush reduces quality predictably
+- [ ] Export with distortion, inspect waveform

@@ -1,0 +1,31 @@
+status: pending
+priority: medium
+depends: TASK-216
+agent: engine
+ref: TASK-220
+---
+Implement brickwall limiter for master bus.
+
+Prevents clipping by catching peaks above threshold with
+instant attack and configurable release. Typically last in
+the master effects chain.
+
+## Parameters
+- ceiling: Maximum output level (-6 to 0 dB, default -0.3)
+- release: Release time (10-500 ms, default 50)
+
+## Implementation
+- Lookahead buffer (1-5ms) for transparent limiting
+- Instant attack (within lookahead window)
+- Smooth gain release
+
+## Acceptance Criteria
+- [ ] EFFECT_LIMITER added to effect type enum
+- [ ] Output never exceeds ceiling level
+- [ ] Transparent on signals below threshold
+- [ ] Minimal distortion on moderate limiting
+
+## Test Plan
+- [ ] Hot signal limited to ceiling
+- [ ] Quiet signal passes unchanged
+- [ ] No clicks at onset of limiting
