@@ -19,9 +19,9 @@ build_ubsan/
 .env
 .env.*
 
-# Test outputs
-*.wav
-*.mp3
+# Test outputs (root-level only, not samples/)
+/test_*.wav
+/test_*.mp3
 *.sqproj
 
 # OS
