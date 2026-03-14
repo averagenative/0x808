@@ -71,6 +71,14 @@ int  gtk_theme_count(void);
 const char *gtk_theme_name(int index);
 void gtk_theme_apply_index(GtkWidget *widget, int index);
 
+/* User theme (JSON) API */
+void gtk_theme_scan_user_themes(const char *dir);
+int  gtk_theme_num_user_themes(void);
+const char *gtk_theme_user_name(int index);
+void gtk_theme_apply_user(GtkWidget *widget, int index);
+int  gtk_theme_is_user_active(void);
+int  gtk_theme_active_user_index(void);
+
 /* gtk_drum_grid.c */
 GtkWidget *gtk_drum_grid_new(void);
 void       gtk_drum_grid_queue_redraw(void);

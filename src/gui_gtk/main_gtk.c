@@ -266,6 +266,17 @@ int main(int argc, char *argv[])
         SDL_free(exe_path);
     }
 
+    /* Scan for user themes in {base_dir}/themes/ and ./themes/ */
+    if (g_engine.base_dir[0]) {
+        char themes_dir[600];
+        snprintf(themes_dir, sizeof(themes_dir), "%sthemes", g_engine.base_dir);
+        gtk_theme_scan_user_themes(themes_dir);
+    }
+    if (gtk_theme_num_user_themes() == 0) {
+        /* Fallback: try ./themes/ relative to CWD (development builds) */
+        gtk_theme_scan_user_themes("themes");
+    }
+
     /* Initialize app state */
     memset(&g_gtk, 0, sizeof(g_gtk));
     g_gtk.engine = &g_engine;

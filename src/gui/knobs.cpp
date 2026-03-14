@@ -162,35 +162,35 @@ int knob_float(const char *label, float *value, float min, float max,
 {
     ImGui::PushID(label);
 
-    /* Calculate layout — consistent size, centered */
-    float avail_w = ImGui::GetContentRegionAvail().x;
-    float knob_w = 36.0f;  /* consistent size across all columns */
-    float knob_h = 36.0f;
+    float knob_sz = 28.0f;
+    float group_w = knob_sz + 8.0f;
 
-    /* Center horizontally */
-    float indent = (avail_w - knob_w) * 0.5f;
-    if (indent > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
+    /* Render as a compact group so SameLine() works */
+    ImGui::BeginGroup();
 
-    /* Label row */
+    /* Label (centered above knob) */
+    float label_w = ImGui::CalcTextSize(label).x;
+    float label_indent = (group_w - label_w) * 0.5f;
+    if (label_indent > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + label_indent);
     ImGui::TextUnformatted(label);
 
-    /* Re-center for knob */
-    if (indent > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
-
+    /* Knob */
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 size(knob_w, knob_h);
-
+    ImVec2 size(knob_sz, knob_sz);
     int changed = knob_core(label, value, min, max, default_val, step, pos, size);
 
-    /* Value display */
-    char val_text[32];
-    snprintf(val_text, sizeof(val_text), "%.1f", *value);
+    /* Value (centered below knob) */
+    char val_text[16];
+    if (max - min > 100.0f)
+        snprintf(val_text, sizeof(val_text), "%.0f", *value);
+    else
+        snprintf(val_text, sizeof(val_text), "%.2f", *value);
     float text_w = ImGui::CalcTextSize(val_text).x;
-    float val_indent = (avail_w - text_w) * 0.5f;
-    if (val_indent > 0.0f)
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + val_indent);
+    float val_indent = (group_w - text_w) * 0.5f;
+    if (val_indent > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + val_indent);
     ImGui::TextUnformatted(val_text);
 
+    ImGui::EndGroup();
     ImGui::PopID();
     return changed;
 }

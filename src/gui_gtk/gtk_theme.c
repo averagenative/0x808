@@ -198,24 +198,133 @@ static const char *THEME_NAMES[] = {
 #define NUM_THEMES 7
 
 static int s_current_theme = 0;
+static int s_active_user_theme = -1;  /* -1 = built-in theme active */
 static GtkCssProvider *s_provider = NULL;
 
-static void apply_theme_css(GtkWidget *widget, int theme_idx)
-{
-    if (theme_idx < 0 || theme_idx >= NUM_THEMES) theme_idx = 0;
-    s_current_theme = theme_idx;
+/* ─── User theme storage ─────────────────────────────────────────────────── */
 
+#define GTK_MAX_USER_THEMES 16
+
+typedef struct {
+    char name[64];
+    char background[8];     /* #rrggbb */
+    char text[8];
+    char accent[8];
+    char button[8];
+    char button_hover[8];
+    char button_active[8];
+    char popup_bg[8];
+    char draw_bg[8];
+    char separator[8];
+    char status_color[8];
+    int  loaded;
+} gtk_user_theme_t;
+
+static gtk_user_theme_t s_user_themes[GTK_MAX_USER_THEMES];
+static int              s_num_user_themes = 0;
+
+/* ─── Hex color helpers ──────────────────────────────────────────────────── */
+
+/* Parse "#rrggbb" into r, g, b bytes (0-255). Returns 0 on success. */
+static int parse_hex_color(const char *hex, int *r, int *g, int *b)
+{
+    if (!hex || hex[0] != '#' || strlen(hex) < 7) return -1;
+    unsigned int val = 0;
+    if (sscanf(hex + 1, "%06x", &val) != 1) return -1;
+    *r = (val >> 16) & 0xFF;
+    *g = (val >> 8) & 0xFF;
+    *b = val & 0xFF;
+    return 0;
+}
+
+/* Blend a color toward black (darken) or white (lighten) by a factor.
+   factor < 0 darkens, factor > 0 lightens.  Writes "#rrggbb" into out. */
+static void adjust_color(const char *hex, double factor, char out[8])
+{
+    int r, g, b;
+    if (parse_hex_color(hex, &r, &g, &b) != 0) {
+        snprintf(out, 8, "%s", hex);
+        return;
+    }
+    if (factor > 0) {
+        r = r + (int)((255 - r) * factor);
+        g = g + (int)((255 - g) * factor);
+        b = b + (int)((255 - b) * factor);
+    } else {
+        double f = 1.0 + factor; /* factor is negative */
+        r = (int)(r * f);
+        g = (int)(g * f);
+        b = (int)(b * f);
+    }
+    if (r < 0) r = 0; if (r > 255) r = 255;
+    if (g < 0) g = 0; if (g > 255) g = 255;
+    if (b < 0) b = 0; if (b > 255) b = 255;
+    snprintf(out, 8, "#%02x%02x%02x", r, g, b);
+}
+
+/* Convert float [0..1] RGB to "#rrggbb" */
+static void float_to_hex(float rf, float gf, float bf, char out[8])
+{
+    int r = (int)(rf * 255.0f + 0.5f);
+    int g = (int)(gf * 255.0f + 0.5f);
+    int b = (int)(bf * 255.0f + 0.5f);
+    if (r < 0) r = 0; if (r > 255) r = 255;
+    if (g < 0) g = 0; if (g > 255) g = 255;
+    if (b < 0) b = 0; if (b > 255) b = 255;
+    snprintf(out, 8, "#%02x%02x%02x", r, g, b);
+}
+
+/* Generate full CSS string from a user theme's color values */
+static char *gtk_user_theme_to_css(const gtk_user_theme_t *t)
+{
+    return g_strdup_printf(
+        "window, box, button, label, scale, scrolledwindow, separator,"
+        " checkbutton, dropdown, entry, popover, popover > contents {"
+        "  background-color: %s;"
+        "  color: %s;"
+        "  font-family: 'DejaVu Sans Mono', monospace;"
+        "  font-size: 13px;"
+        "}"
+        "button { background-color: %s; color: %s; padding: 4px 8px; }"
+        "button:hover { background-color: %s; }"
+        "button:active, button.active { background-color: %s; color: #fff; }"
+        "dropdown { background-color: %s; color: %s; }"
+        "popover, popover > contents { background-color: %s; color: %s; }"
+        "scale trough { background-color: %s; min-height: 6px; }"
+        "scale highlight { background-color: %s; }"
+        "scale slider { background-color: %s; min-width: 16px; min-height: 16px;"
+        "  border-radius: 8px; margin: 0; padding: 0; }"
+        "label.status { color: %s; font-size: 11px; }"
+        "drawingarea { background-color: %s; }"
+        "separator { background-color: %s; min-height: 1px; }",
+        t->background, t->text,
+        t->button, t->text,
+        t->button_hover,
+        t->button_active,
+        t->popup_bg, t->text,
+        t->popup_bg, t->text,
+        t->popup_bg,
+        t->accent,
+        t->accent,
+        t->status_color,
+        t->draw_bg,
+        t->separator
+    );
+}
+
+/* ─── CSS application (built-in or user) ─────────────────────────────────── */
+
+static void apply_css_string(GtkWidget *widget, const char *css)
+{
     GdkDisplay *display = gtk_widget_get_display(widget);
 
-    /* Remove old provider */
     if (s_provider) {
         gtk_style_context_remove_provider_for_display(display,
             GTK_STYLE_PROVIDER(s_provider));
         g_object_unref(s_provider);
     }
 
-    /* Reset first (nuke Adwaita defaults), then apply theme on top */
-    char *full_css = g_strconcat(CSS_THIN_CONTROLS, THEME_CSS[theme_idx], NULL);
+    char *full_css = g_strconcat(CSS_THIN_CONTROLS, css, NULL);
 
     s_provider = gtk_css_provider_new();
     gtk_css_provider_load_from_string(s_provider, full_css);
@@ -224,6 +333,296 @@ static void apply_theme_css(GtkWidget *widget, int theme_idx)
         GTK_STYLE_PROVIDER(s_provider),
         GTK_STYLE_PROVIDER_PRIORITY_USER);
 }
+
+static void apply_theme_css(GtkWidget *widget, int theme_idx)
+{
+    if (theme_idx < 0 || theme_idx >= NUM_THEMES) theme_idx = 0;
+    s_current_theme = theme_idx;
+    s_active_user_theme = -1;
+
+    apply_css_string(widget, THEME_CSS[theme_idx]);
+}
+
+/* ─── JSON theme loading ─────────────────────────────────────────────────── */
+
+/* Get a string value from JSON, or NULL */
+static const char *json_get_str(const cJSON *root, const char *key)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (cJSON_IsString(item) && item->valuestring)
+        return item->valuestring;
+    return NULL;
+}
+
+/* Get a float value from JSON, or the default */
+static double json_get_num(const cJSON *root, const char *key, double def)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (cJSON_IsNumber(item))
+        return item->valuedouble;
+    return def;
+}
+
+/* Copy a hex color string if valid, otherwise keep the default */
+static void copy_hex_if_valid(const char *src, char dst[8])
+{
+    if (src && src[0] == '#' && strlen(src) >= 7) {
+        snprintf(dst, 8, "%.7s", src);
+    }
+}
+
+/* Check if a user theme name conflicts with a built-in theme */
+static int theme_name_conflicts_builtin(const char *name)
+{
+    for (int i = 0; i < NUM_THEMES; i++) {
+        if (strcasecmp(name, THEME_NAMES[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+/* Load a single JSON theme file. Returns 1 on success. */
+static int load_json_theme(const char *path, gtk_user_theme_t *t)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        LOG_WARN("Could not open theme file: %s", path);
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (sz <= 0 || sz > 64 * 1024) {
+        LOG_WARN("Theme file too large or empty: %s (%ld bytes)", path, sz);
+        fclose(f);
+        return 0;
+    }
+
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return 0; }
+    fread(buf, 1, (size_t)sz, f);
+    buf[sz] = '\0';
+    fclose(f);
+
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        LOG_WARN("Failed to parse theme JSON: %s", path);
+        return 0;
+    }
+
+    /* Set defaults (dark theme colors) */
+    memset(t, 0, sizeof(*t));
+    snprintf(t->background,   8, "#24242a");
+    snprintf(t->text,         8, "#d0d0d0");
+    snprintf(t->accent,       8, "#6499cc");
+    snprintf(t->button,       8, "#38383e");
+    snprintf(t->button_hover, 8, "#45454c");
+    snprintf(t->button_active,8, "#6499cc");
+    snprintf(t->popup_bg,     8, "#2a2a32");
+    snprintf(t->draw_bg,      8, "#1a1a20");
+    snprintf(t->separator,    8, "#40404a");
+    snprintf(t->status_color, 8, "#6499cc");
+
+    /* Read "name" */
+    const char *name = json_get_str(root, "name");
+    if (name) {
+        snprintf(t->name, sizeof(t->name), "%s", name);
+    } else {
+        /* Derive from filename */
+        const char *slash = strrchr(path, '/');
+        if (!slash) slash = strrchr(path, '\\');
+        const char *base = slash ? slash + 1 : path;
+        snprintf(t->name, sizeof(t->name), "%s", base);
+        char *dot = strrchr(t->name, '.');
+        if (dot) *dot = '\0';
+    }
+
+    /* --- Read hex color strings (simple format) --- */
+    copy_hex_if_valid(json_get_str(root, "background"), t->background);
+    copy_hex_if_valid(json_get_str(root, "text"),       t->text);
+    copy_hex_if_valid(json_get_str(root, "accent"),     t->accent);
+    copy_hex_if_valid(json_get_str(root, "button"),     t->button);
+    copy_hex_if_valid(json_get_str(root, "button_hover"), t->button_hover);
+    copy_hex_if_valid(json_get_str(root, "button_active"), t->button_active);
+    copy_hex_if_valid(json_get_str(root, "popup_bg"),   t->popup_bg);
+    copy_hex_if_valid(json_get_str(root, "draw_bg"),    t->draw_bg);
+    copy_hex_if_valid(json_get_str(root, "separator"),  t->separator);
+    copy_hex_if_valid(json_get_str(root, "status"),     t->status_color);
+
+    /* --- Read ImGui float format (window_bg_r/g/b, text_r/g/b, etc.) --- */
+    const cJSON *wbg_r = cJSON_GetObjectItemCaseSensitive(root, "window_bg_r");
+    if (cJSON_IsNumber(wbg_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "window_bg_r", 0.14),
+            (float)json_get_num(root, "window_bg_g", 0.14),
+            (float)json_get_num(root, "window_bg_b", 0.15),
+            t->background);
+    }
+    const cJSON *txt_r = cJSON_GetObjectItemCaseSensitive(root, "text_r");
+    if (cJSON_IsNumber(txt_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "text_r", 0.82),
+            (float)json_get_num(root, "text_g", 0.82),
+            (float)json_get_num(root, "text_b", 0.82),
+            t->text);
+    }
+    const cJSON *acc_r = cJSON_GetObjectItemCaseSensitive(root, "accent_r");
+    if (cJSON_IsNumber(acc_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "accent_r", 0.39),
+            (float)json_get_num(root, "accent_g", 0.71),
+            (float)json_get_num(root, "accent_b", 1.0),
+            t->accent);
+    }
+    const cJSON *btn_r = cJSON_GetObjectItemCaseSensitive(root, "button_r");
+    if (cJSON_IsNumber(btn_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "button_r", 0.22),
+            (float)json_get_num(root, "button_g", 0.22),
+            (float)json_get_num(root, "button_b", 0.24),
+            t->button);
+    }
+    const cJSON *btn_h_r = cJSON_GetObjectItemCaseSensitive(root, "button_hover_r");
+    if (cJSON_IsNumber(btn_h_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "button_hover_r", 0.27),
+            (float)json_get_num(root, "button_hover_g", 0.27),
+            (float)json_get_num(root, "button_hover_b", 0.29),
+            t->button_hover);
+    }
+    const cJSON *btn_a_r = cJSON_GetObjectItemCaseSensitive(root, "button_active_r");
+    if (cJSON_IsNumber(btn_a_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "button_active_r", 0.31),
+            (float)json_get_num(root, "button_active_g", 0.31),
+            (float)json_get_num(root, "button_active_b", 0.33),
+            t->button_active);
+    }
+    const cJSON *pop_r = cJSON_GetObjectItemCaseSensitive(root, "popup_bg_r");
+    if (cJSON_IsNumber(pop_r)) {
+        float_to_hex(
+            (float)json_get_num(root, "popup_bg_r", 0.16),
+            (float)json_get_num(root, "popup_bg_g", 0.16),
+            (float)json_get_num(root, "popup_bg_b", 0.17),
+            t->popup_bg);
+    }
+
+    /* Auto-derive missing colors from the ones we have:
+       If button wasn't explicitly set, derive from background.
+       If button_hover/active weren't set, derive from button. */
+    if (!json_get_str(root, "button") && !cJSON_IsNumber(btn_r)) {
+        adjust_color(t->background, 0.15, t->button);
+    }
+    if (!json_get_str(root, "button_hover") && !cJSON_IsNumber(btn_h_r)) {
+        adjust_color(t->button, 0.15, t->button_hover);
+    }
+    if (!json_get_str(root, "button_active") && !cJSON_IsNumber(btn_a_r)) {
+        /* Use accent with some transparency effect approximation */
+        snprintf(t->button_active, 8, "%s", t->accent);
+    }
+    if (!json_get_str(root, "popup_bg") && !cJSON_IsNumber(pop_r)) {
+        adjust_color(t->background, 0.08, t->popup_bg);
+    }
+    if (!json_get_str(root, "draw_bg")) {
+        adjust_color(t->background, -0.15, t->draw_bg);
+    }
+    if (!json_get_str(root, "separator")) {
+        adjust_color(t->background, 0.25, t->separator);
+    }
+    if (!json_get_str(root, "status")) {
+        snprintf(t->status_color, 8, "%s", t->accent);
+    }
+
+    cJSON_Delete(root);
+    t->loaded = 1;
+    return 1;
+}
+
+void gtk_theme_scan_user_themes(const char *dir)
+{
+    if (!dir || !dir[0]) return;
+
+    s_num_user_themes = 0;
+    LOG_INFO("Scanning for user themes in: %s", dir);
+
+    DIR *d = opendir(dir);
+    if (!d) {
+        LOG_INFO("No themes directory: %s", dir);
+        return;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL) {
+        if (s_num_user_themes >= GTK_MAX_USER_THEMES) break;
+        const char *name = ent->d_name;
+        size_t len = strlen(name);
+        if (len < 6) continue;
+        if (strcmp(name + len - 5, ".json") != 0) continue;
+
+        char full[600];
+        snprintf(full, sizeof(full), "%s/%s", dir, name);
+
+        if (load_json_theme(full, &s_user_themes[s_num_user_themes])) {
+            if (theme_name_conflicts_builtin(s_user_themes[s_num_user_themes].name)) {
+                LOG_INFO("Skipping user theme '%s' -- conflicts with built-in",
+                         s_user_themes[s_num_user_themes].name);
+                s_user_themes[s_num_user_themes].loaded = 0;
+            } else {
+                LOG_INFO("Loaded user theme: %s (%s)",
+                         s_user_themes[s_num_user_themes].name, full);
+                s_num_user_themes++;
+            }
+        }
+    }
+    closedir(d);
+
+    LOG_INFO("Found %d user theme(s)", s_num_user_themes);
+}
+
+int gtk_theme_num_user_themes(void)
+{
+    return s_num_user_themes;
+}
+
+const char *gtk_theme_user_name(int index)
+{
+    if (index < 0 || index >= s_num_user_themes) return "?";
+    return s_user_themes[index].name;
+}
+
+void gtk_theme_apply_user(GtkWidget *widget, int index)
+{
+    if (index < 0 || index >= s_num_user_themes) return;
+    const gtk_user_theme_t *t = &s_user_themes[index];
+    if (!t->loaded) return;
+
+    s_active_user_theme = index;
+
+    char *css = gtk_user_theme_to_css(t);
+    apply_css_string(widget, css);
+    g_free(css);
+
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Theme: %s", t->name);
+    sq_app_set_status(&g_gtk.app, msg, 90);
+
+    LOG_INFO("Applied user theme: %s", t->name);
+}
+
+int gtk_theme_is_user_active(void)
+{
+    return s_active_user_theme >= 0;
+}
+
+int gtk_theme_active_user_index(void)
+{
+    return s_active_user_theme;
+}
+
+/* ─── Existing built-in theme API ────────────────────────────────────────── */
 
 /* Recursively add "flat" CSS class to all buttons in the widget tree */
 static void flatten_buttons_recursive(GtkWidget *widget)
@@ -259,12 +658,24 @@ void gtk_theme_apply_light(GtkWidget *widget)
 
 void gtk_theme_cycle(GtkWidget *widget)
 {
-    int next = (s_current_theme + 1) % NUM_THEMES;
-    apply_theme_css(widget, next);
+    /* Cycle through built-in themes, then user themes */
+    int total = NUM_THEMES + s_num_user_themes;
+    int cur;
+    if (s_active_user_theme >= 0)
+        cur = NUM_THEMES + s_active_user_theme;
+    else
+        cur = s_current_theme;
 
-    char msg[32];
-    snprintf(msg, sizeof(msg), "Theme: %s", THEME_NAMES[next]);
-    sq_app_set_status(&g_gtk.app, msg, 90);
+    int next = (cur + 1) % total;
+
+    if (next < NUM_THEMES) {
+        apply_theme_css(widget, next);
+        char msg[32];
+        snprintf(msg, sizeof(msg), "Theme: %s", THEME_NAMES[next]);
+        sq_app_set_status(&g_gtk.app, msg, 90);
+    } else {
+        gtk_theme_apply_user(widget, next - NUM_THEMES);
+    }
 }
 
 int gtk_theme_current(void)
@@ -274,6 +685,8 @@ int gtk_theme_current(void)
 
 const char *gtk_theme_current_name(void)
 {
+    if (s_active_user_theme >= 0 && s_active_user_theme < s_num_user_themes)
+        return s_user_themes[s_active_user_theme].name;
     return THEME_NAMES[s_current_theme];
 }
 
