@@ -22,7 +22,9 @@ extern "C" {
 #include <cstring>
 #include <cmath>
 
-static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus"};
+static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
+                                          "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
+                                          "Ring Mod", "Tape", "Shimmer"};
 static const char *filter_mode_names[] = {"LowPass", "HiPass", "BandPass"};
 static const char *delay_sync_names[]  = {"1/1", "1/2", "1/4", "1/8", "1/16"};
 
@@ -202,6 +204,141 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
             ImGui::Text("Mix: %.0f%%", slot->chorus.mix * 100);
             ImGui::SetNextItemWidth(-1);
             ImGui::SliderFloat("##ChMix", &slot->chorus.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_BITCRUSHER: {
+            ImGui::Text("Bits: %.0f", slot->bitcrusher.bits);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##BcBits", &slot->bitcrusher.bits, 1.0f, 16.0f, "%.0f");
+
+            ImGui::Text("Downsample: %.0f", slot->bitcrusher.downsample);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##BcDs", &slot->bitcrusher.downsample, 1.0f, 32.0f, "%.0f");
+
+            ImGui::Text("Mix: %.0f%%", slot->bitcrusher.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##BcMix", &slot->bitcrusher.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_COMPRESSOR: {
+            ImGui::Text("Threshold: %.0f%%", slot->compressor.threshold * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##CpThresh", &slot->compressor.threshold, 0.0f, 1.0f);
+
+            ImGui::Text("Ratio: %.1f:1", slot->compressor.ratio);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##CpRatio", &slot->compressor.ratio, 1.0f, 20.0f);
+
+            ImGui::Text("Attack: %.3fs", slot->compressor.attack);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##CpAtk", &slot->compressor.attack, 0.001f, 0.5f,
+                               "%.3f", ImGuiSliderFlags_Logarithmic);
+
+            ImGui::Text("Release: %.2fs", slot->compressor.release);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##CpRel", &slot->compressor.release, 0.01f, 1.0f,
+                               "%.2f", ImGuiSliderFlags_Logarithmic);
+
+            ImGui::Text("Makeup: %.0f%%", slot->compressor.makeup * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##CpMkup", &slot->compressor.makeup, 0.0f, 2.0f);
+            break;
+        }
+
+        case EFFECT_PHASER: {
+            ImGui::Text("Rate: %.1f Hz", slot->phaser.rate);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##PhRate", &slot->phaser.rate, 0.1f, 10.0f);
+
+            ImGui::Text("Depth: %.0f%%", slot->phaser.depth * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##PhDepth", &slot->phaser.depth, 0.0f, 1.0f);
+
+            ImGui::Text("Feedback: %.0f%%", slot->phaser.feedback * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##PhFb", &slot->phaser.feedback, 0.0f, 0.9f);
+
+            ImGui::Text("Mix: %.0f%%", slot->phaser.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##PhMix", &slot->phaser.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_FLANGER: {
+            ImGui::Text("Rate: %.1f Hz", slot->flanger.rate);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FlRate", &slot->flanger.rate, 0.1f, 10.0f);
+
+            ImGui::Text("Depth: %.0f%%", slot->flanger.depth * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FlDepth", &slot->flanger.depth, 0.0f, 1.0f);
+
+            ImGui::Text("Feedback: %.0f%%", slot->flanger.feedback * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FlFb", &slot->flanger.feedback, -0.9f, 0.9f);
+
+            ImGui::Text("Mix: %.0f%%", slot->flanger.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FlMix", &slot->flanger.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_TREMOLO: {
+            static const char *wave_names[] = {"Sine", "Square", "Triangle"};
+            ImGui::Text("Rate: %.1f Hz", slot->tremolo.rate);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##TrRate", &slot->tremolo.rate, 0.1f, 20.0f);
+
+            ImGui::Text("Depth: %.0f%%", slot->tremolo.depth * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##TrDepth", &slot->tremolo.depth, 0.0f, 1.0f);
+
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::Combo("Wave", &slot->tremolo.wave, wave_names, 3);
+            break;
+        }
+
+        case EFFECT_RINGMOD: {
+            ImGui::Text("Freq: %.0f Hz", slot->ringmod.freq);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##RmFreq", &slot->ringmod.freq, 20.0f, 5000.0f,
+                               "%.0f", ImGuiSliderFlags_Logarithmic);
+
+            ImGui::Text("Mix: %.0f%%", slot->ringmod.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##RmMix", &slot->ringmod.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_TAPE: {
+            ImGui::Text("Drive: %.0f%%", slot->tape.drive * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##TpDrive", &slot->tape.drive, 0.0f, 1.0f);
+
+            ImGui::Text("Warmth: %.0f%%", slot->tape.warmth * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##TpWarmth", &slot->tape.warmth, 0.0f, 1.0f);
+
+            ImGui::Text("Mix: %.0f%%", slot->tape.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##TpMix", &slot->tape.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_SHIMMER: {
+            ImGui::Text("Decay: %.0f%%", slot->shimmer.decay * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ShDecay", &slot->shimmer.decay, 0.0f, 1.0f);
+
+            ImGui::Text("Shimmer: %.0f%%", slot->shimmer.shimmer * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ShShimmer", &slot->shimmer.shimmer, 0.0f, 1.0f);
+
+            ImGui::Text("Mix: %.0f%%", slot->shimmer.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ShMix", &slot->shimmer.mix, 0.0f, 1.0f);
             break;
         }
 

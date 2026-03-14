@@ -36,7 +36,9 @@ static GtkWidget *s_fx_next_btn;
 static GtkWidget *s_fx_slots_box;
 
 static const char *s_effect_type_names[] = {
-    "None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus", NULL
+    "None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
+    "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
+    "Ring Mod", "Tape", "Shimmer", NULL
 };
 static const char *s_filter_mode_names[] = { "LowPass", "HiPass", "BandPass", NULL };
 static const char *s_delay_sync_names[]  = { "1/1", "1/2", "1/4", "1/8", "1/16", NULL };
@@ -404,6 +406,65 @@ static void on_fx_slider_changed(GtkRange *range, gpointer user_data)
         case 2: pd->slot->chorus.mix   = val / 100.0f; break;
         }
         break;
+    case EFFECT_BITCRUSHER:
+        switch (pd->param_id) {
+        case 0: pd->slot->bitcrusher.bits       = val; break;
+        case 1: pd->slot->bitcrusher.downsample = val; break;
+        case 2: pd->slot->bitcrusher.mix        = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_COMPRESSOR:
+        switch (pd->param_id) {
+        case 0: pd->slot->compressor.threshold = val / 100.0f; break;
+        case 1: pd->slot->compressor.ratio     = val; break;
+        case 2: pd->slot->compressor.attack    = val; break;
+        case 3: pd->slot->compressor.release   = val; break;
+        case 4: pd->slot->compressor.makeup    = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_PHASER:
+        switch (pd->param_id) {
+        case 0: pd->slot->phaser.rate     = val; break;
+        case 1: pd->slot->phaser.depth    = val / 100.0f; break;
+        case 2: pd->slot->phaser.feedback = val / 100.0f; break;
+        case 3: pd->slot->phaser.mix      = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_FLANGER:
+        switch (pd->param_id) {
+        case 0: pd->slot->flanger.rate     = val; break;
+        case 1: pd->slot->flanger.depth    = val / 100.0f; break;
+        case 2: pd->slot->flanger.feedback = val / 100.0f; break;
+        case 3: pd->slot->flanger.mix      = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_TREMOLO:
+        switch (pd->param_id) {
+        case 0: pd->slot->tremolo.rate  = val; break;
+        case 1: pd->slot->tremolo.depth = val / 100.0f; break;
+        case 2: pd->slot->tremolo.wave  = (int)val; break;
+        }
+        break;
+    case EFFECT_RINGMOD:
+        switch (pd->param_id) {
+        case 0: pd->slot->ringmod.freq = val; break;
+        case 1: pd->slot->ringmod.mix  = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_TAPE:
+        switch (pd->param_id) {
+        case 0: pd->slot->tape.drive  = val / 100.0f; break;
+        case 1: pd->slot->tape.warmth = val / 100.0f; break;
+        case 2: pd->slot->tape.mix    = val / 100.0f; break;
+        }
+        break;
+    case EFFECT_SHIMMER:
+        switch (pd->param_id) {
+        case 0: pd->slot->shimmer.decay   = val / 100.0f; break;
+        case 1: pd->slot->shimmer.shimmer = val / 100.0f; break;
+        case 2: pd->slot->shimmer.mix     = val / 100.0f; break;
+        }
+        break;
     default:
         break;
     }
@@ -588,6 +649,76 @@ static GtkWidget *build_slot_widget(sq_effect_slot_t *slot, int slot_index)
                       0, 100, slot->chorus.depth * 100.0f, 1.0f);
         add_fx_slider(vbox, "Mix %", slot, 2,
                       0, 100, slot->chorus.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_BITCRUSHER:
+        add_fx_slider(vbox, "Bits", slot, 0,
+                      1.0f, 16.0f, slot->bitcrusher.bits, 1.0f);
+        add_fx_slider(vbox, "Downsamp", slot, 1,
+                      1.0f, 32.0f, slot->bitcrusher.downsample, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 2,
+                      0, 100, slot->bitcrusher.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_COMPRESSOR:
+        add_fx_slider(vbox, "Thresh %", slot, 0,
+                      0, 100, slot->compressor.threshold * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Ratio", slot, 1,
+                      1.0f, 20.0f, slot->compressor.ratio, 0.1f);
+        add_fx_slider(vbox, "Attack (s)", slot, 2,
+                      0.001f, 0.5f, slot->compressor.attack, 0.001f);
+        add_fx_slider(vbox, "Release (s)", slot, 3,
+                      0.01f, 1.0f, slot->compressor.release, 0.01f);
+        add_fx_slider(vbox, "Makeup %", slot, 4,
+                      0, 200, slot->compressor.makeup * 100.0f, 1.0f);
+        break;
+    case EFFECT_PHASER:
+        add_fx_slider(vbox, "Rate (Hz)", slot, 0,
+                      0.1f, 10.0f, slot->phaser.rate, 0.1f);
+        add_fx_slider(vbox, "Depth %", slot, 1,
+                      0, 100, slot->phaser.depth * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Feedback %", slot, 2,
+                      0, 90, slot->phaser.feedback * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 3,
+                      0, 100, slot->phaser.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_FLANGER:
+        add_fx_slider(vbox, "Rate (Hz)", slot, 0,
+                      0.1f, 10.0f, slot->flanger.rate, 0.1f);
+        add_fx_slider(vbox, "Depth %", slot, 1,
+                      0, 100, slot->flanger.depth * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Feedback %", slot, 2,
+                      -90, 90, slot->flanger.feedback * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 3,
+                      0, 100, slot->flanger.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_TREMOLO:
+        add_fx_slider(vbox, "Rate (Hz)", slot, 0,
+                      0.1f, 20.0f, slot->tremolo.rate, 0.1f);
+        add_fx_slider(vbox, "Depth %", slot, 1,
+                      0, 100, slot->tremolo.depth * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Wave", slot, 2,
+                      0, 2, (float)slot->tremolo.wave, 1.0f);
+        break;
+    case EFFECT_RINGMOD:
+        add_fx_slider(vbox, "Freq (Hz)", slot, 0,
+                      20.0f, 5000.0f, slot->ringmod.freq, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 1,
+                      0, 100, slot->ringmod.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_TAPE:
+        add_fx_slider(vbox, "Drive %", slot, 0,
+                      0, 100, slot->tape.drive * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Warmth %", slot, 1,
+                      0, 100, slot->tape.warmth * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 2,
+                      0, 100, slot->tape.mix * 100.0f, 1.0f);
+        break;
+    case EFFECT_SHIMMER:
+        add_fx_slider(vbox, "Decay %", slot, 0,
+                      0, 100, slot->shimmer.decay * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Shimmer %", slot, 1,
+                      0, 100, slot->shimmer.shimmer * 100.0f, 1.0f);
+        add_fx_slider(vbox, "Mix %", slot, 2,
+                      0, 100, slot->shimmer.mix * 100.0f, 1.0f);
         break;
     default:
         break;

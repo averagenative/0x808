@@ -174,7 +174,9 @@ int main(void) {
 
     /* Test 11: Every effect type in the enum can be init/process/free without crash */
     {
-        const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus"};
+        const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
+                                     "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
+                                     "Ring Mod", "Tape", "Shimmer"};
         int name_count = (int)(sizeof(type_names) / sizeof(type_names[0]));
         ASSERT(name_count == EFFECT_TYPE_COUNT,
                "Effect type names array must match EFFECT_TYPE_COUNT — did you add a new effect?");

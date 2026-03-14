@@ -301,6 +301,301 @@ static void chorus_process(sq_efx_chorus_t *ch_fx, float *buf, uint32_t frames,
     }
 }
 
+/* ─── Bitcrusher ──────────────────────────────────────────────────────────── */
+
+static void bitcrusher_process(sq_efx_bitcrusher_t *bc, float *buf, uint32_t frames)
+{
+    float mix = bc->mix;
+    int ds = (int)bc->downsample;
+    if (ds < 1) ds = 1;
+    float levels = powf(2.0f, bc->bits) - 1.0f;
+    if (levels < 1.0f) levels = 1.0f;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float inL = buf[i * 2];
+        float inR = buf[i * 2 + 1];
+
+        bc->hold_count--;
+        if (bc->hold_count <= 0) {
+            bc->hold_count = ds;
+            /* Quantize */
+            bc->hold_l = roundf(inL * levels) / levels;
+            bc->hold_r = roundf(inR * levels) / levels;
+        }
+
+        buf[i * 2]     = inL * (1.0f - mix) + bc->hold_l * mix;
+        buf[i * 2 + 1] = inR * (1.0f - mix) + bc->hold_r * mix;
+    }
+}
+
+/* ─── Compressor ──────────────────────────────────────────────────────────── */
+
+static void compressor_process(sq_efx_compressor_t *cp, float *buf, uint32_t frames,
+                               uint32_t sample_rate)
+{
+    float attack_coeff  = expf(-1.0f / (cp->attack  * (float)sample_rate));
+    float release_coeff = expf(-1.0f / (cp->release * (float)sample_rate));
+    float threshold = cp->threshold;
+    float ratio = cp->ratio;
+    float makeup = cp->makeup;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        /* Peak detection (stereo max) */
+        float peak = fabsf(buf[i * 2]);
+        float r = fabsf(buf[i * 2 + 1]);
+        if (r > peak) peak = r;
+
+        /* Envelope follower */
+        if (peak > cp->envelope)
+            cp->envelope = attack_coeff * cp->envelope + (1.0f - attack_coeff) * peak;
+        else
+            cp->envelope = release_coeff * cp->envelope + (1.0f - release_coeff) * peak;
+
+        /* Gain computation */
+        float gain = 1.0f;
+        if (cp->envelope > threshold && threshold > 0.0f) {
+            /* dB domain compression */
+            float over = cp->envelope / threshold;
+            float compressed = threshold * powf(over, 1.0f / ratio - 1.0f);
+            gain = compressed;
+        }
+        gain *= makeup;
+
+        buf[i * 2]     *= gain;
+        buf[i * 2 + 1] *= gain;
+    }
+}
+
+/* ─── Phaser ──────────────────────────────────────────────────────────────── */
+
+static void phaser_process(sq_efx_phaser_t *ph, float *buf, uint32_t frames,
+                           uint32_t sample_rate)
+{
+    float mix = ph->mix;
+    float fb = ph->feedback;
+    float phase_inc = ph->rate / (float)sample_rate;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        /* LFO */
+        float lfo = sinf(ph->lfo_phase * 2.0f * (float)M_PI);
+        ph->lfo_phase += phase_inc;
+        if (ph->lfo_phase >= 1.0f) ph->lfo_phase -= 1.0f;
+
+        /* Modulated allpass coefficient: sweep from ~200 Hz to ~4000 Hz */
+        float d = 0.5f + 0.45f * lfo * ph->depth;
+
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch] + ph->last_out[ch] * fb;
+            float out = in;
+
+            /* Chain of first-order allpass filters: y = -a*x + z; z = x + a*y */
+            for (int s = 0; s < PHASER_NUM_STAGES; s++) {
+                float ap_out = -d * out + ph->ap_z1[ch][s];
+                ph->ap_z1[ch][s] = out + d * ap_out;
+                out = ap_out;
+            }
+
+            ph->last_out[ch] = out;
+            buf[i * 2 + ch] = in * (1.0f - mix) + out * mix;
+        }
+    }
+}
+
+/* ─── Flanger ─────────────────────────────────────────────────────────────── */
+
+static void flanger_process(sq_efx_flanger_t *fl, float *buf, uint32_t frames,
+                            uint32_t sample_rate)
+{
+    if (!fl->allocated) return;
+
+    float mix = fl->mix;
+    float fb = fl->feedback;
+    float phase_inc = fl->rate / (float)sample_rate;
+    /* Delay range: 0.1ms to 5ms */
+    float min_delay = 0.0001f * (float)sample_rate;
+    float max_delay = 0.005f * (float)sample_rate;
+    float mod_range = (max_delay - min_delay) * fl->depth;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float lfo = sinf(fl->lfo_phase * 2.0f * (float)M_PI);
+        fl->lfo_phase += phase_inc;
+        if (fl->lfo_phase >= 1.0f) fl->lfo_phase -= 1.0f;
+
+        float delay_samples = min_delay + (lfo * 0.5f + 0.5f) * mod_range;
+        if (delay_samples < 1.0f) delay_samples = 1.0f;
+        if (delay_samples >= (float)(fl->buffer_size - 1))
+            delay_samples = (float)(fl->buffer_size - 2);
+
+        for (int c = 0; c < 2; c++) {
+            float in = buf[i * 2 + c];
+
+            /* Read with linear interpolation */
+            float read_f = (float)fl->write_pos - delay_samples;
+            if (read_f < 0.0f) read_f += (float)fl->buffer_size;
+            int read_i = (int)read_f;
+            float frac = read_f - (float)read_i;
+            int r0 = read_i % fl->buffer_size;
+            int r1 = (read_i + 1) % fl->buffer_size;
+            float delayed = fl->buffer[r0 * 2 + c] * (1.0f - frac)
+                          + fl->buffer[r1 * 2 + c] * frac;
+
+            /* Write input + feedback to buffer */
+            fl->buffer[fl->write_pos * 2 + c] = in + delayed * fb;
+
+            buf[i * 2 + c] = in * (1.0f - mix) + delayed * mix;
+        }
+
+        fl->write_pos = (fl->write_pos + 1) % fl->buffer_size;
+    }
+}
+
+/* ─── Tremolo ─────────────────────────────────────────────────────────────── */
+
+static void tremolo_process(sq_efx_tremolo_t *tr, float *buf, uint32_t frames,
+                            uint32_t sample_rate)
+{
+    float phase_inc = tr->rate / (float)sample_rate;
+    float depth = tr->depth;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float mod;
+        switch (tr->wave) {
+        case 1: /* Square */
+            mod = (tr->lfo_phase < 0.5f) ? 1.0f : 0.0f;
+            break;
+        case 2: /* Triangle */
+            mod = (tr->lfo_phase < 0.5f)
+                ? tr->lfo_phase * 4.0f - 1.0f
+                : 3.0f - tr->lfo_phase * 4.0f;
+            mod = mod * 0.5f + 0.5f; /* normalize to 0-1 */
+            break;
+        default: /* Sine */
+            mod = sinf(tr->lfo_phase * 2.0f * (float)M_PI) * 0.5f + 0.5f;
+            break;
+        }
+
+        float gain = 1.0f - depth * (1.0f - mod);
+
+        buf[i * 2]     *= gain;
+        buf[i * 2 + 1] *= gain;
+
+        tr->lfo_phase += phase_inc;
+        if (tr->lfo_phase >= 1.0f) tr->lfo_phase -= 1.0f;
+    }
+}
+
+/* ─── Ring Modulator ──────────────────────────────────────────────────────── */
+
+static void ringmod_process(sq_efx_ringmod_t *rm, float *buf, uint32_t frames,
+                            uint32_t sample_rate)
+{
+    float mix = rm->mix;
+    float phase_inc = rm->freq / (float)sample_rate;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float carrier = sinf(rm->phase * 2.0f * (float)M_PI);
+        rm->phase += phase_inc;
+        if (rm->phase >= 1.0f) rm->phase -= 1.0f;
+
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch];
+            float wet = in * carrier;
+            buf[i * 2 + ch] = in * (1.0f - mix) + wet * mix;
+        }
+    }
+}
+
+/* ─── Tape Saturation ─────────────────────────────────────────────────────── */
+
+static void tape_process(sq_efx_tape_t *tp, float *buf, uint32_t frames,
+                         uint32_t sample_rate)
+{
+    float mix = tp->mix;
+    /* Drive maps to gain: 1x at 0, ~10x at 1 */
+    float gain = 1.0f + tp->drive * 9.0f;
+
+    /* Warmth filter: one-pole LP, cutoff from 20kHz (warmth=0) to 2kHz (warmth=1) */
+    float fc = 20000.0f - tp->warmth * 18000.0f;
+    float rc = 1.0f / (2.0f * (float)M_PI * fc / (float)sample_rate + 1.0f);
+
+    for (uint32_t i = 0; i < frames; i++) {
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch];
+            /* Soft saturation via tanh */
+            float x = in * gain;
+            float sat = tanhf(x);
+            /* Warmth filter */
+            tp->warmth_z1[ch] += rc * (sat - tp->warmth_z1[ch]);
+            float wet = tp->warmth_z1[ch];
+            buf[i * 2 + ch] = in * (1.0f - mix) + wet * mix;
+        }
+    }
+}
+
+/* ─── Shimmer Reverb ──────────────────────────────────────────────────────── */
+
+static void shimmer_process(sq_efx_shimmer_t *sh, float *buf, uint32_t frames,
+                            uint32_t sample_rate)
+{
+    if (!sh->allocated) return;
+
+    float mix = sh->mix;
+    float decay = sh->decay * 0.85f + 0.1f; /* scale to 0.1-0.95 */
+    float shimmer_amt = sh->shimmer;
+    float lfo_inc = 0.3f / (float)sample_rate; /* slow phaser LFO */
+    int buf_len = sh->buffer_size;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float inL = buf[i * 2];
+        float inR = buf[i * 2 + 1];
+        float input = (inL + inR) * 0.5f;
+
+        /* Read from buffer at normal position (reverb tap) */
+        int tap1 = (sh->write_pos - (int)(0.03f * (float)sample_rate) + buf_len) % buf_len;
+        int tap2 = (sh->write_pos - (int)(0.07f * (float)sample_rate) + buf_len) % buf_len;
+        int tap3 = (sh->write_pos - (int)(0.11f * (float)sample_rate) + buf_len) % buf_len;
+        float reverb_out = sh->buffer[tap1 * 2] * 0.4f
+                         + sh->buffer[tap2 * 2 + 1] * 0.3f
+                         + sh->buffer[tap3 * 2] * 0.3f;
+
+        /* Octave-up pitch shift: read at double rate */
+        float shifted = 0.0f;
+        if (shimmer_amt > 0.0f) {
+            int read_i = (int)sh->read_phase;
+            float frac = sh->read_phase - (float)read_i;
+            int r0 = read_i % buf_len;
+            int r1 = (read_i + 1) % buf_len;
+            shifted = sh->buffer[r0 * 2] * (1.0f - frac)
+                    + sh->buffer[r1 * 2] * frac;
+            /* Advance read position at 2x rate (octave up) */
+            sh->read_phase += 2.0f;
+            if (sh->read_phase >= (float)buf_len)
+                sh->read_phase -= (float)buf_len;
+        }
+
+        float wet_out = reverb_out + shifted * shimmer_amt * 0.5f;
+
+        /* Slight phaser modulation on wet signal */
+        float lfo = sinf(sh->lfo_phase * 2.0f * (float)M_PI);
+        sh->lfo_phase += lfo_inc;
+        if (sh->lfo_phase >= 1.0f) sh->lfo_phase -= 1.0f;
+        float d = 0.5f + 0.3f * lfo;
+        for (int ch = 0; ch < 2; ch++) {
+            float ap_out = -d * wet_out + sh->ap_z1[ch];
+            sh->ap_z1[ch] = wet_out + d * ap_out;
+            wet_out = (wet_out + ap_out) * 0.5f;
+        }
+
+        /* Write to buffer: input + decayed feedback */
+        sh->buffer[sh->write_pos * 2]     = input + reverb_out * decay;
+        sh->buffer[sh->write_pos * 2 + 1] = input + reverb_out * decay;
+        sh->write_pos = (sh->write_pos + 1) % buf_len;
+
+        buf[i * 2]     = inL * (1.0f - mix) + wet_out * mix;
+        buf[i * 2 + 1] = inR * (1.0f - mix) + wet_out * mix;
+    }
+}
+
 /* ─── Public API ─────────────────────────────────────────────────────────── */
 
 void effect_free(sq_effect_slot_t *slot)
@@ -333,8 +628,28 @@ void effect_free(sq_effect_slot_t *slot)
         }
         slot->chorus.allocated = false;
         break;
+    case EFFECT_FLANGER:
+        if (slot->flanger.buffer) {
+            free(slot->flanger.buffer);
+            slot->flanger.buffer = NULL;
+        }
+        slot->flanger.allocated = false;
+        break;
+    case EFFECT_SHIMMER:
+        if (slot->shimmer.buffer) {
+            free(slot->shimmer.buffer);
+            slot->shimmer.buffer = NULL;
+        }
+        slot->shimmer.allocated = false;
+        break;
     case EFFECT_OVERDRIVE:
     case EFFECT_FUZZ:
+    case EFFECT_BITCRUSHER:
+    case EFFECT_COMPRESSOR:
+    case EFFECT_PHASER:
+    case EFFECT_TREMOLO:
+    case EFFECT_RINGMOD:
+    case EFFECT_TAPE:
     default:
         break;
     }
@@ -409,6 +724,57 @@ void effect_init(sq_effect_slot_t *slot, sq_effect_type_t type, uint32_t sample_
         slot->chorus.buffer = calloc(CHORUS_MAX_SAMPLES * 2, sizeof(float));
         slot->chorus.allocated = (slot->chorus.buffer != NULL);
         break;
+    case EFFECT_BITCRUSHER:
+        slot->bitcrusher.bits = 8.0f;
+        slot->bitcrusher.downsample = 1.0f;
+        slot->bitcrusher.mix = 1.0f;
+        slot->bitcrusher.hold_count = 1;
+        break;
+    case EFFECT_COMPRESSOR:
+        slot->compressor.threshold = 0.5f;
+        slot->compressor.ratio = 4.0f;
+        slot->compressor.attack = 0.01f;
+        slot->compressor.release = 0.1f;
+        slot->compressor.makeup = 1.0f;
+        slot->compressor.envelope = 0.0f;
+        break;
+    case EFFECT_PHASER:
+        slot->phaser.rate = 0.5f;
+        slot->phaser.depth = 0.5f;
+        slot->phaser.feedback = 0.5f;
+        slot->phaser.mix = 0.5f;
+        break;
+    case EFFECT_FLANGER:
+        slot->flanger.rate = 0.5f;
+        slot->flanger.depth = 0.5f;
+        slot->flanger.feedback = 0.3f;
+        slot->flanger.mix = 0.5f;
+        slot->flanger.buffer_size = FLANGER_MAX_SAMPLES;
+        slot->flanger.buffer = calloc(FLANGER_MAX_SAMPLES * 2, sizeof(float));
+        slot->flanger.allocated = (slot->flanger.buffer != NULL);
+        break;
+    case EFFECT_TREMOLO:
+        slot->tremolo.rate = 5.0f;
+        slot->tremolo.depth = 0.5f;
+        slot->tremolo.wave = 0;
+        break;
+    case EFFECT_RINGMOD:
+        slot->ringmod.freq = 440.0f;
+        slot->ringmod.mix = 0.5f;
+        break;
+    case EFFECT_TAPE:
+        slot->tape.drive = 0.3f;
+        slot->tape.warmth = 0.3f;
+        slot->tape.mix = 1.0f;
+        break;
+    case EFFECT_SHIMMER:
+        slot->shimmer.decay = 0.5f;
+        slot->shimmer.shimmer = 0.3f;
+        slot->shimmer.mix = 0.3f;
+        slot->shimmer.buffer_size = SHIMMER_BUF_SIZE;
+        slot->shimmer.buffer = calloc(SHIMMER_BUF_SIZE * 2, sizeof(float));
+        slot->shimmer.allocated = (slot->shimmer.buffer != NULL);
+        break;
     default:
         break;
     }
@@ -437,6 +803,30 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
         break;
     case EFFECT_CHORUS:
         chorus_process(&slot->chorus, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_BITCRUSHER:
+        bitcrusher_process(&slot->bitcrusher, buffer, num_frames);
+        break;
+    case EFFECT_COMPRESSOR:
+        compressor_process(&slot->compressor, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_PHASER:
+        phaser_process(&slot->phaser, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_FLANGER:
+        flanger_process(&slot->flanger, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_TREMOLO:
+        tremolo_process(&slot->tremolo, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_RINGMOD:
+        ringmod_process(&slot->ringmod, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_TAPE:
+        tape_process(&slot->tape, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_SHIMMER:
+        shimmer_process(&slot->shimmer, buffer, num_frames, sample_rate);
         break;
     default:
         break;

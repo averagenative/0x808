@@ -24,6 +24,14 @@ typedef enum {
     EFFECT_OVERDRIVE,
     EFFECT_FUZZ,
     EFFECT_CHORUS,
+    EFFECT_BITCRUSHER,
+    EFFECT_COMPRESSOR,
+    EFFECT_PHASER,
+    EFFECT_FLANGER,
+    EFFECT_TREMOLO,
+    EFFECT_RINGMOD,
+    EFFECT_TAPE,
+    EFFECT_SHIMMER,
     EFFECT_TYPE_COUNT
 } sq_effect_type_t;
 
@@ -130,6 +138,108 @@ typedef struct {
     bool  allocated;
 } sq_efx_chorus_t;
 
+/* ─── Bitcrusher effect ──────────────────────────────────────────────────── */
+
+typedef struct {
+    float bits;             /* bit depth (1-16, default 8) */
+    float downsample;       /* sample-and-hold factor (1-32, default 1) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float hold_l, hold_r;  /* held sample values */
+    int   hold_count;       /* frames until next sample */
+} sq_efx_bitcrusher_t;
+
+/* ─── Compressor effect ──────────────────────────────────────────────────── */
+
+typedef struct {
+    float threshold;        /* threshold (0-1, default 0.5) */
+    float ratio;            /* compression ratio (1-20, default 4) */
+    float attack;           /* attack time in seconds (0.001-0.5) */
+    float release;          /* release time in seconds (0.01-1.0) */
+    float makeup;           /* makeup gain (0-2, default 1) */
+    /* State */
+    float envelope;         /* current envelope level */
+} sq_efx_compressor_t;
+
+/* ─── Phaser effect ──────────────────────────────────────────────────────── */
+
+#define PHASER_NUM_STAGES 6
+
+typedef struct {
+    float rate;             /* LFO rate in Hz (0.1-10) */
+    float depth;            /* modulation depth (0-1) */
+    float feedback;         /* feedback amount (0-0.9) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float lfo_phase;        /* 0-1 */
+    float ap_z1[2][PHASER_NUM_STAGES]; /* allpass delay elements [ch][stage] */
+    float last_out[2];      /* for feedback */
+} sq_efx_phaser_t;
+
+/* ─── Flanger effect ─────────────────────────────────────────────────────── */
+
+#define FLANGER_MAX_SAMPLES 512  /* ~11ms at 44100 Hz */
+
+typedef struct {
+    float rate;             /* LFO rate in Hz (0.1-10) */
+    float depth;            /* modulation depth (0-1) */
+    float feedback;         /* feedback (-0.9 to 0.9) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float *buffer;          /* heap-allocated stereo delay buffer */
+    int   write_pos;
+    int   buffer_size;
+    float lfo_phase;        /* 0-1 */
+    bool  allocated;
+} sq_efx_flanger_t;
+
+/* ─── Tremolo effect ─────────────────────────────────────────────────────── */
+
+typedef struct {
+    float rate;             /* LFO rate in Hz (0.1-20) */
+    float depth;            /* modulation depth (0-1) */
+    int   wave;             /* 0=sine, 1=square, 2=triangle */
+    /* State */
+    float lfo_phase;        /* 0-1 */
+} sq_efx_tremolo_t;
+
+/* ─── Ring modulator effect ──────────────────────────────────────────────── */
+
+typedef struct {
+    float freq;             /* modulation frequency in Hz (20-5000) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float phase;            /* oscillator phase (0-1) */
+} sq_efx_ringmod_t;
+
+/* ─── Tape saturation effect ─────────────────────────────────────────────── */
+
+typedef struct {
+    float drive;            /* saturation amount (0-1) */
+    float warmth;           /* low-pass warmth (0-1) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float warmth_z1[2];     /* one-pole LP filter state [L,R] */
+} sq_efx_tape_t;
+
+/* ─── Shimmer reverb effect ──────────────────────────────────────────────── */
+
+#define SHIMMER_BUF_SIZE 48000  /* 1 second at 48kHz */
+
+typedef struct {
+    float decay;            /* reverb decay (0-1) */
+    float shimmer;          /* pitch-shift feedback amount (0-1) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State — heap allocated */
+    float *buffer;          /* circular reverb buffer (stereo) */
+    int   write_pos;
+    int   buffer_size;
+    float read_phase;       /* fractional read position for pitch shift */
+    float ap_z1[2];         /* allpass for phaser modulation */
+    float lfo_phase;        /* phaser LFO */
+    bool  allocated;
+} sq_efx_shimmer_t;
+
 /* ─── Generic effect slot ────────────────────────────────────────────────── */
 
 #define MAX_TRACK_EFFECTS 3
@@ -144,6 +254,14 @@ typedef struct {
         sq_efx_overdrive_t overdrive;
         sq_efx_fuzz_t      fuzz;
         sq_efx_chorus_t    chorus;
+        sq_efx_bitcrusher_t bitcrusher;
+        sq_efx_compressor_t compressor;
+        sq_efx_phaser_t    phaser;
+        sq_efx_flanger_t   flanger;
+        sq_efx_tremolo_t   tremolo;
+        sq_efx_ringmod_t   ringmod;
+        sq_efx_tape_t      tape;
+        sq_efx_shimmer_t   shimmer;
     };
 } sq_effect_slot_t;
 
