@@ -418,8 +418,12 @@ Goal: Support live performance workflows — variable pattern lengths, scene mem
 - [ ] TASK-228: Plugin resize/maximize parity — plugin must correctly fill host window on resize, maximize, and restore. GL viewport and ImGui layout must adapt to any host-provided size. No rendering artifacts (ghosting, stale frames) during resize.
 - [ ] TASK-229: Kit selector — toolbar or drum grid dropdown to switch between sample kits (808, 909, 505, MRK-2, CR-78, LM-2). Switching kit re-assigns all sampler tracks' sample_index to the corresponding kit samples. Show current kit name in UI.
 - [ ] TASK-230: Plugin-specific UI testing — systematic testing of all plugin UI interactions in Reaper (VST3) and other hosts. Verify: mouse hover alignment (reparented SDL window coordinate mapping), button clicks via Win32 mouse injection, knob dragging, right-click popups, scroll wheel, keyboard shortcuts. Document host-specific quirks. Test at multiple window sizes and after resize/maximize.
-- [ ] TASK-231: Plugin transport independence — decouple plugin's internal sequencer transport from host DAW transport. Currently CPLUG's process callback overwrites engine->transport.playing from host state (~15ms after GUI sets it). Plugin should run its own internal clock (like a hardware groove box) so PLAY/STOP, pattern switching, and arrangement mode work independently. Consider adding an "Internal / Host Sync" mode toggle for users who want DAW-synced playback. REC and EXPORT may still not apply in plugin context (DAW handles recording and bouncing).
+- [x] TASK-231: Plugin transport independence — decouple plugin's internal sequencer transport from host DAW transport. Currently CPLUG's process callback overwrites engine->transport.playing from host state (~15ms after GUI sets it). Plugin should run its own internal clock (like a hardware groove box) so PLAY/STOP, pattern switching, and arrangement mode work independently. Consider adding an "Internal / Host Sync" mode toggle for users who want DAW-synced playback. REC and EXPORT may still not apply in plugin context (DAW handles recording and bouncing).
 - [ ] TASK-232: Shared toolbar extraction — extract toolbar drawing into a shared `toolbar_draw()` function in src/gui/toolbar.cpp. Standalone adds window controls (_  []  X) and PLAY/REC/EXPORT. Plugin omits host-controlled features. Both call the same shared code for pattern selector, panel toggles, knobs, theme, logo.
+
+### 14E: GTK3 Frontend (Alternative GUI)
+
+- [ ] TASK-233: GTK3 frontend — build an alternative GUI frontend using GTK3 (C API) as an option alongside the existing Dear ImGui (SDL2+OpenGL) frontend. This provides a native Linux desktop experience and avoids SDL2/OpenGL dependencies for users who prefer system-native toolkits. Scope: create `src/gui_gtk/` with GTK3 implementations of all GUI panels (drum grid, piano roll, synth editor, mixer, arrangement, sample browser, virtual keyboard, toolbar, knobs, export dialog, theme). Use Cairo for custom drawing (waveforms, knobs, meters). Engine interface stays identical — GTK3 frontend calls the same `sq_engine_*` C API. CMake build option: `-DGUI_BACKEND=imgui|gtk3` (default: imgui). GTK3 audio callback via miniaudio (same as standalone). This is a large task (~3000-5000 lines) — break into subtasks during implementation: (1) CMake integration + GTK3 window shell with toolbar, (2) drum grid with Cairo drawing, (3) piano roll, (4) synth editor + knobs, (5) mixer/FX view, (6) sample browser + file chooser dialog, (7) export dialog, (8) theme support via CSS, (9) virtual keyboard, (10) arrangement view.
 
 ---
 
@@ -470,9 +474,9 @@ Goal: Package standalone exe, VST3, and CLAP for distribution. Code signing, ins
 | 11. GUI Polish & Standalone | TASK-124 → 151 | Cross-platform parity, tests | P4 |
 | 12. Security & Robustness | TASK-152 → 183 | Thread safety, vuln fixes, fuzzing | P4 |
 | 13. UX Polish & Visual Design | TASK-184 → 209 | Knobs, visuals, packaging, UX | P5 |
-| 14. Live Performance | TASK-210 → 232 | Variable length, scene memory, MIDI out, plugin parity | P5 |
+| 14. Live Performance | TASK-210 → 233 | Variable length, scene memory, MIDI out, plugin parity, GTK3 frontend | P5 |
 | 15. Release & Distribution | TASK-212 → 223 | Signed builds, CI releases, installer | P2 |
 
-**Total: 232 tasks across 15 phases**
+**Total: 233 tasks across 15 phases**
 
 Each phase ends with a milestone test that proves the new capability works end-to-end. Phases 1-3 (P0) deliver the MVP. Phases 4-5 (P1) make it a real production tool. Phases 6-7 (P2) enable full songs and shipping. Phases 8-10 (P3) expand reach and polish. Phase 11 (P4) ensures cross-platform GUI parity. Phase 12 (P4) hardens the codebase. Phase 13 (P5) makes it feel like a real instrument. Phase 15 (P2) ships the product.

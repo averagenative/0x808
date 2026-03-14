@@ -494,21 +494,11 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
     SqPlugin *p = (SqPlugin *)ptr;
     sq_engine_t *engine = &p->engine;
 
-    /* ── Host transport sync (TASK-109) ─────────────────────────── */
-    if (ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_BPM)
-        engine->transport.bpm = ctx->bpm;
-
-    if (ctx->flags & CPLUG_FLAG_TRANSPORT_IS_PLAYING) {
-        if (!engine->transport.playing) {
-            engine->transport.playing = true;
-            /* Sync playhead position from host if available */
-            if (ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS) {
-                engine->transport.current_beat = ctx->playheadBeats;
-            }
-        }
-    } else {
-        engine->transport.playing = false;
-    }
+    /* ── Internal transport (independent from DAW host) ─────────── */
+    /* The plugin runs its own clock like a hardware groove box.
+     * GUI controls play/stop/BPM; the DAW just captures audio output.
+     * Host transport state (ctx->flags) is intentionally ignored.
+     * TODO: Add an "Internal / Host Sync" toggle if host-sync is needed. */
 
     /* ── Event-driven process loop ──────────────────────────────── */
     CplugEvent event;
