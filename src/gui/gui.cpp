@@ -683,6 +683,41 @@ int gui_frame(sq_engine_t *engine)
         }
         ImGui::SameLine();
 
+        /* Pattern selector: clickable numbered buttons, active one highlighted */
+        {
+            ImVec4 active_col(0.24f, 0.63f, 0.39f, 1.0f);
+            ImVec4 inactive_col(0.18f, 0.18f, 0.20f, 1.0f);
+            float pat_btn_w = 28.0f;
+            for (uint32_t p = 0; p < engine->num_patterns && p < 9; p++) {
+                char plbl[4];
+                snprintf(plbl, sizeof(plbl), "%u", p + 1);
+                bool is_active = ((int)p == engine->transport.current_pattern);
+                if (ColoredButton(plbl, is_active, is_active ? active_col : inactive_col,
+                                  ImVec2(pat_btn_w, btn_h)))
+                    engine->transport.current_pattern = (int)p;
+                ImGui::SameLine(0, 2);
+            }
+            /* "+" button to add pattern */
+            if (engine->num_patterns < SQ_MAX_PATTERNS) {
+                if (ImGui::Button("+##addpat", ImVec2(pat_btn_w, btn_h))) {
+                    int ni = (int)engine->num_patterns;
+                    engine->num_patterns++;
+                    sq_pattern_t *np = &engine->patterns[ni];
+                    memset(np, 0, sizeof(*np));
+                    snprintf(np->name, SQ_PATTERN_NAME_LEN, "Pattern %d", ni + 1);
+                    np->num_tracks = 4;
+                    for (uint32_t t = 0; t < np->num_tracks; t++) {
+                        np->tracks[t].volume = 1.0f;
+                        np->tracks[t].sample_index = (int)(t < engine->num_samples ? t : 0);
+                        np->tracks[t].synth_preset = -1;
+                    }
+                    engine->transport.current_pattern = ni;
+                }
+                ImGui::SameLine(0, 2);
+            }
+        }
+        ImGui::SameLine();
+
         if (ColoredButton(g_show_mixer ? "FX*" : "FX", g_show_mixer, ImVec4(0.51f, 0.31f, 0.63f, 1.0f), btn_sm))
             g_show_mixer = !g_show_mixer;
         ImGui::SameLine();
