@@ -295,10 +295,100 @@ static void on_export_clicked(GtkWidget *btn, gpointer data)
     gtk_export_show(g_gtk.window);
 }
 
+/* ─── Theme popover menu ──────────────────────────────────────────────────── */
+
+static GtkWidget *s_theme_popover = NULL;
+
+static void on_theme_item_clicked(GtkWidget *item_btn, gpointer user_data)
+{
+    (void)item_btn;
+    int theme_idx = GPOINTER_TO_INT(user_data);
+    gtk_theme_apply_index(g_gtk.window, theme_idx);
+
+    /* Dismiss the popover */
+    if (s_theme_popover)
+        gtk_popover_popdown(GTK_POPOVER(s_theme_popover));
+
+    /* Re-flatten buttons since theme CSS reload can affect them */
+    gtk_theme_flatten_buttons(g_gtk.main_box);
+}
+
 static void on_theme_clicked(GtkWidget *btn, gpointer data)
 {
-    (void)btn; (void)data;
-    gtk_theme_cycle(g_gtk.window);
+    (void)data;
+
+    /* If popover already exists, just toggle it */
+    if (s_theme_popover && gtk_widget_get_parent(s_theme_popover) == btn) {
+        gtk_popover_popup(GTK_POPOVER(s_theme_popover));
+
+        /* Update checkmarks for current theme */
+        GtkWidget *box = gtk_popover_get_child(GTK_POPOVER(s_theme_popover));
+        if (box) {
+            int cur = gtk_theme_current();
+            int count = gtk_theme_count();
+            int idx = 0;
+            GtkWidget *child = gtk_widget_get_first_child(box);
+            while (child) {
+                /* Skip the header label and separator */
+                if (GTK_IS_BUTTON(child) && idx < count) {
+                    char buf[64];
+                    if (idx == cur)
+                        snprintf(buf, sizeof(buf), ">> %s", gtk_theme_name(idx));
+                    else
+                        snprintf(buf, sizeof(buf), "   %s", gtk_theme_name(idx));
+                    gtk_button_set_label(GTK_BUTTON(child), buf);
+                    idx++;
+                }
+                child = gtk_widget_get_next_sibling(child);
+            }
+        }
+        return;
+    }
+
+    /* Destroy old popover if parent changed */
+    if (s_theme_popover) {
+        gtk_widget_unparent(s_theme_popover);
+        s_theme_popover = NULL;
+    }
+
+    /* Create popover */
+    s_theme_popover = gtk_popover_new();
+    gtk_widget_set_parent(s_theme_popover, btn);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_margin_start(box, 4);
+    gtk_widget_set_margin_end(box, 4);
+    gtk_widget_set_margin_top(box, 4);
+    gtk_widget_set_margin_bottom(box, 4);
+
+    /* Header */
+    GtkWidget *header = gtk_label_new("Select Theme:");
+    gtk_widget_set_halign(header, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(box), header);
+
+    GtkWidget *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_box_append(GTK_BOX(box), sep);
+
+    /* Theme entries */
+    int cur = gtk_theme_current();
+    int count = gtk_theme_count();
+    for (int i = 0; i < count; i++) {
+        char buf[64];
+        if (i == cur)
+            snprintf(buf, sizeof(buf), ">> %s", gtk_theme_name(i));
+        else
+            snprintf(buf, sizeof(buf), "   %s", gtk_theme_name(i));
+
+        GtkWidget *item = gtk_button_new_with_label(buf);
+        gtk_widget_add_css_class(item, "flat");
+        gtk_widget_set_size_request(item, 140, -1);
+        g_signal_connect(item, "clicked",
+                         G_CALLBACK(on_theme_item_clicked), GINT_TO_POINTER(i));
+        gtk_box_append(GTK_BOX(box), item);
+    }
+
+    gtk_popover_set_child(GTK_POPOVER(s_theme_popover), box);
+    gtk_popover_popup(GTK_POPOVER(s_theme_popover));
 }
 
 /* ─── QWERTY keyboard → MIDI note mapping ─────────────────────────────────── */

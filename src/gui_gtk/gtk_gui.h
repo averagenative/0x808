@@ -70,6 +70,9 @@ void gtk_theme_flatten_buttons(GtkWidget *root);
 GtkWidget *sq_flat_button_new(const char *label, GCallback callback, gpointer data);
 int  gtk_theme_current(void);
 const char *gtk_theme_current_name(void);
+int  gtk_theme_count(void);
+const char *gtk_theme_name(int index);
+void gtk_theme_apply_index(GtkWidget *widget, int index);
 
 /* gtk_drum_grid.c */
 GtkWidget *gtk_drum_grid_new(void);

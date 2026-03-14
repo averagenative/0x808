@@ -26,7 +26,28 @@
     ".synth-label { font-size: 10px; margin: 0; padding: 0; }" \
     ".synth-section { font-size: 10px; font-weight: bold; margin: 1px 0; padding: 0; }" \
     "button.flat { padding: 4px 8px; }" \
-    "dropdown { background-image: none; }"
+    "dropdown { background-image: none; }" \
+    "button.section-color-0 { background-color: rgba(100,161,219,0.35); }" \
+    "button.section-color-0:hover { background-color: rgba(100,161,219,0.50); }" \
+    "button.section-color-1 { background-color: rgba(219,130,61,0.35); }" \
+    "button.section-color-1:hover { background-color: rgba(219,130,61,0.50); }" \
+    "button.section-color-2 { background-color: rgba(79,199,120,0.35); }" \
+    "button.section-color-2:hover { background-color: rgba(79,199,120,0.50); }" \
+    "button.section-color-3 { background-color: rgba(199,79,181,0.35); }" \
+    "button.section-color-3:hover { background-color: rgba(199,79,181,0.50); }" \
+    "button.section-color-4 { background-color: rgba(219,199,61,0.35); }" \
+    "button.section-color-4:hover { background-color: rgba(219,199,61,0.50); }" \
+    "button.section-color-5 { background-color: rgba(120,79,199,0.35); }" \
+    "button.section-color-5:hover { background-color: rgba(120,79,199,0.50); }" \
+    "button.section-color-6 { background-color: rgba(61,199,199,0.35); }" \
+    "button.section-color-6:hover { background-color: rgba(61,199,199,0.50); }" \
+    "button.section-color-7 { background-color: rgba(199,100,100,0.35); }" \
+    "button.section-color-7:hover { background-color: rgba(199,100,100,0.50); }" \
+    "button.section-color-0.active, button.section-color-1.active," \
+    "button.section-color-2.active, button.section-color-3.active," \
+    "button.section-color-4.active, button.section-color-5.active," \
+    "button.section-color-6.active, button.section-color-7.active {" \
+    "  border: 2px solid rgba(255,255,255,0.6); }"
 
 /* ─── Theme CSS strings ───────────────────────────────────────────────────── */
 
@@ -242,6 +263,26 @@ int gtk_theme_current(void)
 const char *gtk_theme_current_name(void)
 {
     return THEME_NAMES[s_current_theme];
+}
+
+int gtk_theme_count(void)
+{
+    return NUM_THEMES;
+}
+
+const char *gtk_theme_name(int index)
+{
+    if (index < 0 || index >= NUM_THEMES) return "?";
+    return THEME_NAMES[index];
+}
+
+void gtk_theme_apply_index(GtkWidget *widget, int index)
+{
+    apply_theme_css(widget, index);
+
+    char msg[32];
+    snprintf(msg, sizeof(msg), "Theme: %s", THEME_NAMES[index]);
+    sq_app_set_status(&g_gtk.app, msg, 90);
 }
 
 /* ─── Flat button: GtkLabel + GtkGestureClick, no GtkButton chrome ────────── */

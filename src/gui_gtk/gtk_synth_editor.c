@@ -597,44 +597,11 @@ static void on_adsr_drag_end(GtkGestureDrag *gesture, double dx, double dy,
 
 /* ─── Slider callback ─────────────────────────────────────────────────────── */
 
-static void on_slider_changed(GtkRange *range, gpointer user_data)
-{
-    (void)user_data;
-    float *ptr = (float *)g_object_get_data(G_OBJECT(range), "value_ptr");
-    if (ptr) *ptr = (float)gtk_range_get_value(range);
-}
-
 static void on_int_slider_changed(GtkRange *range, gpointer user_data)
 {
     (void)user_data;
     int *ptr = (int *)g_object_get_data(G_OBJECT(range), "int_ptr");
     if (ptr) *ptr = (int)gtk_range_get_value(range);
-}
-
-static GtkWidget *make_slider(const char *label_text, float min, float max,
-                               float *value_ptr)
-{
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
-
-    GtkWidget *label = gtk_label_new(label_text);
-    gtk_widget_set_size_request(label, 36, -1);
-    gtk_widget_set_halign(label, GTK_ALIGN_START);
-    gtk_widget_add_css_class(label, "synth-label");
-    gtk_box_append(GTK_BOX(box), label);
-
-    GtkWidget *scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                 (double)min, (double)max,
-                                                 (double)(max - min) / 100.0);
-    gtk_range_set_value(GTK_RANGE(scale), (double)*value_ptr);
-    gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
-    gtk_widget_set_hexpand(scale, TRUE);
-    gtk_box_append(GTK_BOX(box), scale);
-
-    g_object_set_data(G_OBJECT(scale), "value_ptr", value_ptr);
-    g_signal_connect(scale, "value-changed",
-                     G_CALLBACK(on_slider_changed), NULL);
-
-    return box;
 }
 
 /* ─── Helper: inline knob with label ──────────────────────────────────────── */
@@ -975,24 +942,50 @@ static void rebuild_controls(void)
     /* ── FM parameters ────────────────────────────────────────────── */
     if (p->synth_mode == SYNTH_FM) {
         add_section(s_content_box, "FM");
+
+        /* Algorithm selector dropdown */
+        gtk_box_append(GTK_BOX(s_content_box),
+                      make_int_dropdown("Alg", fm_alg_names, FM_NUM_ALGORITHMS,
+                                        &p->fm_algorithm));
+
+        /* Algorithm diagram (80px tall Cairo drawing area) */
+        s_fm_preset = p;
+        s_fm_algo_area = gtk_drawing_area_new();
+        gtk_widget_set_size_request(s_fm_algo_area, -1, 80);
+        gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_fm_algo_area),
+                                       fm_algo_draw, NULL, NULL);
+        gtk_box_append(GTK_BOX(s_content_box), s_fm_algo_area);
+
+        /* Operator controls in a 4-column horizontal layout */
+        GtkWidget *fm_cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+        gtk_box_append(GTK_BOX(s_content_box), fm_cols);
+
         for (int op = 0; op < FM_NUM_OPERATORS; op++) {
+            GtkWidget *op_col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
+            gtk_widget_set_hexpand(op_col, TRUE);
+            gtk_box_append(GTK_BOX(fm_cols), op_col);
+
             char ol[16];
             snprintf(ol, sizeof(ol), "Op %d", op + 1);
-            add_section(s_content_box, ol);
-            snprintf(ol, sizeof(ol), "Ratio%d", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0.5, 16, &p->fm_ops[op].freq_ratio));
-            snprintf(ol, sizeof(ol), "Level%d", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0, 1, &p->fm_ops[op].level));
-            snprintf(ol, sizeof(ol), "FB%d", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0, 1, &p->fm_ops[op].feedback));
-            snprintf(ol, sizeof(ol), "%d.A", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0.001, 5, &p->fm_ops[op].env.attack));
-            snprintf(ol, sizeof(ol), "%d.D", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0.001, 5, &p->fm_ops[op].env.decay));
-            snprintf(ol, sizeof(ol), "%d.S", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0, 1, &p->fm_ops[op].env.sustain));
-            snprintf(ol, sizeof(ol), "%d.R", op+1);
-            gtk_box_append(GTK_BOX(s_content_box), make_slider(ol, 0.001, 5, &p->fm_ops[op].env.release));
+            add_section(op_col, ol);
+
+            /* Ratio, Level, Feedback knobs */
+            GtkWidget *knob_row1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+            snprintf(ol, sizeof(ol), "Rat");
+            gtk_box_append(GTK_BOX(knob_row1), make_knob(ol, 0.5f, 16, &p->fm_ops[op].freq_ratio));
+            snprintf(ol, sizeof(ol), "Lvl");
+            gtk_box_append(GTK_BOX(knob_row1), make_knob(ol, 0, 1, &p->fm_ops[op].level));
+            snprintf(ol, sizeof(ol), "FB");
+            gtk_box_append(GTK_BOX(knob_row1), make_knob(ol, 0, 1, &p->fm_ops[op].feedback));
+            gtk_box_append(GTK_BOX(op_col), knob_row1);
+
+            /* ADSR knobs */
+            gtk_box_append(GTK_BOX(op_col),
+                          make_adsr_knobs(&p->fm_ops[op].env.attack,
+                                          &p->fm_ops[op].env.decay,
+                                          &p->fm_ops[op].env.sustain,
+                                          &p->fm_ops[op].env.release,
+                                          5.0f, 5.0f, 5.0f));
         }
     }
 
@@ -1039,6 +1032,10 @@ void gtk_synth_editor_update(void)
     /* Redraw wavetable waveform */
     if (s_wt_area && s_wt_preset)
         gtk_widget_queue_draw(s_wt_area);
+
+    /* Redraw FM algorithm diagram */
+    if (s_fm_algo_area && s_fm_preset)
+        gtk_widget_queue_draw(s_fm_algo_area);
 }
 
 /* ─── Constructor ─────────────────────────────────────────────────────────── */

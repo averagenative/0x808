@@ -46,6 +46,18 @@ static int  s_hover_step  = -1;
 static double s_hover_x = -1.0;
 static double s_hover_y = -1.0;
 
+/* Right-click popover state */
+static GtkWidget *s_popover      = NULL;
+static int        s_popup_track  = -1;
+static int        s_popup_step   = -1;
+static GtkWidget *s_vel_spin     = NULL;
+static GtkWidget *s_pitch_spin   = NULL;
+
+/* Clipboard for copy/paste */
+static bool    s_clipboard_valid = false;
+static uint8_t s_clipboard_vel   = 100;
+static int8_t  s_clipboard_pitch = 0;
+
 /* ─── Helper: get grid geometry ───────────────────────────────────────────── */
 
 typedef struct {
@@ -556,6 +568,257 @@ static void on_motion_leave(GtkEventControllerMotion *ctrl, gpointer user_data)
     gtk_widget_queue_draw(g_gtk.drum_grid_area);
 }
 
+/* ─── Right-click context menu callbacks ───────────────────────────────────── */
+
+static void on_vel_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    int val = gtk_spin_button_get_value_as_int(spin);
+    pat->tracks[s_popup_track].steps[s_popup_step].velocity = (uint8_t)val;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_pitch_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    int val = gtk_spin_button_get_value_as_int(spin);
+    pat->tracks[s_popup_track].steps[s_popup_step].pitch_offset = (int8_t)val;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_delete_note(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    undo_push(engine);
+    pat->tracks[s_popup_track].steps[s_popup_step].velocity = 0;
+    pat->tracks[s_popup_track].steps[s_popup_step].pitch_offset = 0;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+    if (s_popover) gtk_popover_popdown(GTK_POPOVER(s_popover));
+}
+
+static void on_copy_note(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    sq_step_t *step = &pat->tracks[s_popup_track].steps[s_popup_step];
+    s_clipboard_vel   = step->velocity;
+    s_clipboard_pitch = step->pitch_offset;
+    s_clipboard_valid = true;
+    sq_app_set_status(&g_gtk.app, "Step copied", 60);
+}
+
+static void on_paste_note(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    if (!s_clipboard_valid) return;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    undo_push(engine);
+    sq_step_t *step = &pat->tracks[s_popup_track].steps[s_popup_step];
+    step->velocity     = s_clipboard_vel;
+    step->pitch_offset = s_clipboard_pitch;
+
+    /* Update spinners to reflect pasted values */
+    if (s_vel_spin)
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(s_vel_spin), s_clipboard_vel);
+    if (s_pitch_spin)
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(s_pitch_spin), s_clipboard_pitch);
+
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+    sq_app_set_status(&g_gtk.app, "Step pasted", 60);
+}
+
+static void on_popover_closed(GtkPopover *popover, gpointer user_data)
+{
+    (void)user_data;
+    (void)popover;
+    s_popup_track = -1;
+    s_popup_step  = -1;
+    s_vel_spin    = NULL;
+    s_pitch_spin  = NULL;
+}
+
+static void show_step_popover(int track, int step, double click_x, double click_y)
+{
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)track >= pat->num_tracks) return;
+
+    sq_step_t *st = &pat->tracks[track].steps[step];
+
+    /* Push undo before any edits via the popover */
+    undo_push(engine);
+
+    s_popup_track = track;
+    s_popup_step  = step;
+
+    /* Destroy previous popover if any */
+    if (s_popover) {
+        gtk_widget_unparent(s_popover);
+        s_popover = NULL;
+    }
+
+    /* Build popover content */
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    gtk_widget_set_margin_start(box, 10);
+    gtk_widget_set_margin_end(box, 10);
+    gtk_widget_set_margin_top(box, 8);
+    gtk_widget_set_margin_bottom(box, 8);
+
+    /* Header label */
+    char header[48];
+    snprintf(header, sizeof(header), "Track %d, Step %d", track + 1, step + 1);
+    GtkWidget *lbl = gtk_label_new(header);
+    PangoAttrList *attrs = pango_attr_list_new();
+    pango_attr_list_insert(attrs, pango_attr_weight_new(PANGO_WEIGHT_BOLD));
+    gtk_label_set_attributes(GTK_LABEL(lbl), attrs);
+    pango_attr_list_unref(attrs);
+    gtk_box_append(GTK_BOX(box), lbl);
+
+    /* Velocity row */
+    GtkWidget *vel_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(vel_row), gtk_label_new("Velocity:"));
+    GtkAdjustment *vel_adj = gtk_adjustment_new(
+        st->velocity, 1, 127, 1, 10, 0);
+    s_vel_spin = gtk_spin_button_new(vel_adj, 1, 0);
+    gtk_widget_set_hexpand(s_vel_spin, TRUE);
+    g_signal_connect(s_vel_spin, "value-changed", G_CALLBACK(on_vel_changed), NULL);
+    gtk_box_append(GTK_BOX(vel_row), s_vel_spin);
+    gtk_box_append(GTK_BOX(box), vel_row);
+
+    /* Pitch row */
+    GtkWidget *pitch_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(pitch_row), gtk_label_new("Pitch:"));
+    GtkAdjustment *pitch_adj = gtk_adjustment_new(
+        st->pitch_offset, -12, 12, 1, 4, 0);
+    s_pitch_spin = gtk_spin_button_new(pitch_adj, 1, 0);
+    gtk_widget_set_hexpand(s_pitch_spin, TRUE);
+    g_signal_connect(s_pitch_spin, "value-changed", G_CALLBACK(on_pitch_changed), NULL);
+    gtk_box_append(GTK_BOX(pitch_row), s_pitch_spin);
+    gtk_box_append(GTK_BOX(box), pitch_row);
+
+    /* Separator */
+    gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+
+    /* Button row */
+    GtkWidget *btn_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    gtk_widget_set_halign(btn_row, GTK_ALIGN_CENTER);
+
+    GtkWidget *del_btn = gtk_button_new_with_label("Delete");
+    g_signal_connect(del_btn, "clicked", G_CALLBACK(on_delete_note), NULL);
+    gtk_box_append(GTK_BOX(btn_row), del_btn);
+
+    GtkWidget *copy_btn = gtk_button_new_with_label("Copy");
+    g_signal_connect(copy_btn, "clicked", G_CALLBACK(on_copy_note), NULL);
+    gtk_box_append(GTK_BOX(btn_row), copy_btn);
+
+    GtkWidget *paste_btn = gtk_button_new_with_label("Paste");
+    gtk_widget_set_sensitive(paste_btn, s_clipboard_valid);
+    g_signal_connect(paste_btn, "clicked", G_CALLBACK(on_paste_note), NULL);
+    gtk_box_append(GTK_BOX(btn_row), paste_btn);
+
+    gtk_box_append(GTK_BOX(box), btn_row);
+
+    /* Create popover parented on the drum grid drawing area */
+    s_popover = gtk_popover_new();
+    gtk_popover_set_child(GTK_POPOVER(s_popover), box);
+    gtk_widget_set_parent(s_popover, g_gtk.drum_grid_area);
+    gtk_popover_set_autohide(GTK_POPOVER(s_popover), TRUE);
+
+    /* Position the popover at the click point */
+    GdkRectangle rect = {
+        .x = (int)click_x,
+        .y = (int)click_y,
+        .width = 1,
+        .height = 1
+    };
+    gtk_popover_set_pointing_to(GTK_POPOVER(s_popover), &rect);
+
+    g_signal_connect(s_popover, "closed", G_CALLBACK(on_popover_closed), NULL);
+
+    gtk_popover_popup(GTK_POPOVER(s_popover));
+}
+
+/* ─── Right-click handler ─────────────────────────────────────────────────── */
+
+static void on_right_click(GtkGestureClick *gesture, int n_press,
+                           double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if (pat->num_tracks == 0) return;
+
+    int w = gtk_widget_get_width(g_gtk.drum_grid_area);
+    int h = gtk_widget_get_height(g_gtk.drum_grid_area);
+    grid_geom_t g;
+    if (!get_geom(w, h, &g)) return;
+
+    /* Only handle clicks in the grid area */
+    if (x < g.grid_x || y < g.grid_y) return;
+
+    int step  = (int)((x - g.grid_x) / g.cell_w);
+    int track = (int)((y - g.grid_y + s_scroll_offset) / g.cell_h);
+
+    if (step < 0 || (uint32_t)step >= g.max_steps) return;
+    if (track < 0 || (uint32_t)track >= pat->num_tracks) return;
+
+    /* If cell is empty, activate it first with default velocity */
+    if (pat->tracks[track].steps[step].velocity == 0) {
+        undo_push(engine);
+        pat->tracks[track].steps[step].velocity = 100;
+        gtk_widget_queue_draw(g_gtk.drum_grid_area);
+    }
+
+    g_gtk.app.selected_track = track;
+    show_step_popover(track, step, x, y);
+}
+
 /* ─── Add track buttons ───────────────────────────────────────────────────── */
 
 static void on_add_sampler_track(GtkWidget *btn, gpointer user_data)
@@ -621,10 +884,17 @@ GtkWidget *gtk_drum_grid_new(void)
     GtkWidget *area = gtk_drawing_area_new();
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), on_draw, NULL, NULL);
 
-    /* Click for toggling steps + selecting tracks */
+    /* Left-click for toggling steps + selecting tracks */
     GtkGesture *click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 1);
     g_signal_connect(click, "pressed", G_CALLBACK(on_click), NULL);
     gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(click));
+
+    /* Right-click for context menu */
+    GtkGesture *rclick = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(rclick), 3);
+    g_signal_connect(rclick, "pressed", G_CALLBACK(on_right_click), NULL);
+    gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(rclick));
 
     /* Drag for painting multiple steps */
     GtkGesture *drag = gtk_gesture_drag_new();

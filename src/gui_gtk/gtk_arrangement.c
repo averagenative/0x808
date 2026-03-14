@@ -117,11 +117,16 @@ static void rebuild_sections(void)
             snprintf(label, sizeof(label), "P%d x%d", pi + 1, sec->repeat_count);
 
         GtkWidget *btn = gtk_button_new_with_label(label);
+
+        /* Section color coding — 8-color palette cycled by index */
+        char color_class[24];
+        snprintf(color_class, sizeof(color_class), "section-color-%d", ci);
+        gtk_widget_add_css_class(btn, color_class);
+
         if ((int)i == s_selected_section || (int)i == engine->transport.current_section)
             gtk_widget_add_css_class(btn, "active");
         g_signal_connect(btn, "clicked", G_CALLBACK(on_section_clicked), GINT_TO_POINTER(i));
         gtk_box_append(GTK_BOX(s_sections_box), btn);
-        (void)ci; /* TODO: use color */
     }
 
     /* Add button */
