@@ -4,7 +4,12 @@
 
 #include "core/log.h"
 
-sq_log_level_t g_sq_log_level    = SQ_LOG_DEBUG;
+/* Default: errors only in release, everything in debug builds */
+#ifdef NDEBUG
+sq_log_level_t g_sq_log_level    = SQ_LOG_ERROR;
+#else
+sq_log_level_t g_sq_log_level    = SQ_LOG_WARN;
+#endif
 double         g_sq_log_start_ms = 0.0;
 
 void sq_log_init(void)
