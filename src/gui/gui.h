@@ -41,6 +41,9 @@ extern int g_visual_step;
 /* Currently selected track index (-1 = none) */
 extern int g_selected_track;
 
+/* Pattern selector scroll offset (shared between standalone and plugin) */
+extern int g_pat_scroll;
+
 #ifdef __cplusplus
 }
 #endif

@@ -11,5 +11,6 @@ int g_win_width    = 1280;
 int g_win_height   = 720;
 int g_visual_step  = 0;
 int g_selected_track = -1;
+/* g_pat_scroll is defined in toolbar.cpp */
 
 }

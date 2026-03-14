@@ -77,6 +77,7 @@ add_library(sq_engine STATIC
     src/engine/synth.c
     src/engine/export.c
     src/engine/effects.c
+    src/engine/kits.c
     src/formats/sample_io.c
     src/formats/project.c
     src/formats/sf2.c
@@ -155,6 +156,7 @@ if(SDL2_FOUND AND OpenGL_FOUND)
     # ── GUI component library (shared between standalone and plugin) ──
     add_library(sq_gui STATIC
         src/gui/gui_globals.cpp
+        src/gui/toolbar.cpp
         src/gui/drum_grid.cpp
         src/gui/knobs.cpp
         src/gui/synth_editor.cpp

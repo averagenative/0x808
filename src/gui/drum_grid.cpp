@@ -27,6 +27,7 @@ extern "C" {
 #include "gui/undo.h"
 #include "gui/theme.h"
 #include "engine/sampler.h"
+#include "engine/kits.h"
 }
 
 extern "C" {
@@ -145,6 +146,32 @@ void drum_grid_draw(sq_engine_t *engine,
 
     ImDrawList *draw_list = ImGui::GetWindowDrawList();
     ImGuiIO &io = ImGui::GetIO();
+
+    /* --- Kit selector combo ------------------------------------------ */
+    {
+        ImGui::Text("Kit:");
+        ImGui::SameLine();
+        ImGui::PushItemWidth(100);
+        int sel_kit = sq_current_kit;
+        const char *preview = (sel_kit >= 0 && sel_kit < SQ_NUM_KITS)
+                              ? sq_kits[sel_kit].name : "(custom)";
+        if (ImGui::BeginCombo("##kit_sel", preview, ImGuiComboFlags_HeightRegular)) {
+            for (int ki = 0; ki < SQ_NUM_KITS; ki++) {
+                bool is_selected = (ki == sel_kit);
+                if (ImGui::Selectable(sq_kits[ki].name, is_selected)) {
+                    if (ki != sel_kit) {
+                        sq_kit_load(engine, ki, engine->base_dir);
+                    }
+                }
+                if (is_selected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%u samples loaded)", engine->num_samples);
+    }
 
     /* Get theme-aware pad/glow colors */
     float theme_pad[3], theme_glow[3];
