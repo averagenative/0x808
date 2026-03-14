@@ -1,18 +1,18 @@
 # 0x808
 
-**Drum machine & synth workstation — C engine, C++ GUI**
+**Drum machine & synth workstation — C engine, multi-frontend GUI**
 
 ![0x808 demo](0x808_demo.gif)
 
 > **[Watch full demo video](https://projects.dcmichael.com/0x808_demo.mp4)**
 
-A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV export. All dependencies vendored, zero external runtime dependencies.
+A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin and a GTK 4.0 native Linux frontend. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV/MP3 export. All dependencies vendored, zero external runtime dependencies.
 
 ## Screenshots
 
 <img src="screenshots/0x808_light_theme.png" width="270"> <img src="screenshots/0x808_dark_theme.png" width="270"> <img src="screenshots/0x808_hacker_theme.png" width="270">
 
-5 built-in themes (Dark, Light, Hacker, Midnight, Amber) + user-defined themes via JSON files in the `themes/` folder.
+7 built-in themes (Dark, Light, Hacker, Midnight, Amber, Vaporwave, Neon) + user-defined themes via JSON files in the `themes/` folder.
 
 ## Features
 
@@ -23,21 +23,25 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 - **Sample browser** — load WAV/MP3/FLAC samples, 72 bundled CC0 drum samples
 - **Song arrangement** — pattern chaining with song/perform modes
 - **Effects** — per-track and master bus filter, delay, reverb, overdrive, fuzz, chorus
-- **Export** — offline render to WAV (16/24/32-bit)
+- **Export** — offline render to WAV (16/24/32-bit) and MP3 (128-320k)
 - **Project save/load** — JSON-based .sqproj format
 - **Undo/redo** — Ctrl+Z / Ctrl+Shift+Z with 32 levels
 - **Swing/shuffle** — per-transport swing control (0-100%)
 - **Velocity humanization** — per-track random velocity variation
+- **Pattern presets** — 12 drum patterns + 10 bass lines (House, Trap, DnB, Lo-fi, etc.)
+- **Multiple frontends** — ImGui (standalone + plugin) and GTK 4.0 (Linux native)
 
-## Plugin Formats
+## Frontends
 
-0x808 builds as a standalone application and as an audio plugin:
+| Frontend | Binary | Platform | Notes |
+|----------|--------|----------|-------|
+| **ImGui Standalone** | `0x808` / `0x808.exe` | Linux, Windows | SDL2 + OpenGL + Dear ImGui |
+| **GTK 4.0** | `0x808_gtk` | Linux | Native GTK widgets + Cairo rendering |
+| **VST3 Plugin** | `0x808.vst3` | Linux, Windows | Embeds in DAW host window |
+| **CLAP Plugin** | `0x808.clap` | Linux, Windows | Embeds in DAW host window |
+| **CLI** | `0x808_cli` | Linux, Windows | Terminal-only audio engine |
 
-| Format | Target | Notes |
-|--------|--------|-------|
-| **Standalone** | `sequencer_gui` | SDL2 + OpenGL + miniaudio |
-| **VST3** | `sequencer_vst3` | Works in any VST3-compatible DAW |
-| **CLAP** | `sequencer_clap` | Works in Bitwig, Reaper, and other CLAP hosts |
+All GUI frontends share the `sq_app` controller library (C99) for keyboard shortcuts, panel state, playhead, and undo coordination. See `docs/FRONTEND_FEATURES.md` for the full feature parity specification.
 
 ## Keyboard Shortcuts
 
@@ -52,7 +56,7 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 | Ctrl+V | Paste pattern |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
-| Ctrl+T | Toggle theme |
+| Ctrl+T | Cycle theme |
 | Escape | Quit |
 
 ## Mouse Controls
@@ -79,27 +83,29 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 | Action | Behavior |
 |--------|----------|
 | **Click keys** | Trigger synth notes |
+| **Click + drag** | Glissando across keys |
 | **QWERTY keys** (when Piano panel is open) | Play notes — Z-M = lower octave, Q-P = upper octave |
 | **<< / >>** | Shift keyboard octave range |
 
-### Track Management
+### Toolbar Buttons
 
 | Action | Behavior |
 |--------|----------|
-| **"+ Sampler Track" button** | Add a new sampler track (inserted before synth tracks) |
-| **"+ Synth Track" button** | Add a new synth track (appended at end) |
-| **Right-click track name** | Cycle track color |
-| **Click track name** | Select track (shows piano roll / synth editor for synth tracks) |
+| **Click PRESETS** | Toggle pattern presets dialog open/closed |
+| **Click EXPORT** | Toggle export dialog open/closed |
+| **Click THEME** | Cycle through themes (GTK) |
+| **Click panel buttons** | Toggle panel visibility (BROWSE, MIXER, PIANO, KEYS) |
 
 ## Building
 
 ### Requirements
 
-- C11 compiler (GCC, Clang, or MSVC) — engine and tests
-- C++17 compiler — GUI layer (Dear ImGui)
+- C11 compiler (GCC, Clang, or MSVC) — engine, app controller, and tests
+- C++17 compiler — ImGui GUI layer
 - CMake 3.16+
-- SDL2 (for GUI targets)
-- OpenGL 3.3 (for GUI targets)
+- SDL2 (for GUI and audio)
+- OpenGL 3.3 (for ImGui targets)
+- GTK 4.0 (optional, for GTK frontend)
 
 All other dependencies are vendored in `deps/`.
 
@@ -108,6 +114,14 @@ All other dependencies are vendored in `deps/`.
 ```bash
 sudo apt install libsdl2-dev libgl-dev g++   # Debian/Ubuntu
 cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+```
+
+### Linux with GTK Frontend
+
+```bash
+sudo apt install libsdl2-dev libgl-dev libgtk-4-dev g++
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GTK=ON
 cmake --build build -j$(nproc)
 ```
 
@@ -137,21 +151,25 @@ cmake --build build_win -j$(nproc)
 
 ### Build Targets
 
-| Target | Description |
-|--------|-------------|
-| `sequencer_gui` | Full GUI application (SDL2 + OpenGL + Dear ImGui) |
-| `sequencer_standalone` | Terminal-only audio engine (miniaudio) |
-| `sequencer_vst3` | VST3 plugin |
-| `sequencer_clap` | CLAP plugin |
+| Target | Output | Description |
+|--------|--------|-------------|
+| `sequencer_gui` | `0x808` / `0x808.exe` | ImGui GUI (SDL2 + OpenGL + Dear ImGui) |
+| `sequencer_gtk` | `0x808_gtk` | GTK 4.0 GUI (optional, `-DBUILD_GTK=ON`) |
+| `sequencer_standalone` | `0x808_cli` | Terminal-only audio engine |
+| `sequencer_vst3` | `0x808.vst3` | VST3 plugin |
+| `sequencer_clap` | `0x808.clap` | CLAP plugin |
 
 ## Running
 
 ```bash
-# GUI application
-./build/sequencer_gui
+# ImGui GUI
+./build/0x808
+
+# GTK GUI (if built with -DBUILD_GTK=ON)
+./build/0x808_gtk
 
 # Terminal mode
-./build/sequencer_standalone
+./build/0x808_cli
 ```
 
 ## Testing
@@ -170,19 +188,23 @@ cmake --build build_win -j$(nproc)
 
 ```
 +---------------------------------------------+
-|  Layer 3: Host Wrapper                      |
-|  Standalone (miniaudio) | VST3 | CLAP      |
+|  Layer 4: Host Wrappers                     |
+|  Standalone | Plugin (VST3/CLAP) | GTK      |
 +---------------------------------------------+
-|  Layer 2: GUI (Dear ImGui + SDL2 + OpenGL)  |
-|  Drum grid, piano roll, knobs, arrangement  |
+|  Layer 3: GUI Components                    |
+|  ImGui (C++): grid, piano, knobs, etc.     |
+|  GTK (C): Cairo drawing, native widgets     |
 +---------------------------------------------+
-|  Layer 1: DSP Engine (pure C, zero deps)    |
+|  Layer 2: App Controller (sq_app, C99)      |
+|  Shortcuts, panel state, playhead, undo     |
++---------------------------------------------+
+|  Layer 1: DSP Engine (pure C99, zero deps)  |
 |  Sequencer, sampler, synth, mixer, effects  |
 |  Input: transport state -> Output: float buf|
 +---------------------------------------------+
 ```
 
-The engine (Layer 1) has zero knowledge of GUI or audio drivers. It receives transport state and produces float audio buffers. Audio runs on a separate thread from the GUI.
+The engine (Layer 1) has zero knowledge of GUI or audio drivers. The app controller (Layer 2) provides shared non-rendering logic used by all frontends. Audio runs on a separate thread from the GUI.
 
 ## Bundled Samples
 
@@ -212,6 +234,7 @@ The engine (Layer 1) has zero knowledge of GUI or audio drivers. It receives tra
 | [dr_wav/dr_mp3/dr_flac](https://github.com/mackron/dr_libs) | Public Domain | Audio file decoding |
 | [TinySoundFont](https://github.com/schellingb/TinySoundFont) | MIT | SoundFont2 synthesis |
 | [cJSON](https://github.com/DaveGamble/cJSON) | MIT | JSON parsing for project files |
+| [Shine](https://github.com/toots/shine) | LGPL-2 | Fixed-point MP3 encoder |
 
 ## License
 

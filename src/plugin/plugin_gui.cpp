@@ -35,6 +35,7 @@ extern "C" {
 #include "gui/pattern_presets.h"
 #include "gui/virtual_keyboard.h"
 #include "gui/theme.h"
+#include "app/sq_app.h"
 #include "formats/project.h"
 #include "engine/export.h"
 #define LOG_TAG "plugin_gui"
@@ -54,12 +55,43 @@ extern "C" {
 #include <windows.h>
 #endif
 
-#define STEPS_PER_BEAT 4
 #define RENDER_FPS 60
 
-/* g_pat_scroll defined in gui_globals.cpp, declared extern in gui.h */
-static sq_pattern_t g_clipboard_pattern;
-static bool g_clipboard_valid = false;
+/* ─── SDL keycode → SQ_KEY translation ────────────────────────────────────── */
+
+static int sdl_to_sq_key(int sdlk)
+{
+    switch (sdlk) {
+    case SDLK_SPACE:     return SQ_KEY_SPACE;
+    case SDLK_ESCAPE:    return SQ_KEY_ESCAPE;
+    case SDLK_1:         return SQ_KEY_1;
+    case SDLK_2:         return SQ_KEY_2;
+    case SDLK_3:         return SQ_KEY_3;
+    case SDLK_4:         return SQ_KEY_4;
+    case SDLK_5:         return SQ_KEY_5;
+    case SDLK_6:         return SQ_KEY_6;
+    case SDLK_7:         return SQ_KEY_7;
+    case SDLK_8:         return SQ_KEY_8;
+    case SDLK_9:         return SQ_KEY_9;
+    case SDLK_c:         return SQ_KEY_C;
+    case SDLK_o:         return SQ_KEY_O;
+    case SDLK_s:         return SQ_KEY_S;
+    case SDLK_t:         return SQ_KEY_T;
+    case SDLK_v:         return SQ_KEY_V;
+    case SDLK_z:         return SQ_KEY_Z;
+    case SDLK_EQUALS:    return SQ_KEY_EQUALS;
+    default:             return SQ_KEY_NONE;
+    }
+}
+
+static int sdl_to_sq_mod(int sdl_mod)
+{
+    int mod = 0;
+    if (sdl_mod & KMOD_CTRL)  mod |= SQ_MOD_CTRL;
+    if (sdl_mod & KMOD_SHIFT) mod |= SQ_MOD_SHIFT;
+    if (sdl_mod & KMOD_ALT)   mod |= SQ_MOD_ALT;
+    return mod;
+}
 
 /* ─── Win32 mouse event latching ─────────────────────────────────────────
  * GetAsyncKeyState polling at 60fps can miss fast clicks (press+release
@@ -87,27 +119,6 @@ static LRESULT CALLBACK PluginMouseWndProc(HWND hwnd, UINT msg,
 }
 #endif
 
-/* Initialize a new pattern by copying track layout from pattern 0 (no step data).
- * Local copy for keyboard shortcut handler — canonical version is in toolbar.cpp. */
-static void init_new_pattern(sq_engine_t *engine, int idx)
-{
-    sq_pattern_t *np = &engine->patterns[idx];
-    sq_pattern_t *src = &engine->patterns[0];
-    memset(np, 0, sizeof(*np));
-    snprintf(np->name, SQ_PATTERN_NAME_LEN, "Pattern %d", idx + 1);
-    np->num_tracks = src->num_tracks;
-    for (uint32_t t = 0; t < np->num_tracks; t++) {
-        np->tracks[t].type = src->tracks[t].type;
-        np->tracks[t].length = src->tracks[t].length;
-        np->tracks[t].volume = src->tracks[t].volume;
-        np->tracks[t].pan = src->tracks[t].pan;
-        np->tracks[t].sample_index = src->tracks[t].sample_index;
-        np->tracks[t].synth_preset = src->tracks[t].synth_preset;
-        np->tracks[t].sf2_preset = src->tracks[t].sf2_preset;
-        np->tracks[t].color_index = src->tracks[t].color_index;
-    }
-}
-
 /* ─── Plugin GUI instance ────────────────────────────────────────────────── */
 
 struct sq_plugin_gui {
@@ -124,17 +135,8 @@ struct sq_plugin_gui {
     SDL_Thread *render_thread;
     std::atomic<int> running;
 
-    /* UI state */
-    bool show_browser;
-    bool show_mixer;
-    bool show_piano_roll;
-    bool show_keyboard;
-    char save_status[128];
-    uint32_t status_timer;
-
-    /* Wall-clock playhead tracking */
-    Uint64 play_start_ticks;
-    bool   was_playing;
+    /* App state (shared logic) */
+    sq_app_t app;
 };
 
 /* ─── Plugin file logger (Windows: file, Linux: stderr) ─────────────────── */
@@ -218,6 +220,10 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 #endif
     SDL_GetWindowSize(gui->window, &g_win_width, &g_win_height);
 
+    /* Sync globals from app state */
+    g_visual_step = gui->app.visual_step;
+    g_selected_track = gui->app.selected_track;
+
     /* Poll SDL events */
     SDL_Event evt;
     while (SDL_PollEvent(&evt)) {
@@ -233,128 +239,52 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 
         {
             bool is_ctrl = (evt.key.keysym.mod & KMOD_CTRL) != 0;
-            bool imgui_wants_kb = ImGui::GetIO().WantCaptureKeyboard;
-
-            /* Transport: space always works */
-            if (evt.type == SDL_KEYDOWN && evt.key.keysym.sym == SDLK_SPACE) {
-                engine->transport.playing = !engine->transport.playing;
-                engine->transport.current_beat = 0.0;
-                engine->transport.sample_position = 0;
-                engine->transport.current_step = 0;
-                g_visual_step = 0;
-                if (engine->transport.playing)
-                    gui->play_start_ticks = SDL_GetPerformanceCounter();
-            }
 
             /* QWERTY piano — always active when keyboard panel is shown */
-            if (!is_ctrl && gui->show_keyboard &&
+            if (!is_ctrl && gui->app.panels[SQ_PANEL_KEYBOARD] &&
                 !(evt.key.keysym.mod & KMOD_ALT) &&
                 (evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP))
             {
-                int kb_preset_key = -1;
-                if (g_selected_track >= 0) {
-                    int kpi = engine->transport.current_pattern;
-                    if (kpi >= 0 && (uint32_t)kpi < engine->num_patterns) {
-                        sq_pattern_t *kpat = &engine->patterns[kpi];
-                        if ((uint32_t)g_selected_track < kpat->num_tracks &&
-                            kpat->tracks[g_selected_track].type == TRACK_SYNTH)
-                            kb_preset_key = kpat->tracks[g_selected_track].synth_preset;
-                    }
-                }
-                if (kb_preset_key < 0) {
-                    int kpi = engine->transport.current_pattern;
-                    if (kpi >= 0 && (uint32_t)kpi < engine->num_patterns) {
-                        for (uint32_t tt = 0; tt < engine->patterns[kpi].num_tracks; tt++) {
-                            if (engine->patterns[kpi].tracks[tt].type == TRACK_SYNTH) {
-                                kb_preset_key = engine->patterns[kpi].tracks[tt].synth_preset;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (kb_preset_key < 0) kb_preset_key = 0;
-                virtual_keyboard_key_event(engine, kb_preset_key,
+                int kb_preset = sq_app_get_keyboard_preset(&gui->app, engine);
+                if (kb_preset < 0) kb_preset = 0;
+                virtual_keyboard_key_event(engine, kb_preset,
                                            evt.key.keysym.sym,
                                            evt.type == SDL_KEYDOWN);
             }
 
-            /* Pattern select 1-9 — always active */
-            if (evt.type == SDL_KEYDOWN && !is_ctrl) {
-                if (evt.key.keysym.sym >= SDLK_1 && evt.key.keysym.sym <= SDLK_9) {
-                    int pat = evt.key.keysym.sym - SDLK_1;
-                    if ((uint32_t)pat < engine->num_patterns) {
-                        engine->transport.current_pattern = pat;
-                        snprintf(gui->save_status, sizeof(gui->save_status),
-                                 "Pattern %d", pat + 1);
-                        gui->status_timer = 90;
-                    }
-                }
-            }
+            /* Key dispatch via sq_app */
+            if (evt.type == SDL_KEYDOWN) {
+                int sq_key = sdl_to_sq_key(evt.key.keysym.sym);
+                int sq_mod = sdl_to_sq_mod(evt.key.keysym.mod);
 
-            /* Ctrl shortcuts + non-captured keys */
-            if (is_ctrl || !imgui_wants_kb) {
-                if (evt.type == SDL_KEYDOWN) {
-                    switch (evt.key.keysym.sym) {
-                    case SDLK_s:
-                        if (evt.key.keysym.mod & KMOD_CTRL) {
-                            snprintf(gui->save_status, sizeof(gui->save_status),
-                                     "Use DAW to save plugin state");
-                            gui->status_timer = 180;
-                        }
+                bool imgui_wants_kb = ImGui::GetIO().WantCaptureKeyboard;
+                bool is_transport = (sq_key == SQ_KEY_SPACE);
+                bool is_pattern_key = (!is_ctrl && sq_key >= SQ_KEY_1 && sq_key <= SQ_KEY_9);
+
+                if (is_transport || is_pattern_key || is_ctrl || !imgui_wants_kb) {
+                    sq_app_action_t action = sq_app_handle_key(&gui->app, engine,
+                                                                sq_key, sq_mod, true);
+
+                    /* If space started playback, record the start ticks */
+                    if (sq_key == SQ_KEY_SPACE && engine->transport.playing)
+                        gui->app.play_start_ticks = SDL_GetPerformanceCounter();
+
+                    switch (action) {
+                    case SQ_ACTION_QUIT:
+                        /* Plugin ignores quit — no escape to close */
                         break;
-                    case SDLK_t:
-                        if (evt.key.keysym.mod & KMOD_CTRL)
-                            theme_toggle();
+                    case SQ_ACTION_SAVE:
+                        sq_app_set_status(&gui->app,
+                                          "Use DAW to save plugin state", 180);
                         break;
-                    case SDLK_c:
-                        if (evt.key.keysym.mod & KMOD_CTRL) {
-                            int pi = engine->transport.current_pattern;
-                            if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
-                                g_clipboard_pattern = engine->patterns[pi];
-                                g_clipboard_valid = true;
-                                snprintf(gui->save_status, sizeof(gui->save_status),
-                                         "Copied pattern %d", pi + 1);
-                                gui->status_timer = 90;
-                            }
-                        }
+                    case SQ_ACTION_LOAD:
+                        sq_app_set_status(&gui->app,
+                                          "Use DAW to load plugin state", 180);
                         break;
-                    case SDLK_v:
-                        if ((evt.key.keysym.mod & KMOD_CTRL) && g_clipboard_valid) {
-                            int pi = engine->transport.current_pattern;
-                            if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
-                                engine->patterns[pi] = g_clipboard_pattern;
-                                snprintf(gui->save_status, sizeof(gui->save_status),
-                                         "Pasted to pattern %d", pi + 1);
-                                gui->status_timer = 90;
-                            }
-                        }
+                    case SQ_ACTION_TOGGLE_THEME:
+                        theme_toggle();
                         break;
-                    case SDLK_z:
-                        if (evt.key.keysym.mod & KMOD_CTRL) {
-                            if (evt.key.keysym.mod & KMOD_SHIFT) {
-                                if (undo_redo(engine)) {
-                                    snprintf(gui->save_status, sizeof(gui->save_status), "Redo");
-                                    gui->status_timer = 90;
-                                }
-                            } else {
-                                if (undo_undo(engine)) {
-                                    snprintf(gui->save_status, sizeof(gui->save_status), "Undo");
-                                    gui->status_timer = 90;
-                                }
-                            }
-                        }
-                        break;
-                    case SDLK_EQUALS:
-                        if (engine->num_patterns < SQ_MAX_PATTERNS) {
-                            int ni = (int)engine->num_patterns;
-                            engine->num_patterns++;
-                            init_new_pattern(engine, ni);
-                            engine->transport.current_pattern = ni;
-                            snprintf(gui->save_status, sizeof(gui->save_status),
-                                     "New pattern %d", ni + 1);
-                            gui->status_timer = 90;
-                        }
-                        break;
+                    case SQ_ACTION_NONE:
                     default:
                         break;
                     }
@@ -364,22 +294,10 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     }
 
     /* Visual playhead from wall-clock time */
-    if (engine->transport.playing) {
-        Uint64 now = SDL_GetPerformanceCounter();
-        double elapsed = (double)(now - gui->play_start_ticks)
-                       / (double)SDL_GetPerformanceFrequency();
-        double beats = elapsed * (engine->transport.bpm / 60.0);
-        int pat_len = 16;
-        int pi = engine->transport.current_pattern;
-        if (pi >= 0 && (uint32_t)pi < engine->num_patterns &&
-            engine->patterns[pi].num_tracks > 0) {
-            pat_len = (int)engine->patterns[pi].tracks[0].length;
-        }
-        g_visual_step = ((int)floor(beats * STEPS_PER_BEAT)) % pat_len;
-    } else if (gui->was_playing && !engine->transport.playing) {
-        g_visual_step = 0;
-    }
-    gui->was_playing = engine->transport.playing;
+    sq_app_update_playhead(&gui->app, engine,
+                           SDL_GetPerformanceCounter(),
+                           SDL_GetPerformanceFrequency());
+    g_visual_step = gui->app.visual_step;
 
     /* Start ImGui frame */
     ImGui_ImplOpenGL3_NewFrame();
@@ -422,14 +340,14 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     bool show_synth_editor = false;
     int synth_preset_idx = -1;
     int *synth_preset_ptr = nullptr;
-    if (g_selected_track >= 0) {
+    if (gui->app.selected_track >= 0) {
         int pi = engine->transport.current_pattern;
         if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
             sq_pattern_t *pat = &engine->patterns[pi];
-            if ((uint32_t)g_selected_track < pat->num_tracks &&
-                pat->tracks[g_selected_track].type == TRACK_SYNTH) {
+            if ((uint32_t)gui->app.selected_track < pat->num_tracks &&
+                pat->tracks[gui->app.selected_track].type == TRACK_SYNTH) {
                 show_synth_editor = true;
-                synth_preset_ptr = &pat->tracks[g_selected_track].synth_preset;
+                synth_preset_ptr = &pat->tracks[gui->app.selected_track].synth_preset;
                 synth_preset_idx = *synth_preset_ptr;
             }
         }
@@ -437,26 +355,26 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 
     /* ── Toolbar (shared implementation) ──────────────────────────────────── */
     {
-        Uint64 play_ticks = gui->play_start_ticks;
+        Uint64 play_ticks = gui->app.play_start_ticks;
         sq_toolbar_params_t tp = {};
         tp.engine = engine;
         tp.toolbar_h = toolbar_h;
         tp.is_plugin = true;
         tp.quit = nullptr;
         tp.window = nullptr;
-        tp.show_browser = &gui->show_browser;
-        tp.show_mixer = &gui->show_mixer;
-        tp.show_piano_roll = &gui->show_piano_roll;
-        tp.show_keyboard = &gui->show_keyboard;
-        tp.save_status = gui->save_status;
-        tp.save_status_size = (int)sizeof(gui->save_status);
-        tp.status_timer = &gui->status_timer;
+        tp.show_browser    = &gui->app.panels[SQ_PANEL_BROWSER];
+        tp.show_mixer      = &gui->app.panels[SQ_PANEL_MIXER];
+        tp.show_piano_roll = &gui->app.panels[SQ_PANEL_PIANO_ROLL];
+        tp.show_keyboard   = &gui->app.panels[SQ_PANEL_KEYBOARD];
+        tp.save_status = gui->app.status_msg;
+        tp.save_status_size = SQ_STATUS_LEN;
+        tp.status_timer = &gui->app.status_timer;
         tp.play_start_ticks = &play_ticks;
         toolbar_draw(&tp);
-        gui->play_start_ticks = play_ticks;
+        gui->app.play_start_ticks = play_ticks;
     }
 
-    /* ── Arrangement panel ──────────────────────────────────── */
+    /* ── Arrangement panel ──────────────────────────────────────── */
     float arrange_h = 0.0f;
     if (engine->transport.mode != MODE_PATTERN) {
         arrange_h = 160.0f;
@@ -465,13 +383,13 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 
     /* ── Main layout ─────────────────────────────────────────── */
     float grid_y = toolbar_h + arrange_h;
-    float kb_reserve = gui->show_keyboard ? 120.0f : 0.0f;
+    float kb_reserve = gui->app.panels[SQ_PANEL_KEYBOARD] ? 120.0f : 0.0f;
     float total_h = (float)g_win_height - grid_y - kb_reserve;
     float total_w = (float)g_win_width;
 
     float browser_w = 0.0f;
     float main_w = total_w;
-    if (gui->show_browser) {
+    if (gui->app.panels[SQ_PANEL_BROWSER]) {
         browser_w = 350.0f;
         if (browser_w > total_w * 0.4f)
             browser_w = total_w * 0.4f;
@@ -479,12 +397,12 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     }
 
     /* Full-height piano roll mode */
-    if (gui->show_piano_roll && show_synth_editor && synth_preset_idx >= 0) {
-        if (gui->show_mixer) {
+    if (gui->app.panels[SQ_PANEL_PIANO_ROLL] && show_synth_editor && synth_preset_idx >= 0) {
+        if (gui->app.panels[SQ_PANEL_MIXER]) {
             float pr_w = main_w * 0.60f;
             float se_w = main_w * 0.20f;
             float mx_w = main_w - pr_w - se_w;
-            piano_roll_draw(engine, g_selected_track,
+            piano_roll_draw(engine, gui->app.selected_track,
                             0.0f, grid_y, pr_w, total_h);
             synth_editor_draw(engine, synth_preset_ptr,
                               pr_w, grid_y, se_w, total_h);
@@ -493,7 +411,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
         } else {
             float pr_w = main_w * 0.70f;
             float se_w = main_w - pr_w;
-            piano_roll_draw(engine, g_selected_track,
+            piano_roll_draw(engine, gui->app.selected_track,
                             0.0f, grid_y, pr_w, total_h);
             synth_editor_draw(engine, synth_preset_ptr,
                               pr_w, grid_y, se_w, total_h);
@@ -501,10 +419,10 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     } else {
         /* Normal layout: drum grid + optional bottom panels */
         float grid_h, bottom_h;
-        bool has_bottom = show_synth_editor || gui->show_mixer;
+        bool has_bottom = show_synth_editor || gui->app.panels[SQ_PANEL_MIXER];
         if (has_bottom) {
             bottom_h = 360.0f;
-            if (gui->show_keyboard && bottom_h > total_h - 150.0f)
+            if (gui->app.panels[SQ_PANEL_KEYBOARD] && bottom_h > total_h - 150.0f)
                 bottom_h = total_h - 150.0f;
             if (bottom_h < 120.0f) bottom_h = 120.0f;
             grid_h = total_h - bottom_h;
@@ -519,11 +437,11 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 
         if (has_bottom) {
             float bottom_y = grid_y + grid_h;
-            if (show_synth_editor && synth_preset_idx >= 0 && gui->show_mixer) {
+            if (show_synth_editor && synth_preset_idx >= 0 && gui->app.panels[SQ_PANEL_MIXER]) {
                 float pr_w = main_w * 0.40f;
                 float se_w = main_w * 0.30f;
                 float mx_w = main_w - pr_w - se_w;
-                piano_roll_draw(engine, g_selected_track,
+                piano_roll_draw(engine, gui->app.selected_track,
                                 0.0f, bottom_y, pr_w, bottom_h);
                 synth_editor_draw(engine, synth_preset_ptr,
                                   pr_w, bottom_y, se_w, bottom_h);
@@ -532,11 +450,11 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
             } else if (show_synth_editor && synth_preset_idx >= 0) {
                 float pr_w = main_w * 0.55f;
                 float se_w = main_w - pr_w;
-                piano_roll_draw(engine, g_selected_track,
+                piano_roll_draw(engine, gui->app.selected_track,
                                 0.0f, bottom_y, pr_w, bottom_h);
                 synth_editor_draw(engine, synth_preset_ptr,
                                   pr_w, bottom_y, se_w, bottom_h);
-            } else if (gui->show_mixer) {
+            } else if (gui->app.panels[SQ_PANEL_MIXER]) {
                 mixer_view_draw(engine,
                                 0.0f, bottom_y, main_w, bottom_h);
             }
@@ -544,33 +462,20 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     }
 
     /* ── Virtual keyboard ─────────────────────────────────────── */
-    if (gui->show_keyboard) {
+    if (gui->app.panels[SQ_PANEL_KEYBOARD]) {
         float kb_h = 120.0f;
-        int kb_preset = -1;
-        if (synth_preset_idx >= 0) {
-            kb_preset = synth_preset_idx;
-        } else {
-            int pi2 = engine->transport.current_pattern;
-            if (pi2 >= 0 && (uint32_t)pi2 < engine->num_patterns) {
-                for (uint32_t t = 0; t < engine->patterns[pi2].num_tracks; t++) {
-                    if (engine->patterns[pi2].tracks[t].type == TRACK_SYNTH) {
-                        kb_preset = engine->patterns[pi2].tracks[t].synth_preset;
-                        break;
-                    }
-                }
-            }
-        }
+        int kb_preset = sq_app_get_keyboard_preset(&gui->app, engine);
         if (kb_preset < 0) kb_preset = 0;
         virtual_keyboard_draw(engine, kb_preset,
                               0.0f, (float)g_win_height - kb_h,
                               main_w, kb_h);
     }
 
-    if (gui->show_browser) {
+    if (gui->app.panels[SQ_PANEL_BROWSER]) {
         sample_browser_draw(engine,
                             main_w, grid_y, browser_w, total_h);
         if (sample_browser_close_requested()) {
-            gui->show_browser = false;
+            gui->app.panels[SQ_PANEL_BROWSER] = false;
         }
     }
 
@@ -592,6 +497,9 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(gui->window);
+
+    /* Sync app state back from globals (components may have changed them) */
+    gui->app.selected_track = g_selected_track;
 }
 
 /* ─── Render thread ──────────────────────────────────────────────────────── */
@@ -636,13 +544,16 @@ extern "C" sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine)
     gui->scale_factor = 1.0f;
     gui->running.store(0);
 
+    /* Initialize app state */
+    sq_app_init(&gui->app);
+
     /* Default: select first synth track so synth editor is visible in bottom panel */
-    gui->show_piano_roll = false;
     int pi = engine->transport.current_pattern;
     if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
         sq_pattern_t *pat = &engine->patterns[pi];
         for (uint32_t t = 0; t < pat->num_tracks; t++) {
             if (pat->tracks[t].type == TRACK_SYNTH) {
+                gui->app.selected_track = (int)t;
                 g_selected_track = (int)t;
                 break;
             }

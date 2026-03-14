@@ -12,7 +12,7 @@
 - [x] 2.2 Implement `gui_frame()` — SDL event polling via ImGui, glClear, ImGui::NewFrame/Render, swap buffers
 - [x] 2.3 Implement `gui_shutdown()` — ImGui cleanup, SDL teardown
 - [x] 2.4 Create `src/gui/theme.cpp` — dark/light theme color tables for ImGui (matching current Nuklear colors)
-- [ ] 2.5 Verify standalone app launches with ImGui showing an empty dark window
+- [x] 2.5 Verify standalone app launches with ImGui showing an empty dark window
 
 ## 3. Toolbar (Fixed Panel)
 
@@ -21,7 +21,7 @@
 - [x] 3.3 Add BPM slider (40-300), Swing slider (0-100%), Volume slider (0-100%)
 - [x] 3.4 Add panel toggle buttons: EXPORT, PRESETS, PIANO, PAT/SONG/PERF, FX, BROWSE, EXIT with active highlights
 - [x] 3.5 Add status message display with auto-dismiss timer
-- [ ] 3.6 Verify toolbar is always visible on first frame and stays visible during all interactions
+- [x] 3.6 Verify toolbar is always visible on first frame and stays visible during all interactions
 
 ## 4. Drum Grid
 

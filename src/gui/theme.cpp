@@ -29,7 +29,7 @@ static sq_theme_t s_current_theme = THEME_DARK;
 static int        s_active_user_theme = -1;  /* -1 = built-in theme active */
 
 static const char *s_theme_names[] = {
-    "Dark", "Light", "Hacker", "Midnight", "Amber"
+    "Dark", "Light", "Hacker", "Midnight", "Amber", "Vaporwave", "Neon"
 };
 
 /* --- User theme storage --------------------------------------------------- */
@@ -82,6 +82,12 @@ void theme_get_clear_color(float out[4])
         break;
     case THEME_AMBER:
         out[0] = 0.06f; out[1] = 0.04f; out[2] = 0.02f; out[3] = 1.0f;
+        break;
+    case THEME_VAPORWAVE:
+        out[0] = 0.04f; out[1] = 0.02f; out[2] = 0.06f; out[3] = 1.0f;
+        break;
+    case THEME_NEON:
+        out[0] = 0.02f; out[1] = 0.02f; out[2] = 0.05f; out[3] = 1.0f;
         break;
     default: /* THEME_DARK */
         out[0] = 0.12f; out[1] = 0.12f; out[2] = 0.13f; out[3] = 1.0f;
@@ -328,6 +334,112 @@ static void apply_amber(ImGuiStyle &style, ImVec4 *c)
     c[ImGuiCol_PlotHistogram]         = warm_white;
 }
 
+/* --- Vaporwave: pink/cyan/purple synthwave -------------------------------- */
+
+static void apply_vaporwave(ImGuiStyle &style, ImVec4 *c)
+{
+    style.FrameBorderSize = 1.0f;
+    style.FrameRounding   = 1.0f;
+    style.GrabRounding    = 1.0f;
+
+    ImVec4 pink      = ImVec4(0.95f, 0.40f, 0.70f, 1.00f);
+    ImVec4 dim_pink  = ImVec4(0.50f, 0.20f, 0.38f, 1.00f);
+    ImVec4 dark_purp = ImVec4(0.20f, 0.08f, 0.30f, 1.00f);
+    ImVec4 bg_black  = ImVec4(0.08f, 0.04f, 0.12f, 1.00f);
+    ImVec4 bg_panel  = ImVec4(0.10f, 0.05f, 0.15f, 1.00f);
+    ImVec4 text      = ImVec4(0.85f, 0.75f, 0.95f, 1.00f);
+    ImVec4 cyan      = ImVec4(0.30f, 0.85f, 0.95f, 1.00f);
+
+    c[ImGuiCol_Text]                  = text;
+    c[ImGuiCol_TextDisabled]          = ImVec4(0.40f, 0.30f, 0.50f, 1.00f);
+    c[ImGuiCol_WindowBg]              = bg_black;
+    c[ImGuiCol_ChildBg]               = bg_panel;
+    c[ImGuiCol_PopupBg]               = ImVec4(0.09f, 0.05f, 0.14f, 0.97f);
+    c[ImGuiCol_Border]                = ImVec4(0.35f, 0.15f, 0.55f, 1.00f);
+    c[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    c[ImGuiCol_FrameBg]               = ImVec4(0.12f, 0.06f, 0.18f, 1.00f);
+    c[ImGuiCol_FrameBgHovered]        = ImVec4(0.16f, 0.09f, 0.24f, 1.00f);
+    c[ImGuiCol_FrameBgActive]         = ImVec4(0.20f, 0.12f, 0.30f, 1.00f);
+    c[ImGuiCol_TitleBg]               = bg_black;
+    c[ImGuiCol_TitleBgActive]         = dark_purp;
+    c[ImGuiCol_TitleBgCollapsed]      = bg_black;
+    c[ImGuiCol_MenuBarBg]             = bg_panel;
+    c[ImGuiCol_ScrollbarBg]           = bg_black;
+    c[ImGuiCol_ScrollbarGrab]         = dark_purp;
+    c[ImGuiCol_ScrollbarGrabHovered]  = dim_pink;
+    c[ImGuiCol_ScrollbarGrabActive]   = pink;
+    c[ImGuiCol_CheckMark]             = cyan;
+    c[ImGuiCol_SliderGrab]            = pink;
+    c[ImGuiCol_SliderGrabActive]      = ImVec4(1.00f, 0.55f, 0.80f, 1.00f);
+    c[ImGuiCol_Button]                = dark_purp;
+    c[ImGuiCol_ButtonHovered]         = dim_pink;
+    c[ImGuiCol_ButtonActive]          = pink;
+    c[ImGuiCol_Header]                = dark_purp;
+    c[ImGuiCol_HeaderHovered]         = dim_pink;
+    c[ImGuiCol_HeaderActive]          = ImVec4(0.35f, 0.15f, 0.55f, 1.00f);
+    c[ImGuiCol_Separator]             = dim_pink;
+    c[ImGuiCol_SeparatorHovered]      = pink;
+    c[ImGuiCol_SeparatorActive]       = pink;
+    c[ImGuiCol_Tab]                   = dark_purp;
+    c[ImGuiCol_TabHovered]            = dim_pink;
+    c[ImGuiCol_TabSelected]           = ImVec4(0.28f, 0.12f, 0.42f, 1.00f);
+    c[ImGuiCol_PlotLines]             = cyan;
+    c[ImGuiCol_PlotHistogram]         = pink;
+}
+
+/* --- Neon: hot pink/magenta on dark, cyan accents ------------------------- */
+
+static void apply_neon(ImGuiStyle &style, ImVec4 *c)
+{
+    style.FrameBorderSize = 1.0f;
+    style.FrameRounding   = 1.0f;
+    style.GrabRounding    = 1.0f;
+
+    ImVec4 magenta     = ImVec4(0.90f, 0.20f, 0.80f, 1.00f);
+    ImVec4 dim_magenta = ImVec4(0.45f, 0.15f, 0.40f, 1.00f);
+    ImVec4 dark_purp   = ImVec4(0.15f, 0.08f, 0.25f, 1.00f);
+    ImVec4 bg_black    = ImVec4(0.06f, 0.04f, 0.10f, 1.00f);
+    ImVec4 bg_panel    = ImVec4(0.08f, 0.05f, 0.13f, 1.00f);
+    ImVec4 text        = ImVec4(0.95f, 0.30f, 0.90f, 1.00f);
+    ImVec4 cyan        = ImVec4(0.00f, 0.90f, 0.95f, 1.00f);
+
+    c[ImGuiCol_Text]                  = text;
+    c[ImGuiCol_TextDisabled]          = ImVec4(0.45f, 0.15f, 0.40f, 1.00f);
+    c[ImGuiCol_WindowBg]              = bg_black;
+    c[ImGuiCol_ChildBg]               = bg_panel;
+    c[ImGuiCol_PopupBg]               = ImVec4(0.07f, 0.05f, 0.12f, 0.97f);
+    c[ImGuiCol_Border]                = ImVec4(0.30f, 0.15f, 0.50f, 1.00f);
+    c[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    c[ImGuiCol_FrameBg]               = ImVec4(0.10f, 0.07f, 0.15f, 1.00f);
+    c[ImGuiCol_FrameBgHovered]        = ImVec4(0.14f, 0.10f, 0.22f, 1.00f);
+    c[ImGuiCol_FrameBgActive]         = ImVec4(0.18f, 0.13f, 0.28f, 1.00f);
+    c[ImGuiCol_TitleBg]               = bg_black;
+    c[ImGuiCol_TitleBgActive]         = dark_purp;
+    c[ImGuiCol_TitleBgCollapsed]      = bg_black;
+    c[ImGuiCol_MenuBarBg]             = bg_panel;
+    c[ImGuiCol_ScrollbarBg]           = bg_black;
+    c[ImGuiCol_ScrollbarGrab]         = dark_purp;
+    c[ImGuiCol_ScrollbarGrabHovered]  = dim_magenta;
+    c[ImGuiCol_ScrollbarGrabActive]   = magenta;
+    c[ImGuiCol_CheckMark]             = cyan;
+    c[ImGuiCol_SliderGrab]            = magenta;
+    c[ImGuiCol_SliderGrabActive]      = ImVec4(0.95f, 0.40f, 0.90f, 1.00f);
+    c[ImGuiCol_Button]                = dark_purp;
+    c[ImGuiCol_ButtonHovered]         = dim_magenta;
+    c[ImGuiCol_ButtonActive]          = magenta;
+    c[ImGuiCol_Header]                = dark_purp;
+    c[ImGuiCol_HeaderHovered]         = dim_magenta;
+    c[ImGuiCol_HeaderActive]          = ImVec4(0.30f, 0.15f, 0.50f, 1.00f);
+    c[ImGuiCol_Separator]             = dim_magenta;
+    c[ImGuiCol_SeparatorHovered]      = magenta;
+    c[ImGuiCol_SeparatorActive]       = magenta;
+    c[ImGuiCol_Tab]                   = dark_purp;
+    c[ImGuiCol_TabHovered]            = dim_magenta;
+    c[ImGuiCol_TabSelected]           = ImVec4(0.22f, 0.10f, 0.38f, 1.00f);
+    c[ImGuiCol_PlotLines]             = cyan;
+    c[ImGuiCol_PlotHistogram]         = magenta;
+}
+
 /* --- Public built-in API -------------------------------------------------- */
 
 void theme_apply(sq_theme_t theme)
@@ -340,11 +452,13 @@ void theme_apply(sq_theme_t theme)
     ImVec4 *c = style.Colors;
 
     switch (theme) {
-    case THEME_LIGHT:    apply_light(c);            break;
-    case THEME_HACKER:   apply_hacker(style, c);    break;
-    case THEME_MIDNIGHT: apply_midnight(style, c);   break;
-    case THEME_AMBER:    apply_amber(style, c);      break;
-    default:             apply_dark(c);              break;
+    case THEME_LIGHT:      apply_light(c);              break;
+    case THEME_HACKER:     apply_hacker(style, c);      break;
+    case THEME_MIDNIGHT:   apply_midnight(style, c);    break;
+    case THEME_AMBER:      apply_amber(style, c);       break;
+    case THEME_VAPORWAVE:  apply_vaporwave(style, c);   break;
+    case THEME_NEON:       apply_neon(style, c);        break;
+    default:               apply_dark(c);               break;
     }
 
     LOG_INFO("Applied %s theme", theme_name(theme));
@@ -632,6 +746,22 @@ static bool theme_load_json_into(const char *path, sq_user_theme_t *t)
 
 /* --- User theme public API ------------------------------------------------ */
 
+/* Check if a user theme name conflicts with a built-in theme */
+#ifdef _WIN32
+#define sq_strcasecmp _stricmp
+#else
+#define sq_strcasecmp strcasecmp
+#endif
+
+static bool theme_name_conflicts_builtin(const char *name)
+{
+    for (int i = 0; i < THEME_COUNT; i++) {
+        if (sq_strcasecmp(name, s_theme_names[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
 void theme_scan_user_themes(const char *dir)
 {
     if (!dir || !dir[0]) return;
@@ -662,9 +792,15 @@ void theme_scan_user_themes(const char *dir)
         snprintf(full, sizeof(full), "%s\\%s", dir, fd.cFileName);
 
         if (theme_load_json_into(full, &s_user_themes[s_num_user_themes])) {
-            LOG_INFO("Loaded user theme: %s (%s)",
-                     s_user_themes[s_num_user_themes].name, full);
-            s_num_user_themes++;
+            if (theme_name_conflicts_builtin(s_user_themes[s_num_user_themes].name)) {
+                LOG_INFO("Skipping user theme '%s' — conflicts with built-in",
+                         s_user_themes[s_num_user_themes].name);
+                s_user_themes[s_num_user_themes].loaded = false;
+            } else {
+                LOG_INFO("Loaded user theme: %s (%s)",
+                         s_user_themes[s_num_user_themes].name, full);
+                s_num_user_themes++;
+            }
         }
     } while (FindNextFileA(h, &fd));
     FindClose(h);
@@ -687,9 +823,15 @@ void theme_scan_user_themes(const char *dir)
         snprintf(full, sizeof(full), "%s/%s", dir, name);
 
         if (theme_load_json_into(full, &s_user_themes[s_num_user_themes])) {
-            LOG_INFO("Loaded user theme: %s (%s)",
-                     s_user_themes[s_num_user_themes].name, full);
-            s_num_user_themes++;
+            if (theme_name_conflicts_builtin(s_user_themes[s_num_user_themes].name)) {
+                LOG_INFO("Skipping user theme '%s' — conflicts with built-in",
+                         s_user_themes[s_num_user_themes].name);
+                s_user_themes[s_num_user_themes].loaded = false;
+            } else {
+                LOG_INFO("Loaded user theme: %s (%s)",
+                         s_user_themes[s_num_user_themes].name, full);
+                s_num_user_themes++;
+            }
         }
     }
     closedir(d);
@@ -795,6 +937,14 @@ void theme_get_pad_colors(float pad_rgb[3], float glow_rgb[3])
     case THEME_LIGHT:
         pad_rgb[0] = 0.20f; pad_rgb[1] = 0.45f; pad_rgb[2] = 0.70f;
         glow_rgb[0] = 0.30f; glow_rgb[1] = 0.55f; glow_rgb[2] = 0.85f;
+        break;
+    case THEME_VAPORWAVE:
+        pad_rgb[0] = 0.95f; pad_rgb[1] = 0.40f; pad_rgb[2] = 0.70f;
+        glow_rgb[0] = 1.00f; glow_rgb[1] = 0.55f; glow_rgb[2] = 0.80f;
+        break;
+    case THEME_NEON:
+        pad_rgb[0] = 0.80f; pad_rgb[1] = 0.20f; pad_rgb[2] = 0.90f;
+        glow_rgb[0] = 0.90f; glow_rgb[1] = 0.30f; glow_rgb[2] = 0.95f;
         break;
     default: /* THEME_DARK */
         pad_rgb[0] = 0.39f; pad_rgb[1] = 0.71f; pad_rgb[2] = 1.00f;

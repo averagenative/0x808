@@ -18,6 +18,8 @@ typedef enum {
     THEME_HACKER,
     THEME_MIDNIGHT,
     THEME_AMBER,
+    THEME_VAPORWAVE,
+    THEME_NEON,
     THEME_COUNT
 } sq_theme_t;
 

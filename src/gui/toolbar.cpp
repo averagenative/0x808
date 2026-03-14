@@ -324,8 +324,13 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
 
     float export_x = ImGui::GetCursorPosX();
 
-    if (ImGui::Button("EXPORT", ImVec2(is_plugin ? 60.0f : 70.0f, btn_h)))
-        export_dialog_show();
+    if (ImGui::Button(export_dialog_visible() ? "EXPORT*" : "EXPORT",
+                       ImVec2(is_plugin ? 60.0f : 70.0f, btn_h))) {
+        if (export_dialog_visible())
+            export_dialog_hide();
+        else
+            export_dialog_show();
+    }
     ImGui::SameLine();
 
     {

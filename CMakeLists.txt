@@ -113,6 +113,18 @@ set_target_properties(sequencer_standalone PROPERTIES
     OUTPUT_NAME "0x808_cli"
 )
 
+# ─── App controller library (C99, shared by all frontends) ────────────────────
+
+add_library(sq_app STATIC
+    src/app/sq_app.c
+    src/gui/undo.c
+)
+target_include_directories(sq_app PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(sq_app PUBLIC sq_engine)
+set_target_properties(sq_app PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # ─── GUI executable (Phase 3+: requires SDL2 and OpenGL) ─────────────────────
 
 find_package(PkgConfig QUIET)
@@ -123,11 +135,11 @@ if(NOT OpenGL_FOUND)
     find_package(OpenGL QUIET)
 endif()
 
-# Normalize OpenGL link target: use ${SQ_OPENGL_LIB} when available, else OPENGL_gl_LIBRARY
-if(TARGET ${SQ_OPENGL_LIB})
-    set(SQ_OPENGL_LIB ${SQ_OPENGL_LIB})
-elseif(OPENGL_gl_LIBRARY)
+# Normalize OpenGL link target
+if(OPENGL_gl_LIBRARY)
     set(SQ_OPENGL_LIB ${OPENGL_gl_LIBRARY})
+elseif(TARGET OpenGL::GL)
+    set(SQ_OPENGL_LIB OpenGL::GL)
 endif()
 
 if(SDL2_FOUND AND OpenGL_FOUND)
@@ -165,7 +177,6 @@ if(SDL2_FOUND AND OpenGL_FOUND)
         src/gui/piano_roll.cpp
         src/gui/arrangement.cpp
         src/gui/mixer_view.cpp
-        src/gui/undo.c
         src/gui/pattern_presets.cpp
         src/gui/virtual_keyboard.cpp
         src/gui/theme.cpp
@@ -177,12 +188,22 @@ if(SDL2_FOUND AND OpenGL_FOUND)
         ${CMAKE_SOURCE_DIR}/deps/imgui/backends
         ${CMAKE_SOURCE_DIR}/resources
     )
-    target_link_libraries(sq_gui PUBLIC sq_engine imgui)
+    target_link_libraries(sq_gui PUBLIC sq_app imgui)
     set_target_properties(sq_gui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+    # Windows icon resource
+    if(WIN32)
+        set(SQ_WIN_RC ${CMAKE_SOURCE_DIR}/resources/0x808.rc)
+        set_source_files_properties(${SQ_WIN_RC} PROPERTIES
+            COMPILE_FLAGS "-I${CMAKE_SOURCE_DIR}/resources")
+    else()
+        set(SQ_WIN_RC "")
+    endif()
 
     add_executable(sequencer_gui
         src/standalone/main_gui.c
         src/gui/gui.cpp
+        ${SQ_WIN_RC}
     )
     target_include_directories(sequencer_gui PRIVATE
         ${CMAKE_SOURCE_DIR}/src
@@ -220,6 +241,57 @@ if(SDL2_FOUND AND OpenGL_FOUND)
 else()
     message(STATUS "SDL2 or OpenGL not found — skipping GUI target")
     message(STATUS "  Install with: sudo apt-get install pkg-config libsdl2-dev libgl-dev")
+endif()
+
+# ─── GTK 4.0 frontend (optional, Linux only) ──────────────────────────────────
+
+option(BUILD_GTK "Build GTK 4.0 frontend" OFF)
+
+if(BUILD_GTK)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(GTK4 QUIET gtk4)
+    endif()
+    if(GTK4_FOUND AND SDL2_FOUND)
+        message(STATUS "GTK 4.0 found (${GTK4_VERSION}) — building GTK frontend")
+        add_executable(sequencer_gtk
+            src/gui_gtk/main_gtk.c
+            src/gui_gtk/gtk_window.c
+            src/gui_gtk/gtk_theme.c
+            src/gui_gtk/gtk_drum_grid.c
+            src/gui_gtk/gtk_piano_roll.c
+            src/gui_gtk/gtk_knob.c
+            src/gui_gtk/gtk_synth_editor.c
+            src/gui_gtk/gtk_mixer.c
+            src/gui_gtk/gtk_browser.c
+            src/gui_gtk/gtk_keyboard.c
+            src/gui_gtk/gtk_arrangement.c
+            src/gui_gtk/gtk_presets.c
+            src/gui_gtk/gtk_export.c
+        )
+        target_include_directories(sequencer_gtk PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+            ${GTK4_INCLUDE_DIRS}
+            ${SDL2_INCLUDE_DIRS}
+        )
+        target_compile_options(sequencer_gtk PRIVATE ${GTK4_CFLAGS_OTHER})
+        target_link_libraries(sequencer_gtk PRIVATE
+            sq_app
+            ${GTK4_LIBRARIES}
+            ${SDL2_LIBRARIES}
+            m pthread ${CMAKE_DL_LIBS}
+        )
+        set_target_properties(sequencer_gtk PROPERTIES
+            OUTPUT_NAME "0x808_gtk"
+        )
+    else()
+        if(NOT GTK4_FOUND)
+            message(STATUS "GTK 4.0 not found — skipping GTK frontend")
+            message(STATUS "  Install with: sudo apt-get install libgtk-4-dev")
+        endif()
+        if(NOT SDL2_FOUND)
+            message(STATUS "SDL2 not found — skipping GTK frontend (needed for audio)")
+        endif()
+    endif()
 endif()
 
 # ─── Plugin targets (Phase 9: VST3 and CLAP via CPLUG) ────────────────────────
