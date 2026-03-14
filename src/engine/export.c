@@ -187,7 +187,44 @@ int sq_export_write_wav(const char *filepath, const sq_export_result_t *result,
         return -1;
     }
 
-    drwav_uint64 written = drwav_write_pcm_frames(&wav, result->num_frames, result->data);
+    drwav_uint64 written;
+    uint32_t total_samples = result->num_frames * 2; /* stereo */
+
+    if (bit_depth == 32) {
+        /* 32-bit float: write float data directly */
+        written = drwav_write_pcm_frames(&wav, result->num_frames, result->data);
+    } else if (bit_depth == 16) {
+        /* Convert float -> int16 */
+        int16_t *pcm16 = malloc(total_samples * sizeof(int16_t));
+        if (!pcm16) {
+            drwav_uninit(&wav);
+            return -1;
+        }
+        for (uint32_t i = 0; i < total_samples; i++) {
+            float v = result->data[i];
+            if (v > 1.0f) v = 1.0f;
+            if (v < -1.0f) v = -1.0f;
+            pcm16[i] = (int16_t)(v * 32767.0f);
+        }
+        written = drwav_write_pcm_frames(&wav, result->num_frames, pcm16);
+        free(pcm16);
+    } else {
+        /* 24-bit: convert float -> int32 (dr_wav reads 32-bit ints for 24-bit PCM) */
+        int32_t *pcm32 = malloc(total_samples * sizeof(int32_t));
+        if (!pcm32) {
+            drwav_uninit(&wav);
+            return -1;
+        }
+        for (uint32_t i = 0; i < total_samples; i++) {
+            float v = result->data[i];
+            if (v > 1.0f) v = 1.0f;
+            if (v < -1.0f) v = -1.0f;
+            pcm32[i] = (int32_t)(v * 8388607.0f); /* 2^23 - 1 */
+        }
+        written = drwav_write_pcm_frames(&wav, result->num_frames, pcm32);
+        free(pcm32);
+    }
+
     drwav_uninit(&wav);
 
     LOG_INFO("Wrote %llu frames to %s (%d-bit)", (unsigned long long)written,

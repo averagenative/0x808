@@ -406,6 +406,21 @@ Goal: Support live performance workflows — variable pattern lengths, scene mem
 
 - [ ] TASK-211: Scene memory system — "MEMORY" button in toolbar opens a bank of 8-16 scene slots. Each slot stores the current pattern data + synth preset settings. Click to save current state, click to recall. For live DAW use — instant switching between prepared scenes.
 
+### 14C: MIDI Output
+
+- [ ] TASK-224: MIDI output from plugin — set CPLUG_WANT_MIDI_OUTPUT=1 in plugin config, implement MIDI note-on/note-off output from the sequencer engine so the plugin can drive external instruments in the DAW. Map drum grid steps and piano roll notes to MIDI events with correct timing, velocity, and channel.
+
+### 14D: Plugin/Standalone Feature Parity
+
+- [x] TASK-225: Plugin toolbar parity — plugin_gui.cpp toolbar must match gui.cpp standalone toolbar: PLAY, REC, BPM, Swing, Vol, EXPORT, PRESETS, PIANO, KEYS, PAT/SONG/PERF, FX, BROWSE, THEME (popup selector). Any toolbar change to standalone must be mirrored to plugin.
+- [ ] TASK-226: Plugin layout parity — ensure all panel layouts (drum grid, piano roll, synth editor, mixer/FX, arrangement, sample browser, virtual keyboard, export dialog, pattern presets) render identically in plugin and standalone. Shared drawing functions should be used where possible; any standalone-only features should be ported to plugin.
+- [ ] TASK-227: Plugin input parity — verify all keyboard shortcuts (pattern select 1-9, copy/paste Ctrl+C/V, undo/redo Ctrl+Z, theme toggle Ctrl+T) and mouse interactions (right-click velocity popup, click-drag painting, knob dragging) work in the plugin context. Document any host-specific limitations.
+- [ ] TASK-228: Plugin resize/maximize parity — plugin must correctly fill host window on resize, maximize, and restore. GL viewport and ImGui layout must adapt to any host-provided size. No rendering artifacts (ghosting, stale frames) during resize.
+- [ ] TASK-229: Kit selector — toolbar or drum grid dropdown to switch between sample kits (808, 909, 505, MRK-2, CR-78, LM-2). Switching kit re-assigns all sampler tracks' sample_index to the corresponding kit samples. Show current kit name in UI.
+- [ ] TASK-230: Plugin-specific UI testing — systematic testing of all plugin UI interactions in Reaper (VST3) and other hosts. Verify: mouse hover alignment (reparented SDL window coordinate mapping), button clicks via Win32 mouse injection, knob dragging, right-click popups, scroll wheel, keyboard shortcuts. Document host-specific quirks. Test at multiple window sizes and after resize/maximize.
+- [ ] TASK-231: Plugin transport integration — remove standalone PLAY/STOP button from plugin (host controls transport). Show host transport state read-only. Remove REC button (DAW records output). Remove EXPORT button (DAW handles bounce). These features only apply to standalone mode.
+- [ ] TASK-232: Shared toolbar extraction — extract toolbar drawing into a shared `toolbar_draw()` function in src/gui/toolbar.cpp. Standalone adds window controls (_  []  X) and PLAY/REC/EXPORT. Plugin omits host-controlled features. Both call the same shared code for pattern selector, panel toggles, knobs, theme, logo.
+
 ---
 
 ## Phase 15: Release & Distribution (P2 — Ship It)
@@ -455,9 +470,9 @@ Goal: Package standalone exe, VST3, and CLAP for distribution. Code signing, ins
 | 11. GUI Polish & Standalone | TASK-124 → 151 | Cross-platform parity, tests | P4 |
 | 12. Security & Robustness | TASK-152 → 183 | Thread safety, vuln fixes, fuzzing | P4 |
 | 13. UX Polish & Visual Design | TASK-184 → 209 | Knobs, visuals, packaging, UX | P5 |
-| 14. Live Performance | TASK-210 → 211 | Variable length, scene memory | P5 |
+| 14. Live Performance | TASK-210 → 232 | Variable length, scene memory, MIDI out, plugin parity | P5 |
 | 15. Release & Distribution | TASK-212 → 223 | Signed builds, CI releases, installer | P2 |
 
-**Total: 223 tasks across 15 phases**
+**Total: 232 tasks across 15 phases**
 
 Each phase ends with a milestone test that proves the new capability works end-to-end. Phases 1-3 (P0) deliver the MVP. Phases 4-5 (P1) make it a real production tool. Phases 6-7 (P2) enable full songs and shipping. Phases 8-10 (P3) expand reach and polish. Phase 11 (P4) ensures cross-platform GUI parity. Phase 12 (P4) hardens the codebase. Phase 13 (P5) makes it feel like a real instrument. Phase 15 (P2) ships the product.

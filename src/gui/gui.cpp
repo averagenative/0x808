@@ -682,8 +682,7 @@ int gui_frame(sq_engine_t *engine)
                 }
                 engine->rec_frames = 0;
             } else {
-                engine->rec_frames = 0;
-                engine->recording = true;
+                sq_engine_start_recording(engine);
                 char rec_path[600];
                 snprintf(rec_path, sizeof(rec_path), "%srecording.wav",
                          engine->base_dir[0] ? engine->base_dir : "");
@@ -849,6 +848,7 @@ int gui_frame(sq_engine_t *engine)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.35f, 0.38f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             if (ImGui::Button("_##wmin", wc_sz)) {
 #ifdef _WIN32
                 SDL_SysWMinfo wmInfo;
@@ -859,13 +859,14 @@ int gui_frame(sq_engine_t *engine)
                 SDL_MinimizeWindow(g_window);
 #endif
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor(4);
             ImGui::SameLine(0, 2);
 
             /* Maximize / Restore */
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.35f, 0.38f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
             {
                 bool maximized = false;
 #ifdef _WIN32
@@ -886,7 +887,7 @@ int gui_frame(sq_engine_t *engine)
 #endif
                 }
             }
-            ImGui::PopStyleColor(3);
+            ImGui::PopStyleColor(4);
             ImGui::SameLine(0, 2);
 
             /* Close — red */
