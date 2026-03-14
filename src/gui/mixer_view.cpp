@@ -282,33 +282,83 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
 
     ImGui::SameLine();
 
-    /* --- Section 2: Effects panel (tabs: Master + per-track) --- */
+    /* --- Section 2: Effects panel (browse: Master + per-track) --- */
     if (ImGui::BeginChild("EffectsPanel", ImVec2(effects_w, content_h),
                           ImGuiChildFlags_Borders)) {
         static int fx_tab = 0; /* 0 = Master, 1+ = track index+1 */
 
-        /* Tab bar: Master | Track 1 | Track 2 | ... */
-        if (ImGui::BeginTabBar("FXTabs")) {
-            if (ImGui::BeginTabItem("Master")) {
-                fx_tab = 0;
-                ImGui::EndTabItem();
-            }
+        int pat_idx2 = engine->transport.current_pattern;
+        uint32_t nt = 0;
+        if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns)
+            nt = engine->patterns[pat_idx2].num_tracks;
 
-            int pat_idx2 = engine->transport.current_pattern;
-            uint32_t nt = 0;
-            if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns)
-                nt = engine->patterns[pat_idx2].num_tracks;
+        /* Clamp fx_tab if tracks changed */
+        if (fx_tab > (int)nt) fx_tab = 0;
 
-            for (uint32_t ti = 0; ti < nt; ti++) {
-                char tab_label[32];
-                snprintf(tab_label, sizeof(tab_label), "Trk %u", ti + 1);
-                if (ImGui::BeginTabItem(tab_label)) {
-                    fx_tab = (int)ti + 1;
-                    ImGui::EndTabItem();
+        /* Build display label: "Master" or "Trk N: Name (Type)" */
+        char fx_label[128];
+        if (fx_tab == 0) {
+            snprintf(fx_label, sizeof(fx_label), "Master Bus");
+        } else {
+            uint32_t ti = (uint32_t)(fx_tab - 1);
+            const char *tname = "(empty)";
+            const char *ttype = "Sampler";
+            if (ti < nt) {
+                sq_track_t *trk = &engine->patterns[pat_idx2].tracks[ti];
+                if (trk->type == TRACK_SYNTH) {
+                    ttype = "Synth";
+                    if (trk->synth_preset >= 0 &&
+                        (uint32_t)trk->synth_preset < engine->num_synth_presets)
+                        tname = engine->synth_presets[trk->synth_preset].name;
+                } else if (trk->type == TRACK_SF2) {
+                    ttype = "SF2";
+                    if (trk->sf2_preset >= 0 &&
+                        (uint32_t)trk->sf2_preset < engine->num_sf2_presets)
+                        tname = engine->sf2_presets[trk->sf2_preset].name;
+                } else {
+                    if (trk->sample_index >= 0 &&
+                        (uint32_t)trk->sample_index < engine->num_samples)
+                        tname = engine->samples[trk->sample_index].name;
                 }
+                snprintf(fx_label, sizeof(fx_label), "Trk %u: %s (%s)", ti + 1, tname, ttype);
+            } else {
+                snprintf(fx_label, sizeof(fx_label), "Trk %u", ti + 1);
             }
-            ImGui::EndTabBar();
         }
+
+        /* Browse bar: [<] [label clipped] [>] — fixed layout using a table */
+        {
+            float btn_w = 30.0f;
+            bool can_prev = (fx_tab > 0);
+            bool can_next = (fx_tab < (int)nt);
+
+            if (ImGui::BeginTable("FXBrowse", 3, ImGuiTableFlags_SizingFixedFit)) {
+                ImGui::TableSetupColumn("prev", ImGuiTableColumnFlags_WidthFixed, btn_w);
+                ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("next", ImGuiTableColumnFlags_WidthFixed, btn_w);
+
+                ImGui::TableNextColumn();
+                if (!can_prev) ImGui::BeginDisabled();
+                if (ImGui::Button("<##fx_prev", ImVec2(btn_w, 0)))
+                    fx_tab--;
+                if (!can_prev) ImGui::EndDisabled();
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(fx_label);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", fx_label);
+
+                ImGui::TableNextColumn();
+                if (!can_next) ImGui::BeginDisabled();
+                if (ImGui::Button(">##fx_next", ImVec2(btn_w, 0)))
+                    fx_tab++;
+                if (!can_next) ImGui::EndDisabled();
+
+                ImGui::EndTable();
+            }
+        }
+
+        ImGui::Separator();
 
         /* Draw effect slots for selected tab */
         sq_effect_slot_t *slots = NULL;
@@ -324,17 +374,19 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
         }
 
         if (slots) {
-            if (ImGui::BeginTable("FXSlots", MAX_TRACK_EFFECTS,
-                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
-                ImGui::TableNextRow();
-                for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
-                    ImGui::TableSetColumnIndex(i);
-                    char slot_label[32];
-                    snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
-                    draw_effect_slot(&slots[i], slot_label,
-                                     engine->sample_rate, i + fx_tab * 10);
-                }
-                ImGui::EndTable();
+            float slot_w = (ImGui::GetContentRegionAvail().x - 8.0f) / MAX_TRACK_EFFECTS;
+            float slot_h = ImGui::GetContentRegionAvail().y;
+            for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
+                if (i > 0) ImGui::SameLine(0, 4);
+                char child_id[32];
+                snprintf(child_id, sizeof(child_id), "FXSlot%d", i);
+                ImGui::BeginChild(child_id, ImVec2(slot_w, slot_h),
+                                  ImGuiChildFlags_Borders);
+                char slot_label[32];
+                snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
+                draw_effect_slot(&slots[i], slot_label,
+                                 engine->sample_rate, i + fx_tab * 10);
+                ImGui::EndChild();
             }
         }
     }

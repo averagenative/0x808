@@ -89,6 +89,8 @@ static int   rclick_drag_track = -1;
 static int   rclick_drag_step  = -1;
 static ImVec2 rclick_drag_origin;
 static bool  rclick_dragging = false;
+static int   rclick_drag_base_vel = 100;
+static int   rclick_drag_base_pitch = 0;
 
 /* --- Globals ------------------------------------------------------------- */
 extern "C" {
@@ -175,21 +177,23 @@ void drum_grid_draw(sq_engine_t *engine,
         ImGui::BeginChild(child_id, ImVec2(track_panel_w - 10, row_h - 4), true,
                           ImGuiWindowFlags_NoScrollbar);
         {
-            /* Determine track display name */
-            const char *track_name = "(empty)";
+            /* Determine track display name with track number */
+            const char *raw_name = "(empty)";
             if (track->type == TRACK_SYNTH &&
                 track->synth_preset >= 0 &&
                 (uint32_t)track->synth_preset < engine->num_synth_presets) {
-                track_name = engine->synth_presets[track->synth_preset].name;
+                raw_name = engine->synth_presets[track->synth_preset].name;
             } else if (track->type == TRACK_SAMPLER &&
                        track->sample_index >= 0 &&
                        (uint32_t)track->sample_index < engine->num_samples) {
-                track_name = engine->samples[track->sample_index].name;
+                raw_name = engine->samples[track->sample_index].name;
             } else if (track->type == TRACK_SF2 &&
                        track->sf2_preset >= 0 &&
                        (uint32_t)track->sf2_preset < engine->num_sf2_presets) {
-                track_name = engine->sf2_presets[track->sf2_preset].name;
+                raw_name = engine->sf2_presets[track->sf2_preset].name;
             }
+            char track_name[128];
+            snprintf(track_name, sizeof(track_name), "%u. %s", t + 1, raw_name);
 
             /* Row 1: Track name button + Mute + Solo */
             {
@@ -532,14 +536,51 @@ void drum_grid_draw(sq_engine_t *engine,
                                      pad_round, 0, 1.0f);
                 }
 
-                /* Cell label: show velocity if active */
+                /* Cell label: show velocity centered, pitch indicator at bottom */
                 if (is_active && step->velocity > 0) {
+                    float pw = cell_max.x - cell_min.x;
+                    float ph = cell_max.y - cell_min.y;
+
+                    /* Velocity number — centered (shift up slightly if pitch shown) */
                     char label[16];
                     snprintf(label, sizeof(label), "%d", step->velocity);
                     ImVec2 text_size = ImGui::CalcTextSize(label);
-                    float tx = cell_min.x + (cell_max.x - cell_min.x - text_size.x) * 0.5f;
-                    float ty = cell_min.y + (cell_max.y - cell_min.y - text_size.y) * 0.5f;
+                    float tx = cell_min.x + (pw - text_size.x) * 0.5f;
+                    float ty_offset = (step->pitch_offset != 0) ? -5.0f : 0.0f;
+                    float ty = cell_min.y + (ph - text_size.y) * 0.5f + ty_offset;
                     cell_dl->AddText(ImVec2(tx, ty), IM_COL32(255, 255, 255, 220), label);
+
+                    /* Pitch indicator — small arrow + number at bottom of pad */
+                    if (step->pitch_offset != 0) {
+                        char plbl[16];
+                        snprintf(plbl, sizeof(plbl), "%+d", step->pitch_offset);
+                        ImVec2 psz = ImGui::CalcTextSize(plbl);
+                        float px = cell_min.x + (pw - psz.x) * 0.5f;
+                        float py = cell_max.y - psz.y - 2.0f;
+                        /* Color: cyan for up, orange for down */
+                        ImU32 pcol = (step->pitch_offset > 0)
+                            ? IM_COL32(80, 220, 255, 200)
+                            : IM_COL32(255, 180, 60, 200);
+                        cell_dl->AddText(ImVec2(px, py), pcol, plbl);
+
+                        /* Small triangle arrow above the pitch text */
+                        float ax = cell_min.x + pw * 0.5f;
+                        float ay = py - 2.0f;
+                        float as = 4.0f; /* arrow size */
+                        if (step->pitch_offset > 0) {
+                            /* Up arrow */
+                            cell_dl->AddTriangleFilled(
+                                ImVec2(ax, ay - as),
+                                ImVec2(ax - as, ay),
+                                ImVec2(ax + as, ay), pcol);
+                        } else {
+                            /* Down arrow */
+                            cell_dl->AddTriangleFilled(
+                                ImVec2(ax - as, ay - as),
+                                ImVec2(ax + as, ay - as),
+                                ImVec2(ax, ay), pcol);
+                        }
+                    }
                 }
 
                 /* Left-click drag: toggle pads as mouse drags across them */
@@ -569,10 +610,9 @@ void drum_grid_draw(sq_engine_t *engine,
                         }
                     }
 
-                    /* Right click: start drag for velocity/pitch, or open popup */
+                    /* Right click: start drag for velocity/pitch */
                     {
                         bool rb_down = io.MouseDown[1];
-
                         if (rb_down && !rclick_was_down) {
                             if (!is_active) {
                                 step->velocity = 100;
@@ -580,28 +620,9 @@ void drum_grid_draw(sq_engine_t *engine,
                             rclick_drag_track = (int)t;
                             rclick_drag_step = (int)s;
                             rclick_drag_origin = io.MousePos;
+                            rclick_drag_base_vel = (int)step->velocity;
+                            rclick_drag_base_pitch = (int)step->pitch_offset;
                             rclick_dragging = false;
-                        }
-
-                        /* Right-click+hold drag: left/right = velocity, up/down = pitch */
-                        if (rb_down && rclick_drag_track == (int)t && rclick_drag_step == (int)s) {
-                            float dx = io.MousePos.x - rclick_drag_origin.x;
-                            float dy = io.MousePos.y - rclick_drag_origin.y;
-                            if (fabsf(dx) > 3.0f || fabsf(dy) > 3.0f) {
-                                rclick_dragging = true;
-                            }
-                            if (rclick_dragging) {
-                                /* Horizontal: velocity (1 pixel = 1 unit) */
-                                int new_vel = 100 + (int)(dx * 0.5f);
-                                if (new_vel < 1) new_vel = 1;
-                                if (new_vel > 127) new_vel = 127;
-                                step->velocity = (uint8_t)new_vel;
-                                /* Vertical: pitch (inverted — drag up = pitch up) */
-                                int new_pitch = -(int)(dy * 0.2f);
-                                if (new_pitch < -24) new_pitch = -24;
-                                if (new_pitch > 24) new_pitch = 24;
-                                step->pitch_offset = (int8_t)new_pitch;
-                            }
                         }
                     }
                 }
@@ -611,6 +632,29 @@ void drum_grid_draw(sq_engine_t *engine,
             ImGui::Dummy(ImVec2(cells_region_w, row_h - 6));
         }
         ImGui::EndChild();
+    }
+
+    /* --- Right-click drag: continuous velocity/pitch adjustment ----------- */
+    if (io.MouseDown[1] && rclick_drag_track >= 0 && rclick_drag_step >= 0) {
+        float dx = io.MousePos.x - rclick_drag_origin.x;
+        float dy = io.MousePos.y - rclick_drag_origin.y;
+        if (!rclick_dragging && (fabsf(dx) > 3.0f || fabsf(dy) > 3.0f)) {
+            rclick_dragging = true;
+        }
+        if (rclick_dragging) {
+            sq_track_t *dt = &pattern->tracks[rclick_drag_track];
+            sq_step_t *ds = &dt->steps[rclick_drag_step];
+            /* Horizontal: velocity relative to starting value */
+            int new_vel = rclick_drag_base_vel + (int)(dx * 0.5f);
+            if (new_vel < 1) new_vel = 1;
+            if (new_vel > 127) new_vel = 127;
+            ds->velocity = (uint8_t)new_vel;
+            /* Vertical: pitch relative to starting value (drag up = pitch up) */
+            int new_pitch = rclick_drag_base_pitch - (int)(dy * 0.2f);
+            if (new_pitch < -24) new_pitch = -24;
+            if (new_pitch > 24) new_pitch = 24;
+            ds->pitch_offset = (int8_t)new_pitch;
+        }
     }
 
     /* --- Add track buttons ----------------------------------------------- */

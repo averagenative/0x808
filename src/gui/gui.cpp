@@ -18,6 +18,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_syswm.h>
 
 extern "C" {
 #include "gui/gui.h"
@@ -45,10 +46,112 @@ extern "C" {
 
 #ifdef _WIN32
 #include <windows.h>
+#include <windowsx.h>
 #include <commdlg.h>
 #endif
 
 #define STEPS_PER_BEAT 4
+
+/* ─── Custom borderless window resize/maximize via Win32 ─────────────────── */
+
+#define RESIZE_BORDER 8
+
+#ifdef _WIN32
+/* Subclass the Win32 HWND to handle WM_NCHITTEST + WM_NCCALCSIZE for
+ * borderless window resize/maximize. SDL2's HitTest is broken for resize
+ * on Windows (SDL issue #8586). The fix is to:
+ *   1. Add WS_THICKFRAME so Windows provides native resize behavior
+ *   2. Handle WM_NCCALCSIZE returning 0 to hide the frame (keep borderless look)
+ *   3. Handle WM_NCHITTEST via DefWindowProc for edge detection
+ *   4. Handle WM_GETMINMAXINFO to constrain maximize to work area
+ * Ref: rossy/borderless-window, alek-tron.com/borderless */
+static WNDPROC g_orig_wndproc = NULL;
+
+static LRESULT CALLBACK borderless_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    /* WM_NCCALCSIZE: Remove non-client area to keep borderless look.
+     * Without this, WS_THICKFRAME causes a visible border/white line. */
+    if (msg == WM_NCCALCSIZE && wp == TRUE) {
+        if (IsZoomed(hwnd)) {
+            /* When maximized, constrain to work area so we don't cover the taskbar */
+            NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lp;
+            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi;
+            mi.cbSize = sizeof(mi);
+            if (GetMonitorInfo(mon, &mi))
+                params->rgrc[0] = mi.rcWork;
+        }
+        return 0; /* 0 = no non-client area = borderless */
+    }
+
+    /* WM_NCHITTEST: Let DefWindowProc detect the WS_THICKFRAME edges first,
+     * then overlay our own border detection for the resize zones. */
+    if (msg == WM_NCHITTEST) {
+        LRESULT hit = DefWindowProcW(hwnd, msg, wp, lp);
+        if (hit == HTCLIENT) {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            ScreenToClient(hwnd, &pt);
+
+            int w = rc.right, h = rc.bottom;
+            bool top    = pt.y < RESIZE_BORDER;
+            bool bottom = pt.y >= h - RESIZE_BORDER;
+            bool left   = pt.x < RESIZE_BORDER;
+            bool right  = pt.x >= w - RESIZE_BORDER;
+
+            if (top && left)     return HTTOPLEFT;
+            if (top && right)    return HTTOPRIGHT;
+            if (bottom && left)  return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (top)             return HTTOP;
+            if (bottom)          return HTBOTTOM;
+            if (left)            return HTLEFT;
+            if (right)           return HTRIGHT;
+        } else {
+            /* DefWindowProc already detected a frame edge — use it */
+            return hit;
+        }
+    }
+
+    /* WM_GETMINMAXINFO: Constrain maximize to monitor work area (excludes taskbar) */
+    if (msg == WM_GETMINMAXINFO) {
+        MINMAXINFO *mmi = (MINMAXINFO *)lp;
+        HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi;
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfo(mon, &mi)) {
+            mmi->ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+            mmi->ptMaxPosition.y = mi.rcWork.top  - mi.rcMonitor.top;
+            mmi->ptMaxSize.x     = mi.rcWork.right  - mi.rcWork.left;
+            mmi->ptMaxSize.y     = mi.rcWork.bottom - mi.rcWork.top;
+        }
+        return 0; /* must return 0, not fall through */
+    }
+
+    return CallWindowProcW(g_orig_wndproc, hwnd, msg, wp, lp);
+}
+
+static void install_borderless_wndproc(SDL_Window *window)
+{
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (SDL_GetWindowWMInfo(window, &wmInfo)) {
+        HWND hwnd = wmInfo.info.win.window;
+        g_orig_wndproc = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC,
+                                                      (LONG_PTR)borderless_wndproc);
+        /* Add WS_THICKFRAME for native resize, WS_CAPTION for window snapping,
+         * keep borderless look via WM_NCCALCSIZE returning 0 */
+        LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        style |= WS_THICKFRAME | WS_CAPTION | WS_SYSMENU |
+                 WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style);
+        /* Force Windows to recalculate the frame */
+        SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    }
+}
+#endif
 
 /* ─── Native file dialogs ─────────────────────────────────────────────────── */
 
@@ -199,12 +302,13 @@ int gui_init(int width, int height, const char *title)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    LOG_INFO("gui_init: SDL_CreateWindow...");
+    LOG_INFO("gui_init: SDL_CreateWindow (borderless)...");
     g_window = SDL_CreateWindow(
         title,
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         width, height,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS |
+        SDL_WINDOW_ALLOW_HIGHDPI
     );
     if (!g_window) {
         LOG_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
@@ -212,7 +316,10 @@ int gui_init(int width, int height, const char *title)
         return -1;
     }
     SDL_SetWindowMinimumSize(g_window, 800, 500);
-    LOG_INFO("gui_init: SDL_CreateWindow OK (min size 800x500)");
+#ifdef _WIN32
+    install_borderless_wndproc(g_window);
+#endif
+    LOG_INFO("gui_init: SDL_CreateWindow OK (borderless, min size 800x500)");
 
     LOG_INFO("gui_init: SDL_GL_CreateContext...");
     g_gl_ctx = SDL_GL_CreateContext(g_window);
@@ -732,16 +839,67 @@ int gui_frame(sq_engine_t *engine)
         }
         ImGui::SameLine();
 
-        /* EXIT button — vibrant red with forced white text */
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.80f, 0.10f, 0.10f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.20f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.00f, 0.30f, 0.30f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-        if (ImGui::Button("EXIT", btn_sz)) {
-            LOG_INFO("EXIT button pressed");
-            quit = 1;
+        /* Window control buttons: _ [] X — always right-aligned */
+        {
+            ImVec2 wc_sz(35.0f, btn_h);
+            float controls_w = wc_sz.x * 3 + 2 * 2 + 8; /* 3 buttons + 2 gaps + padding */
+            ImGui::SameLine(ImGui::GetWindowWidth() - controls_w);
+
+            /* Minimize */
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.35f, 0.38f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
+            if (ImGui::Button("_##wmin", wc_sz)) {
+#ifdef _WIN32
+                SDL_SysWMinfo wmInfo;
+                SDL_VERSION(&wmInfo.version);
+                if (SDL_GetWindowWMInfo(g_window, &wmInfo))
+                    ShowWindow(wmInfo.info.win.window, SW_MINIMIZE);
+#else
+                SDL_MinimizeWindow(g_window);
+#endif
+            }
+            ImGui::PopStyleColor(3);
+            ImGui::SameLine(0, 2);
+
+            /* Maximize / Restore */
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.35f, 0.38f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
+            {
+                bool maximized = false;
+#ifdef _WIN32
+                SDL_SysWMinfo wmInfo;
+                SDL_VERSION(&wmInfo.version);
+                if (SDL_GetWindowWMInfo(g_window, &wmInfo))
+                    maximized = IsZoomed(wmInfo.info.win.window);
+#else
+                maximized = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MAXIMIZED) != 0;
+#endif
+                if (ImGui::Button(maximized ? "[]##wmax" : "[ ]##wmax", wc_sz)) {
+#ifdef _WIN32
+                    if (SDL_GetWindowWMInfo(g_window, &wmInfo))
+                        ShowWindow(wmInfo.info.win.window, maximized ? SW_RESTORE : SW_MAXIMIZE);
+#else
+                    if (maximized) SDL_RestoreWindow(g_window);
+                    else SDL_MaximizeWindow(g_window);
+#endif
+                }
+            }
+            ImGui::PopStyleColor(3);
+            ImGui::SameLine(0, 2);
+
+            /* Close — red */
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.80f, 0.10f, 0.10f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.20f, 0.20f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.00f, 0.30f, 0.30f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            if (ImGui::Button("X##wclose", wc_sz)) {
+                LOG_INFO("Close button pressed");
+                quit = 1;
+            }
+            ImGui::PopStyleColor(4);
         }
-        ImGui::PopStyleColor(4);
 
         /* ── Second row: pattern selector + status ─────────────────────── */
         {
@@ -807,6 +965,50 @@ int gui_frame(sq_engine_t *engine)
             } else if (g_status_timer > 0) {
                 ImGui::TextColored(ImVec4(0.39f, 1.0f, 0.39f, 1.0f), "%s", g_save_status);
                 g_status_timer--;
+            }
+        }
+
+        /* ── Window drag: if user clicks empty toolbar area, drag window ── */
+        {
+            ImGuiIO &drag_io = ImGui::GetIO();
+            static bool dragging_window = false;
+            static int drag_start_wx, drag_start_wy;
+            static int drag_start_mx, drag_start_my;
+
+            /* Check if mouse is in toolbar area and not over any ImGui widget */
+            bool in_toolbar = (drag_io.MousePos.y < toolbar_h);
+            bool over_widget = ImGui::IsAnyItemHovered() || ImGui::IsAnyItemActive();
+
+            /* Double-click empty toolbar: maximize/restore */
+            if (drag_io.MouseDoubleClicked[0] && in_toolbar && !over_widget) {
+#ifdef _WIN32
+                SDL_SysWMinfo wmInfo;
+                SDL_VERSION(&wmInfo.version);
+                if (SDL_GetWindowWMInfo(g_window, &wmInfo)) {
+                    bool is_max = IsZoomed(wmInfo.info.win.window);
+                    ShowWindow(wmInfo.info.win.window, is_max ? SW_RESTORE : SW_MAXIMIZE);
+                }
+#else
+                bool is_max = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_MAXIMIZED) != 0;
+                if (is_max) SDL_RestoreWindow(g_window); else SDL_MaximizeWindow(g_window);
+#endif
+            }
+
+            if (drag_io.MouseClicked[0] && in_toolbar && !over_widget) {
+                dragging_window = true;
+                SDL_GetWindowPosition(g_window, &drag_start_wx, &drag_start_wy);
+                SDL_GetGlobalMouseState(&drag_start_mx, &drag_start_my);
+            }
+            if (dragging_window) {
+                if (drag_io.MouseDown[0]) {
+                    int mx, my;
+                    SDL_GetGlobalMouseState(&mx, &my);
+                    int dx = mx - drag_start_mx;
+                    int dy = my - drag_start_my;
+                    SDL_SetWindowPosition(g_window, drag_start_wx + dx, drag_start_wy + dy);
+                } else {
+                    dragging_window = false;
+                }
             }
         }
 
@@ -936,6 +1138,22 @@ int gui_frame(sq_engine_t *engine)
     if (export_dialog_visible())
         export_dialog_draw(engine);
     pattern_presets_draw(engine);
+
+    /* ── Window border + resize grip (borderless mode) ──────────────────── */
+    {
+        ImDrawList *fg = ImGui::GetForegroundDrawList();
+        ImU32 border_col = IM_COL32(60, 60, 65, 200);
+        fg->AddRect(ImVec2(0, 0),
+                    ImVec2((float)g_win_width, (float)g_win_height),
+                    border_col, 0.0f, 0, 2.0f);
+
+        /* Resize grip triangle — bottom-right corner */
+        float gs = 14.0f;
+        float bx = (float)g_win_width, by = (float)g_win_height;
+        ImU32 grip_col = IM_COL32(100, 100, 110, 180);
+        fg->AddTriangleFilled(
+            ImVec2(bx - gs, by), ImVec2(bx, by - gs), ImVec2(bx, by), grip_col);
+    }
 
     /* ── Render ───────────────────────────────────────────────────────────── */
     ImGui::Render();
