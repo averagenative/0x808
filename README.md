@@ -10,6 +10,10 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 
 ## Screenshots
 
+### GTK 4.0 Frontend (Vaporwave Theme)
+![0x808 GTK Frontend](docs/screenshot_gtk.png)
+
+### ImGui Frontend
 <img src="screenshots/0x808_light_theme.png" width="270"> <img src="screenshots/0x808_dark_theme.png" width="270"> <img src="screenshots/0x808_hacker_theme.png" width="270">
 
 7 built-in themes (Dark, Light, Hacker, Midnight, Amber, Vaporwave, Neon) + user-defined themes via JSON files in the `themes/` folder.
@@ -93,7 +97,7 @@ All GUI frontends share the `sq_app` controller library (C99) for keyboard short
 |--------|----------|
 | **Click PRESETS** | Toggle pattern presets dialog open/closed |
 | **Click EXPORT** | Toggle export dialog open/closed |
-| **Click THEME** | Cycle through themes (GTK) |
+| **Click THEME** | Open theme selector popup |
 | **Click panel buttons** | Toggle panel visibility (BROWSE, MIXER, PIANO, KEYS) |
 
 ## Building
@@ -234,8 +238,18 @@ The engine (Layer 1) has zero knowledge of GUI or audio drivers. The app control
 | [dr_wav/dr_mp3/dr_flac](https://github.com/mackron/dr_libs) | Public Domain | Audio file decoding |
 | [TinySoundFont](https://github.com/schellingb/TinySoundFont) | MIT | SoundFont2 synthesis |
 | [cJSON](https://github.com/DaveGamble/cJSON) | MIT | JSON parsing for project files |
-| [Shine](https://github.com/toots/shine) | LGPL-2 | Fixed-point MP3 encoder |
+| [Shine](https://github.com/toots/shine) | LGPL-2 | Fixed-point MP3 encoder (opt-in) |
+
+## MP3 Export (Optional)
+
+MP3 export uses [Shine](https://github.com/toots/shine) which is LGPL-2. It is **disabled by default** to keep the core project MIT-clean. To enable:
+
+```bash
+cmake -B build -DENABLE_MP3=ON
+```
+
+Without `-DENABLE_MP3=ON`, WAV export works normally and MP3 export returns a friendly error message.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)

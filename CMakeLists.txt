@@ -39,28 +39,33 @@ endif()
 # Single-header libs live in deps/ — we just need the include path
 include_directories(${CMAKE_SOURCE_DIR}/deps)
 
-# ─── Shine MP3 encoder library (LGPL-2, fixed-point, cross-platform) ──────────
+# ─── Shine MP3 encoder library (LGPL-2, opt-in) ──────────────────────────────
+# MP3 export uses shine (LGPL-2). Disabled by default for MIT license purity.
+# Enable with: cmake .. -DENABLE_MP3=ON
+option(ENABLE_MP3 "Enable MP3 export via shine (LGPL-2)" OFF)
 
-add_library(shine STATIC
-    deps/shine/bitstream.c
-    deps/shine/huffman.c
-    deps/shine/l3bitstream.c
-    deps/shine/l3loop.c
-    deps/shine/l3mdct.c
-    deps/shine/l3subband.c
-    deps/shine/layer3.c
-    deps/shine/reservoir.c
-    deps/shine/tables.c
-)
-target_include_directories(shine PUBLIC ${CMAKE_SOURCE_DIR}/deps/shine)
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(shine PRIVATE -w)  # Suppress warnings in vendored code
-endif()
-if(CMAKE_C_COMPILER_ID MATCHES "MSVC")
-    target_compile_options(shine PRIVATE /w)
-endif()
-if(NOT MSVC)
-    target_link_libraries(shine PRIVATE m)
+if(ENABLE_MP3)
+    add_library(shine STATIC
+        deps/shine/bitstream.c
+        deps/shine/huffman.c
+        deps/shine/l3bitstream.c
+        deps/shine/l3loop.c
+        deps/shine/l3mdct.c
+        deps/shine/l3subband.c
+        deps/shine/layer3.c
+        deps/shine/reservoir.c
+        deps/shine/tables.c
+    )
+    target_include_directories(shine PUBLIC ${CMAKE_SOURCE_DIR}/deps/shine)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(shine PRIVATE -w)
+    endif()
+    if(CMAKE_C_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(shine PRIVATE /w)
+    endif()
+    if(NOT MSVC)
+        target_link_libraries(shine PRIVATE m)
+    endif()
 endif()
 
 # ─── Engine library (Layer 1: pure DSP, no GUI or platform deps) ───────────────
@@ -89,12 +94,21 @@ target_include_directories(sq_engine PUBLIC
 )
 # PIC required so engine can be linked into plugin shared libraries
 set_target_properties(sq_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
-set_target_properties(shine PROPERTIES POSITION_INDEPENDENT_CODE ON)
-# Engine links only math + shine — no SDL2, no OpenGL, no platform libs
+# Engine links only math (+ shine if MP3 enabled)
+if(ENABLE_MP3)
+    set_target_properties(shine PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(sq_engine PRIVATE SQ_HAVE_MP3=1)
+endif()
 if(MSVC)
-    target_link_libraries(sq_engine PRIVATE shine)
+    if(ENABLE_MP3)
+        target_link_libraries(sq_engine PRIVATE shine)
+    endif()
 else()
-    target_link_libraries(sq_engine PRIVATE m shine)
+    if(ENABLE_MP3)
+        target_link_libraries(sq_engine PRIVATE m shine)
+    else()
+        target_link_libraries(sq_engine PRIVATE m)
+    endif()
 endif()
 
 # ─── Standalone terminal executable (Phase 1-2) ──────────────────────────────

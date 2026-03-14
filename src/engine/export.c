@@ -7,7 +7,9 @@
 #include "engine/export.h"
 
 #include "dr_wav.h"
+#ifdef SQ_HAVE_MP3
 #include "layer3.h"
+#endif
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -232,6 +234,15 @@ int sq_export_write_wav(const char *filepath, const sq_export_result_t *result,
     return 0;
 }
 
+#ifndef SQ_HAVE_MP3
+int sq_export_write_mp3(const char *filepath, const sq_export_result_t *result,
+                        int bitrate)
+{
+    (void)filepath; (void)result; (void)bitrate;
+    LOG_ERROR("MP3 export not available (build with -DENABLE_MP3=ON)");
+    return -1;
+}
+#else
 int sq_export_write_mp3(const char *filepath, const sq_export_result_t *result,
                         int bitrate)
 {
@@ -330,3 +341,4 @@ int sq_export_write_mp3(const char *filepath, const sq_export_result_t *result,
     LOG_INFO("Wrote MP3: %s (%u bytes, %d kbps)", filepath, total_written, bitrate);
     return 0;
 }
+#endif /* SQ_HAVE_MP3 */
