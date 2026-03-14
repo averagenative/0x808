@@ -207,8 +207,11 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                 engine->recording = false;
                 if (engine->rec_frames > 0) {
                     char rec_path[600];
-                    snprintf(rec_path, sizeof(rec_path), "%srecording.wav",
-                             engine->base_dir[0] ? engine->base_dir : "");
+                    const char *bd = engine->base_dir[0] ? engine->base_dir : "";
+                    size_t bdlen = strlen(bd);
+                    const char *sep = (bdlen > 0 && bd[bdlen-1] != '/' &&
+                                       bd[bdlen-1] != '\\') ? "/" : "";
+                    snprintf(rec_path, sizeof(rec_path), "%s%srecording.wav", bd, sep);
                     sq_export_result_t rec_result = {};
                     rec_result.data = engine->rec_buffer;
                     rec_result.num_frames = engine->rec_frames;

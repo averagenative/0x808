@@ -71,6 +71,8 @@ Section "0x808 Standalone (required)" SecMain
         "DisplayVersion" "1.0.0"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
         "Publisher" "Dan Michael"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
+        "DisplayIcon" '"$INSTDIR\0x808.exe",0'
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
         "NoModify" 1
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \

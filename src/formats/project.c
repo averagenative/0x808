@@ -22,9 +22,24 @@
 
 #include "cJSON.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ─── Path safety helper ─────────────────────────────────────────────────── */
+
+static bool path_is_safe(const char *path)
+{
+    if (!path || !path[0]) return false;
+    /* Reject absolute paths (Unix or Windows) */
+    if (path[0] == '/') return false;
+    if (path[0] == '\\') return false;
+    if (strlen(path) >= 2 && path[1] == ':') return false; /* e.g. C:\ */
+    /* Reject path traversal */
+    if (strstr(path, "..")) return false;
+    return true;
+}
 
 /* ─── Clamp helpers ──────────────────────────────────────────────────────── */
 
@@ -536,10 +551,11 @@ int project_load(sq_engine_t *engine, const char *filepath)
     fclose(f);
 
     cJSON *root = cJSON_Parse(json_str);
+    const char *parse_err = cJSON_GetErrorPtr(); /* save before free */
     free(json_str);
 
     if (!root) {
-        LOG_ERROR("Failed to parse JSON: %s", cJSON_GetErrorPtr());
+        LOG_ERROR("Failed to parse JSON: %s", parse_err ? parse_err : "(unknown)");
         return -1;
     }
 
@@ -593,6 +609,11 @@ int project_load(sq_engine_t *engine, const char *filepath)
         for (int i = 0; i < n && engine->num_samples < SQ_MAX_SAMPLES; i++) {
             cJSON *sp = cJSON_GetArrayItem(samples, i);
             if (sp && sp->valuestring) {
+                /* Reject unsafe paths (traversal, absolute) */
+                if (!path_is_safe(sp->valuestring)) {
+                    LOG_WARN("Rejected unsafe sample path: %s", sp->valuestring);
+                    continue;
+                }
                 /* Try loading from the saved path */
                 int idx = (int)engine->num_samples;
                 /* Try several locations */
@@ -786,9 +807,13 @@ int project_load(sq_engine_t *engine, const char *filepath)
     /* SF2 SoundFont */
     cJSON *sf2p = cJSON_GetObjectItem(root, "sf2_path");
     if (sf2p && sf2p->valuestring && sf2p->valuestring[0]) {
-        /* Try to load SF2 — non-fatal if it fails */
-        extern int sf2_load(sq_engine_t *e, const char *path);
-        sf2_load(engine, sf2p->valuestring);
+        if (!path_is_safe(sf2p->valuestring)) {
+            LOG_WARN("Rejected unsafe SF2 path: %s", sf2p->valuestring);
+        } else {
+            /* Try to load SF2 — non-fatal if it fails */
+            extern int sf2_load(sq_engine_t *e, const char *path);
+            sf2_load(engine, sf2p->valuestring);
+        }
     }
 
     cJSON_Delete(root);

@@ -525,6 +525,7 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
             if (status == 0x90 && vel > 0) {
                 /* Note On — use synth_trigger() for proper voice init */
                 int pat = engine->transport.current_pattern;
+                if (pat < 0 || (uint32_t)pat >= engine->num_patterns) break;
                 for (uint32_t t = 0; t < engine->patterns[pat].num_tracks; t++) {
                     if (engine->patterns[pat].tracks[t].type == TRACK_SYNTH) {
                         synth_trigger(engine,
@@ -746,7 +747,7 @@ void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc read
     for (size_t i = 0; i < count && i < NUM_PARAMS * 2; i++) {
         int idx = param_index_from_id(state[i].id);
         if (idx >= 0)
-            apply_param_to_engine(p, state[i].id, state[i].value);
+            cplug_setParameterValue(p, state[i].id, state[i].value);
     }
 }
 

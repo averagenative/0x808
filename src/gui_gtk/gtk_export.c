@@ -45,8 +45,12 @@ static void on_export_clicked(GtkButton *btn, gpointer user_data)
     char path[1024];
     if (filename[0] == '/')
         snprintf(path, sizeof(path), "%s", filename);
-    else
-        snprintf(path, sizeof(path), "%s%s", engine->base_dir, filename);
+    else {
+        size_t dlen = strlen(engine->base_dir);
+        const char *sep = (dlen > 0 && engine->base_dir[dlen-1] != '/' &&
+                           engine->base_dir[dlen-1] != '\\') ? "/" : "";
+        snprintf(path, sizeof(path), "%s%s%s", engine->base_dir, sep, filename);
+    }
 
     /* Configure export */
     sq_export_config_t config = {0};

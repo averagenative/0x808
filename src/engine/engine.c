@@ -23,6 +23,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#define sq_sleep_ms(ms) Sleep(ms)
+#else
+#include <unistd.h>
+#define sq_sleep_ms(ms) usleep((ms) * 1000)
+#endif
+
 #define LOG_TAG "engine"
 #include "core/log.h"
 
@@ -306,6 +314,12 @@ void sq_engine_start_recording(sq_engine_t *engine)
 {
     /* Pre-allocate for 10 minutes at current sample rate */
     uint32_t max_frames = engine->sample_rate * 600;
+    size_t alloc_bytes = (size_t)max_frames * 2 * sizeof(float);
+    if (alloc_bytes > 500ULL * 1024 * 1024) {
+        LOG_ERROR("Recording buffer too large: %zu bytes, capping", alloc_bytes);
+        max_frames = (uint32_t)(500ULL * 1024 * 1024 / (2 * sizeof(float)));
+        alloc_bytes = (size_t)max_frames * 2 * sizeof(float);
+    }
     if (engine->rec_buffer) free(engine->rec_buffer);
     engine->rec_buffer = calloc((size_t)max_frames * 2, sizeof(float));
     engine->rec_capacity = engine->rec_buffer ? max_frames : 0;
@@ -331,10 +345,10 @@ int sq_engine_safe_load(sq_engine_t *engine, const char *filepath)
     /*
      * The audio callback checks engine->transport.playing at the start of
      * each buffer. Setting it false means the next buffer won't trigger any
-     * voices or read pattern data. Since the audio buffer is typically
-     * 256-1024 frames (5-23ms), there's an inherent small window, but this
-     * is vastly better than the current no-protection approach.
+     * voices or read pattern data. Give the audio callback time to finish
+     * its current buffer before we modify engine state.
      */
+    sq_sleep_ms(50);
 
     LOG_INFO("Safe load: playback stopped, loading %s", filepath);
     return project_load(engine, filepath);

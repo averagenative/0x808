@@ -98,16 +98,16 @@ int main(void)
         }
     }
 
-    /* Test 4: MP3 export at 128 kbps */
+    /* Test 4: FLAC 16-bit export */
     {
         sq_export_config_t cfg = {.sample_rate = 44100, .num_bars = 2, .pattern_index = 0};
         sq_export_result_t result = {0};
 
         if (sq_export_render(&g_engine, &cfg, &result) == 0) {
-            if (sq_export_write_mp3("test_export_128.mp3", &result, 128) == 0) {
-                LOG_INFO("Test 4 OK: MP3 128k export");
+            if (sq_export_write_flac("test_export_16.flac", &result, 16) == 0) {
+                LOG_INFO("Test 4 OK: FLAC 16-bit export");
             } else {
-                LOG_ERROR("Test 4 FAILED: MP3 write error");
+                LOG_ERROR("Test 4 FAILED: FLAC write error");
                 free(result.data);
                 return 1;
             }
@@ -118,16 +118,16 @@ int main(void)
         }
     }
 
-    /* Test 5: MP3 export at 320 kbps */
+    /* Test 5: FLAC 24-bit export */
     {
-        sq_export_config_t cfg = {.sample_rate = 44100, .num_bars = 1, .pattern_index = 0};
+        sq_export_config_t cfg = {.sample_rate = 48000, .num_bars = 1, .pattern_index = 0};
         sq_export_result_t result = {0};
 
         if (sq_export_render(&g_engine, &cfg, &result) == 0) {
-            if (sq_export_write_mp3("test_export_320.mp3", &result, 320) == 0) {
-                LOG_INFO("Test 5 OK: MP3 320k export");
+            if (sq_export_write_flac("test_export_24.flac", &result, 24) == 0) {
+                LOG_INFO("Test 5 OK: FLAC 24-bit export at 48kHz");
             } else {
-                LOG_ERROR("Test 5 FAILED: MP3 write error");
+                LOG_ERROR("Test 5 FAILED: FLAC write error");
                 free(result.data);
                 return 1;
             }
@@ -138,16 +138,16 @@ int main(void)
         }
     }
 
-    /* Test 6: FLAC 16-bit export */
+    /* Test 6: MP3 export at 128 kbps */
     {
         sq_export_config_t cfg = {.sample_rate = 44100, .num_bars = 2, .pattern_index = 0};
         sq_export_result_t result = {0};
 
         if (sq_export_render(&g_engine, &cfg, &result) == 0) {
-            if (sq_export_write_flac("test_export_16.flac", &result, 16) == 0) {
-                LOG_INFO("Test 6 OK: FLAC 16-bit export");
+            if (sq_export_write_mp3("test_export_128.mp3", &result, 128) == 0) {
+                LOG_INFO("Test 6 OK: MP3 128k export");
             } else {
-                LOG_ERROR("Test 6 FAILED: FLAC write error");
+                LOG_ERROR("Test 6 FAILED: MP3 write error");
                 free(result.data);
                 return 1;
             }
@@ -158,16 +158,16 @@ int main(void)
         }
     }
 
-    /* Test 7: FLAC 24-bit export */
+    /* Test 7: MP3 export at 320 kbps */
     {
-        sq_export_config_t cfg = {.sample_rate = 48000, .num_bars = 1, .pattern_index = 0};
+        sq_export_config_t cfg = {.sample_rate = 44100, .num_bars = 1, .pattern_index = 0};
         sq_export_result_t result = {0};
 
         if (sq_export_render(&g_engine, &cfg, &result) == 0) {
-            if (sq_export_write_flac("test_export_24.flac", &result, 24) == 0) {
-                LOG_INFO("Test 7 OK: FLAC 24-bit export at 48kHz");
+            if (sq_export_write_mp3("test_export_320.mp3", &result, 320) == 0) {
+                LOG_INFO("Test 7 OK: MP3 320k export");
             } else {
-                LOG_ERROR("Test 7 FAILED: FLAC write error");
+                LOG_ERROR("Test 7 FAILED: MP3 write error");
                 free(result.data);
                 return 1;
             }

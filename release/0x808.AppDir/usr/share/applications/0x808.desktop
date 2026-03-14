@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=0x808
+Comment=Drum machine & synth workstation
+Exec=0x808
+Icon=0x808
+Categories=Audio;Music;Sequencer;
