@@ -38,6 +38,7 @@ static GtkWidget *s_redo_btn = NULL;
 static int s_status_flash_frames = 0;
 static uint32_t s_prev_status_timer = 0;
 static GtkWidget *s_logo_area = NULL;
+static GtkWidget *s_wc_maximize_btn = NULL;
 
 /* ─── Panel visibility sync ───────────────────────────────────────────────── */
 
@@ -224,6 +225,13 @@ static gboolean on_redraw_tick(gpointer user_data)
 
     /* Rebuild synth editor if selected track changed */
     gtk_synth_editor_update();
+
+    /* Update maximize/restore button label */
+    if (s_wc_maximize_btn && GTK_IS_LABEL(s_wc_maximize_btn)) {
+        bool is_max = gtk_window_is_maximized(GTK_WINDOW(g_gtk.window));
+        gtk_label_set_text(GTK_LABEL(s_wc_maximize_btn),
+                           is_max ? "\xe2\x96\xa3" : "\xe2\x96\xa1");
+    }
 
     /* Redraw logo (pulse animation during playback) */
     if (s_logo_area)
@@ -885,6 +893,32 @@ static void logo_draw_cb(GtkDrawingArea *area, cairo_t *cr,
     cairo_show_text(cr, "0x808");
 }
 
+/* ─── Window control callbacks ─────────────────────────────────────────────── */
+
+static void on_wc_minimize(GtkWidget *btn, gpointer data)
+{
+    (void)btn; (void)data;
+    if (g_gtk.window)
+        gtk_window_minimize(GTK_WINDOW(g_gtk.window));
+}
+
+static void on_wc_maximize(GtkWidget *btn, gpointer data)
+{
+    (void)btn; (void)data;
+    if (!g_gtk.window) return;
+    if (gtk_window_is_maximized(GTK_WINDOW(g_gtk.window)))
+        gtk_window_unmaximize(GTK_WINDOW(g_gtk.window));
+    else
+        gtk_window_maximize(GTK_WINDOW(g_gtk.window));
+}
+
+static void on_wc_close(GtkWidget *btn, gpointer data)
+{
+    (void)btn; (void)data;
+    if (g_gtk.window)
+        gtk_window_close(GTK_WINDOW(g_gtk.window));
+}
+
 /* ─── Build the toolbar ───────────────────────────────────────────────────── */
 
 static GtkWidget *build_toolbar(void)
@@ -1016,6 +1050,28 @@ static GtkWidget *build_toolbar(void)
     gtk_widget_set_hexpand(g_gtk.status_label, TRUE);
     gtk_widget_set_halign(g_gtk.status_label, GTK_ALIGN_END);
     gtk_box_append(GTK_BOX(row1), g_gtk.status_label);
+
+    /* ── Window controls: _ [] X ──────────────────────────────────── */
+    {
+        GtkWidget *wc_min = sq_flat_button_new("\xe2\x80\x95",
+            G_CALLBACK(on_wc_minimize), NULL);
+        gtk_widget_set_size_request(wc_min, 32, -1);
+        gtk_widget_add_css_class(wc_min, "wc-btn");
+        gtk_box_append(GTK_BOX(row1), wc_min);
+
+        s_wc_maximize_btn = sq_flat_button_new("\xe2\x96\xa1",
+            G_CALLBACK(on_wc_maximize), NULL);
+        gtk_widget_set_size_request(s_wc_maximize_btn, 32, -1);
+        gtk_widget_add_css_class(s_wc_maximize_btn, "wc-btn");
+        gtk_box_append(GTK_BOX(row1), s_wc_maximize_btn);
+
+        GtkWidget *wc_close = sq_flat_button_new("\xc3\x97",
+            G_CALLBACK(on_wc_close), NULL);
+        gtk_widget_set_size_request(wc_close, 32, -1);
+        gtk_widget_add_css_class(wc_close, "wc-btn");
+        gtk_widget_add_css_class(wc_close, "wc-close");
+        gtk_box_append(GTK_BOX(row1), wc_close);
+    }
 
     /* ── Row 2: Pattern selector ──────────────────────────────────── */
     GtkWidget *row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);

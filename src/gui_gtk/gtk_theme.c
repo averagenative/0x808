@@ -59,7 +59,10 @@
     "button.section-color-4.active, button.section-color-5.active," \
     "button.section-color-6.active, button.section-color-7.active {" \
     "  border: 2px solid rgba(255,255,255,0.6); }" \
-    "label.status-flash { color: #fff; font-weight: bold; font-size: 12px; }"
+    "label.status-flash { color: #fff; font-weight: bold; font-size: 12px; }" \
+    ".wc-btn { padding: 2px 6px; border-radius: 3px; font-size: 14px; }" \
+    ".wc-btn:hover { background-color: rgba(128,128,140,0.35); }" \
+    ".wc-close:hover { background-color: rgba(220,40,40,0.85); color: #fff; }"
 
 /* ─── Theme CSS strings ───────────────────────────────────────────────────── */
 

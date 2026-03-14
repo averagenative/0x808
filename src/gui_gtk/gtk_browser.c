@@ -17,6 +17,7 @@
  * | Preview: kick_01                                  |
  * | [~~~~~~~~waveform~~~~~~~~]                        |
  * | 1.23s  |  44100 Hz  |  mono                      |
+ * | [> Audition]                                      |
  * +--------------------------------------------------+
  */
 
@@ -47,6 +48,9 @@ static int s_needs_refresh = 1;
 
 /* --- Waveform preview state --- */
 static int s_preview_sample_idx = -1;  /* index into engine->samples[] */
+
+/* --- Audition button widget --- */
+static GtkWidget *s_audition_btn = NULL;
 
 /* --- Widgets that need updating --- */
 static GtkWidget *s_path_label       = NULL;
@@ -555,6 +559,39 @@ static void on_load_sample_clicked(GtkWidget *btn, gpointer data)
     g_object_unref(dialog);
 }
 
+static void on_audition_clicked(GtkWidget *btn, gpointer data)
+{
+    (void)btn; (void)data;
+
+    sq_engine_t *engine = g_gtk.engine;
+    if (s_preview_sample_idx < 0 ||
+        (uint32_t)s_preview_sample_idx >= engine->num_samples)
+        return;
+
+    /* Stop any voice already auditioning this sample */
+    for (int v = 0; v < SQ_MAX_VOICES; v++) {
+        if (engine->voices[v].active &&
+            engine->voices[v].sample_index == s_preview_sample_idx) {
+            engine->voices[v].active = false;
+        }
+    }
+
+    /* Trigger on first free voice */
+    for (int v = 0; v < SQ_MAX_VOICES; v++) {
+        if (!engine->voices[v].active) {
+            engine->voices[v].active       = true;
+            engine->voices[v].sample_index = s_preview_sample_idx;
+            engine->voices[v].position     = 0.0;
+            engine->voices[v].rate         = 1.0;
+            engine->voices[v].velocity     = 0.8f;
+            engine->voices[v].volume       = 0.8f;
+            engine->voices[v].pan          = 0.0f;
+            engine->voices[v].start_time   = 0;
+            break;
+        }
+    }
+}
+
 /* --- Public API --- */
 
 GtkWidget *gtk_browser_new(void)
@@ -656,6 +693,13 @@ GtkWidget *gtk_browser_new(void)
     s_waveform_info = gtk_label_new("");
     gtk_widget_set_halign(s_waveform_info, GTK_ALIGN_START);
     gtk_box_append(GTK_BOX(box), s_waveform_info);
+
+    /* Audition button */
+    s_audition_btn = gtk_button_new_with_label("\u25B6 Audition");
+    gtk_widget_set_halign(s_audition_btn, GTK_ALIGN_START);
+    g_signal_connect(s_audition_btn, "clicked",
+                     G_CALLBACK(on_audition_clicked), NULL);
+    gtk_box_append(GTK_BOX(box), s_audition_btn);
 
     /* Initial population */
     refresh_directory();
