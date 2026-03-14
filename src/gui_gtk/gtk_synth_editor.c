@@ -118,17 +118,19 @@ static void on_int_slider_changed(GtkRange *range, gpointer user_data)
 static GtkWidget *make_slider(const char *label_text, float min, float max,
                                float *value_ptr)
 {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
 
     GtkWidget *label = gtk_label_new(label_text);
-    gtk_widget_set_size_request(label, 55, -1);
+    gtk_widget_set_size_request(label, 36, -1);
     gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_widget_add_css_class(label, "synth-label");
     gtk_box_append(GTK_BOX(box), label);
 
     GtkWidget *scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
                                                  (double)min, (double)max,
                                                  (double)(max - min) / 100.0);
     gtk_range_set_value(GTK_RANGE(scale), (double)*value_ptr);
+    gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
     gtk_widget_set_hexpand(scale, TRUE);
     gtk_box_append(GTK_BOX(box), scale);
 
@@ -177,11 +179,12 @@ static void on_int_dropdown_changed(GObject *obj, GParamSpec *pspec, gpointer da
 static GtkWidget *make_int_dropdown(const char *label_text, const char **items,
                                      int count, int *value_ptr)
 {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
 
     GtkWidget *label = gtk_label_new(label_text);
-    gtk_widget_set_size_request(label, 55, -1);
+    gtk_widget_set_size_request(label, 36, -1);
     gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_widget_add_css_class(label, "synth-label");
     gtk_box_append(GTK_BOX(box), label);
 
     /* Build NULL-terminated array for GtkStringList */
@@ -223,10 +226,9 @@ static GtkWidget *make_toggle(const char *label_text, bool *value_ptr)
 
 static void add_section(GtkWidget *box, const char *title)
 {
-    GtkWidget *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_box_append(GTK_BOX(box), sep);
     GtkWidget *label = gtk_label_new(title);
     gtk_widget_set_halign(label, GTK_ALIGN_START);
+    gtk_widget_add_css_class(label, "synth-section");
     gtk_box_append(GTK_BOX(box), label);
 }
 
@@ -315,12 +317,12 @@ static void rebuild_controls(void)
                   make_int_dropdown("Mode", synth_mode_names, 3, (int *)&p->synth_mode));
 
     /* ── 4-column layout (matching ImGui) ─────────────────────────── */
-    GtkWidget *cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    GtkWidget *cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
     gtk_widget_set_vexpand(cols, TRUE);
     gtk_box_append(GTK_BOX(s_content_box), cols);
 
     /* Column 1: Oscillators */
-    GtkWidget *col1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    GtkWidget *col1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
     gtk_widget_set_hexpand(col1, TRUE);
     gtk_box_append(GTK_BOX(cols), col1);
 
@@ -332,9 +334,10 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(col1), make_slider("Mix", 0, 1, &p->osc_mix));
     gtk_box_append(GTK_BOX(col1), make_slider("Detune", -24, 24, &p->osc2_detune));
     {
-        GtkWidget *uni_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
-        GtkWidget *uni_lbl = gtk_label_new("Unison:");
-        gtk_widget_set_size_request(uni_lbl, 55, -1);
+        GtkWidget *uni_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        GtkWidget *uni_lbl = gtk_label_new("Uni");
+        gtk_widget_set_size_request(uni_lbl, 36, -1);
+        gtk_widget_add_css_class(uni_lbl, "synth-label");
         gtk_box_append(GTK_BOX(uni_box), uni_lbl);
         GtkWidget *uni_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1, 7, 1);
         gtk_range_set_value(GTK_RANGE(uni_scale), p->unison_voices);
@@ -348,7 +351,7 @@ static void rebuild_controls(void)
         gtk_box_append(GTK_BOX(col1), make_slider("Spread", 0, 50, &p->unison_detune));
 
     /* Column 2: Filter */
-    GtkWidget *col2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    GtkWidget *col2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
     gtk_widget_set_hexpand(col2, TRUE);
     gtk_box_append(GTK_BOX(cols), col2);
 
@@ -364,7 +367,7 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(col2), make_slider("F.Rel", 0.001, 5, &p->filter_env.release));
 
     /* Column 3: Amp Envelope */
-    GtkWidget *col3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    GtkWidget *col3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
     gtk_widget_set_hexpand(col3, TRUE);
     gtk_box_append(GTK_BOX(cols), col3);
 
@@ -383,7 +386,7 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(col3), s_adsr_area);
 
     /* Column 4: LFO */
-    GtkWidget *col4 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    GtkWidget *col4 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
     gtk_widget_set_hexpand(col4, TRUE);
     gtk_box_append(GTK_BOX(cols), col4);
 

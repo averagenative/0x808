@@ -177,15 +177,54 @@ static void setup_demo_pattern(void)
         p->tracks[synth_pluck].volume = 0.5f;
     }
 
-    /* Basic kick pattern */
-    p->tracks[0].steps[0].velocity  = 120;
-    p->tracks[0].steps[4].velocity  = 110;
-    p->tracks[0].steps[8].velocity  = 120;
-    p->tracks[0].steps[12].velocity = 110;
+    /* Prefill with House drum preset */
+    {
+        static const uint8_t house[6][16] = {
+            {120,0,0,0,110,0,0,0,120,0,0,0,110,0,0,0},  /* kick */
+            {0,0,0,0,127,0,0,0,0,0,0,0,127,0,0,0},      /* snare */
+            {0,0,100,0,0,0,100,0,0,0,100,0,0,0,100,0},  /* hihat */
+            {0,0,0,0,100,0,0,0,0,0,0,0,100,0,0,0},      /* clap */
+            {0,0,0,0,0,0,0,80,0,0,0,0,0,0,0,80},        /* open hat */
+            {60,40,60,40,60,40,60,40,60,40,60,40,60,40,60,40} /* shaker */
+        };
+        int applied = 0;
+        for (uint32_t t = 0; t < p->num_tracks && applied < 6; t++) {
+            if (p->tracks[t].type != TRACK_SAMPLER) continue;
+            for (int s = 0; s < 16; s++)
+                p->tracks[t].steps[s].velocity = house[applied][s];
+            applied++;
+        }
+    }
 
+    /* Prefill Octave Bass on first synth track */
+    if (synth_bass < p->num_tracks) {
+        const uint8_t notes[] = {36,48,0,48,36,48,0,48,36,48,0,48,36,48,0,48};
+        const uint8_t vels[]  = {110,80,0,70,110,80,0,70,110,80,0,70,110,80,0,70};
+        for (int s = 0; s < 16; s++) {
+            p->tracks[synth_bass].steps[s].note = notes[s];
+            p->tracks[synth_bass].steps[s].velocity = vels[s];
+            p->tracks[synth_bass].steps[s].length = 1.0f;
+        }
+    }
+
+    g_engine.transport.bpm = 124.0;
     snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern 1");
-    g_engine.num_patterns = 1;
+    g_engine.num_patterns = 5;
     g_engine.transport.current_pattern = 0;
+
+    /* Initialize patterns 2-5 with tracks but no steps */
+    for (int i = 1; i < 5; i++) {
+        sq_pattern_t *pp = &g_engine.patterns[i];
+        pp->num_tracks = p->num_tracks;
+        for (uint32_t t = 0; t < pp->num_tracks; t++) {
+            pp->tracks[t].type = p->tracks[t].type;
+            pp->tracks[t].sample_index = p->tracks[t].sample_index;
+            pp->tracks[t].synth_preset = p->tracks[t].synth_preset;
+            pp->tracks[t].length = 16;
+            pp->tracks[t].volume = p->tracks[t].volume;
+        }
+        snprintf(pp->name, SQ_PATTERN_NAME_LEN, "Pattern %d", i + 1);
+    }
 }
 
 /* ─── Crash handler ───────────────────────────────────────────────────────── */

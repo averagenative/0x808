@@ -23,6 +23,8 @@
     ".strip-even { background-color: rgba(128,128,140,0.10); padding: 1px; }" \
     ".strip-odd { background-color: rgba(128,128,140,0.25); padding: 1px; }" \
     ".strip-label { font-size: 9px; margin: 0; padding: 0; }" \
+    ".synth-label { font-size: 10px; margin: 0; padding: 0; }" \
+    ".synth-section { font-size: 10px; font-weight: bold; margin: 1px 0; padding: 0; }" \
     "button.flat { padding: 4px 8px; }" \
     "dropdown { background-image: none; }"
 

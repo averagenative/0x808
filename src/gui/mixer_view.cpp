@@ -367,7 +367,7 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
     float full_w = ImGui::GetContentRegionAvail().x;
     float master_col_w = 40.0f;
     float track_area_w = full_w - master_col_w - 4.0f;
-    float strip_w = 32.0f;
+    float strip_w = 22.0f;
     int max_vis = (int)((track_area_w - 40.0f) / (strip_w + 2.0f));
     if (max_vis < 1) max_vis = 1;
     int end_t = track_scroll + max_vis;
@@ -460,7 +460,7 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
                 {
                     float pan = pat_g->tracks[t].pan;
                     ImVec2 kp = ImGui::GetCursorScreenPos();
-                    float kr = 9.0f;
+                    float kr = 8.0f;
                     float kcx = kp.x + strip_w * 0.5f - 2.0f;
                     float kcy = kp.y + kr + 1.0f;
                     float a0 = (float)(M_PI * 0.75);
