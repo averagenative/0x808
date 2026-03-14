@@ -428,10 +428,10 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
 
     if (num_tracks_g > 0 && pat_g) {
         /* Style overrides for all strips */
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.24f, 0.24f, 0.28f, 0.5f));
-        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.28f, 0.28f, 0.33f, 0.6f));
-        ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.40f, 0.60f, 0.90f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(0.50f, 0.70f, 1.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.45f, 0.65f, 0.95f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(0.55f, 0.75f, 1.0f, 1.0f));
 
         for (int t = track_scroll; t < end_t; t++) {
             if (t > track_scroll) ImGui::SameLine(0, 2);
