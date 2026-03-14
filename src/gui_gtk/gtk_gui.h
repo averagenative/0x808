@@ -87,6 +87,8 @@ void       gtk_synth_editor_update(void);
 
 /* gtk_mixer.c */
 GtkWidget *gtk_mixer_new(void);
+void       gtk_mixer_rebuild_fx(void);
+void       gtk_mixer_queue_redraw(void);
 
 /* gtk_browser.c */
 GtkWidget *gtk_browser_new(void);

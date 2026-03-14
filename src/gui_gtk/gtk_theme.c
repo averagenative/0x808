@@ -19,6 +19,10 @@
     "  background-color: rgba(128,128,140,0.15); }" \
     ".sq-btn:hover { background-color: rgba(128,128,140,0.25); }" \
     ".sq-btn.active { background-color: rgba(100,160,210,0.3); }" \
+    ".sq-btn.recording { background-color: rgba(200,30,30,0.7); color: #fff; }" \
+    ".strip-even { background-color: rgba(128,128,140,0.10); padding: 1px; }" \
+    ".strip-odd { background-color: rgba(128,128,140,0.25); padding: 1px; }" \
+    ".strip-label { font-size: 9px; margin: 0; padding: 0; }" \
     "button.flat { padding: 4px 8px; }" \
     "dropdown { background-image: none; }"
 

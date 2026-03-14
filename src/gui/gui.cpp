@@ -340,6 +340,20 @@ int gui_frame(sq_engine_t *engine)
             snprintf(g_project_path, sizeof(g_project_path), "project.sqproj");
     }
 
+    /* Auto-select first synth track on startup */
+    if (g_app.selected_track < 0) {
+        int pi = engine->transport.current_pattern;
+        if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+            sq_pattern_t *pat = &engine->patterns[pi];
+            for (uint32_t t = 0; t < pat->num_tracks; t++) {
+                if (pat->tracks[t].type == TRACK_SYNTH) {
+                    g_app.selected_track = (int)t;
+                    break;
+                }
+            }
+        }
+    }
+
     /* Sync globals from app state */
     g_visual_step = g_app.visual_step;
     g_selected_track = g_app.selected_track;
@@ -525,7 +539,7 @@ int gui_frame(sq_engine_t *engine)
         float grid_h, bottom_h;
         bool has_bottom = show_synth_editor || g_app.panels[SQ_PANEL_MIXER];
         if (has_bottom) {
-            bottom_h = 360.0f;
+            bottom_h = 280.0f;
             if (g_app.panels[SQ_PANEL_KEYBOARD] && bottom_h > total_h - 150.0f)
                 bottom_h = total_h - 150.0f;
             if (bottom_h < 120.0f) bottom_h = 120.0f;

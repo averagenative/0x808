@@ -224,7 +224,7 @@ if(SDL2_FOUND AND OpenGL_FOUND)
             ${SQ_OPENGL_LIB}
             comdlg32
         )
-        target_link_options(sequencer_gui PRIVATE -static -static-libgcc -static-libstdc++)
+        target_link_options(sequencer_gui PRIVATE -static -static-libgcc -static-libstdc++ -mwindows)
     else()
         target_link_libraries(sequencer_gui PRIVATE
             sq_gui

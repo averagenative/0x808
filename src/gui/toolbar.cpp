@@ -349,20 +349,29 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                           *p->show_piano_roll, ImVec4(0.24f, 0.47f, 0.71f, 1.0f), btn_sm)) {
             *p->show_piano_roll = !*p->show_piano_roll;
             if (*p->show_piano_roll) {
-                /* Check if a synth track is selected */
+                /* Auto-select first synth track if none selected */
                 bool has_synth = false;
-                if (g_selected_track >= 0) {
-                    int pi = engine->transport.current_pattern;
-                    if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
-                        sq_pattern_t *pat = &engine->patterns[pi];
-                        if ((uint32_t)g_selected_track < pat->num_tracks &&
-                            pat->tracks[g_selected_track].type == TRACK_SYNTH)
+                int pi = engine->transport.current_pattern;
+                if (g_selected_track >= 0 && pi >= 0 &&
+                    (uint32_t)pi < engine->num_patterns) {
+                    sq_pattern_t *pat = &engine->patterns[pi];
+                    if ((uint32_t)g_selected_track < pat->num_tracks &&
+                        pat->tracks[g_selected_track].type == TRACK_SYNTH)
+                        has_synth = true;
+                }
+                if (!has_synth && pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+                    sq_pattern_t *pat = &engine->patterns[pi];
+                    for (uint32_t t = 0; t < pat->num_tracks; t++) {
+                        if (pat->tracks[t].type == TRACK_SYNTH) {
+                            g_selected_track = (int)t;
                             has_synth = true;
+                            break;
+                        }
                     }
                 }
                 if (!has_synth) {
                     snprintf(p->save_status, (size_t)p->save_status_size,
-                             "Select a synth track for Piano Roll");
+                             "No synth tracks — add one first");
                     *p->status_timer = 120;
                 }
             }
@@ -396,8 +405,10 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
     }
     ImGui::SameLine();
 
-    if (ColoredButton(*p->show_mixer ? "FX*" : "FX",
-                      *p->show_mixer, ImVec4(0.51f, 0.31f, 0.63f, 1.0f), btn_sm))
+    if (ColoredButton(*p->show_mixer ? (is_plugin ? "MIX/FX*" : "MIXER/FX*")
+                                     : (is_plugin ? "MIX/FX" : "MIXER/FX"),
+                      *p->show_mixer, ImVec4(0.51f, 0.31f, 0.63f, 1.0f),
+                      ImVec2(is_plugin ? 55.0f : 75.0f, btn_h)))
         *p->show_mixer = !*p->show_mixer;
     ImGui::SameLine();
 
@@ -543,15 +554,13 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             if (ColoredButton(plbl, is_active, is_active ? active_col : inactive_col,
                               ImVec2(pat_btn_w, pat_btn_h))) {
                 engine->transport.current_pattern = pp;
-                if (is_plugin) {
-                    /* Auto-select first synth track in new pattern */
-                    sq_pattern_t *pat = &engine->patterns[pp];
-                    g_selected_track = -1;
-                    for (uint32_t st = 0; st < pat->num_tracks; st++) {
-                        if (pat->tracks[st].type == TRACK_SYNTH) {
-                            g_selected_track = (int)st;
-                            break;
-                        }
+                /* Auto-select first synth track in new pattern */
+                sq_pattern_t *pat = &engine->patterns[pp];
+                g_selected_track = -1;
+                for (uint32_t st = 0; st < pat->num_tracks; st++) {
+                    if (pat->tracks[st].type == TRACK_SYNTH) {
+                        g_selected_track = (int)st;
+                        break;
                     }
                 }
             }
@@ -576,7 +585,8 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                 engine->transport.current_pattern = ni;
                 if (ni >= g_pat_scroll + max_visible)
                     g_pat_scroll = ni - max_visible + 1;
-                if (is_plugin) {
+                /* Auto-select first synth track in new pattern */
+                {
                     sq_pattern_t *pat = &engine->patterns[ni];
                     g_selected_track = -1;
                     for (uint32_t st = 0; st < pat->num_tracks; st++) {

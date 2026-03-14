@@ -17,7 +17,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Volume slider
 - [ ] Replace sliders with rotary knobs (arc + value display, drag interaction)
 - [ ] Logo with animated pulse effect
-- [ ] REC button with red highlight
+- [x] REC button with red highlight
 - [x] Mode selector (PAT/SONG/PERF) buttons with active highlight
 - [x] Pattern selector row (numbered buttons, add pattern)
 - [x] Panel buttons: active CSS class when panel is open
@@ -96,13 +96,14 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Per-track pan slider
 - [x] Mute button per track
 - [x] Scrollable channel strips
-- [ ] Track level meters (LED-style, 12 segments, green/yellow/red)
-- [ ] Master output meter (stereo L/R)
-- [ ] Effects panel with Prev/Next navigation (Master + per-track)
-- [ ] 3 effect slots per bus
-- [ ] Effect type selector (None/Filter/Delay/Reverb/Overdrive/Fuzz/Chorus)
-- [ ] Bypass checkbox per effect
-- [ ] Effect-specific parameter controls
+- [x] Track level meters (LED-style, 12 segments, green/yellow/red)
+- [x] Master output meter (stereo L/R)
+- [x] Effects panel with Prev/Next navigation (Master + per-track)
+- [x] 3 effect slots per bus
+- [x] Effect type selector (None/Filter/Delay/Reverb/Overdrive/Fuzz/Chorus)
+- [x] Bypass checkbox per effect
+- [x] Effect-specific parameter controls
+- [x] MIXER/FX toolbar button (synced label between ImGui and GTK)
 
 ## 6. Sample Browser Parity
 
@@ -140,12 +141,12 @@ Reference: `docs/FRONTEND_FEATURES.md`
 
 ## 9. Pattern Presets Dialog
 
-- [ ] 12 drum pattern presets with dropdown
-- [ ] 10 bass line presets with dropdown
-- [ ] Apply Drums / Apply Bass / Apply Both buttons
-- [ ] BPM suggestion buttons
-- [ ] Clear Pattern button
-- [ ] Tips text
+- [x] 12 drum pattern presets with dropdown
+- [x] 10 bass line presets with dropdown
+- [x] Apply Drums / Apply Bass / Apply Both buttons
+- [x] BPM suggestion buttons
+- [x] Clear Pattern button
+- [x] Tips text
 
 ## 10. Export Dialog
 

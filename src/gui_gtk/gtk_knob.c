@@ -25,9 +25,10 @@ static void knob_draw(GtkDrawingArea *area, cairo_t *cr,
     knob_data_t *kd = (knob_data_t *)user_data;
 
     double cx = width / 2.0;
-    double cy = height / 2.0 - 8;
+    double cy = height / 2.0;
     double r = KNOB_RADIUS;
-    if (r > cx - 4) r = cx - 4;
+    if (r > cx - 2) r = cx - 2;
+    if (r > cy - 8) r = cy - 8;
 
     /* Normalize value to 0-1 */
     float range = kd->max - kd->min;
@@ -43,10 +44,21 @@ static void knob_draw(GtkDrawingArea *area, cairo_t *cr,
     cairo_arc(cr, cx, cy, r, KNOB_ARC_START, KNOB_ARC_END);
     cairo_stroke(cr);
 
-    /* Value arc */
+    /* Value arc — bipolar knobs (min < 0 < max) fill from center (top),
+     * unipolar knobs fill from the start (lower-left) */
     cairo_set_source_rgba(cr, 0.2, 1.0, 0.2, 0.8);
     cairo_set_line_width(cr, 3.0);
-    cairo_arc(cr, cx, cy, r, KNOB_ARC_START, angle);
+    bool bipolar = (kd->min < 0 && kd->max > 0);
+    if (bipolar) {
+        double center_angle = KNOB_ARC_START +
+            (-kd->min / range) * (KNOB_ARC_END - KNOB_ARC_START);
+        if (angle > center_angle)
+            cairo_arc(cr, cx, cy, r, center_angle, angle);
+        else
+            cairo_arc_negative(cr, cx, cy, r, center_angle, angle);
+    } else {
+        cairo_arc(cr, cx, cy, r, KNOB_ARC_START, angle);
+    }
     cairo_stroke(cr);
 
     /* Knob circle */
@@ -65,18 +77,11 @@ static void knob_draw(GtkDrawingArea *area, cairo_t *cr,
 
     /* Label */
     cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.9);
-    cairo_set_font_size(cr, 9.0);
+    cairo_set_font_size(cr, 8.0);
     cairo_text_extents_t te;
     cairo_text_extents(cr, kd->label, &te);
-    cairo_move_to(cr, cx - te.width / 2, height - 2);
+    cairo_move_to(cr, cx - te.width / 2, height - 1);
     cairo_show_text(cr, kd->label);
-
-    /* Value text */
-    char val_str[16];
-    snprintf(val_str, sizeof(val_str), "%.1f", *kd->value);
-    cairo_text_extents(cr, val_str, &te);
-    cairo_move_to(cr, cx - te.width / 2, cy + 4);
-    cairo_show_text(cr, val_str);
 }
 
 static void on_drag_begin(GtkGestureDrag *gesture, double x, double y,

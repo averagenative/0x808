@@ -139,6 +139,32 @@ static GtkWidget *make_slider(const char *label_text, float min, float max,
     return box;
 }
 
+/* ─── Helper: scroll wheel cycles dropdown values ─────────────────────────── */
+
+static gboolean on_dropdown_scroll(GtkEventControllerScroll *ctrl,
+                                    double dx, double dy, gpointer user_data)
+{
+    (void)ctrl; (void)dx;
+    GtkDropDown *dd = GTK_DROP_DOWN(user_data);
+    guint n = g_list_model_get_n_items(gtk_drop_down_get_model(dd));
+    if (n == 0) return FALSE;
+    int cur = (int)gtk_drop_down_get_selected(dd);
+    if (dy > 0) cur++;
+    else if (dy < 0) cur--;
+    if (cur < 0) cur = 0;
+    if (cur >= (int)n) cur = (int)n - 1;
+    gtk_drop_down_set_selected(dd, (guint)cur);
+    return TRUE;
+}
+
+static void add_dropdown_scroll(GtkWidget *dropdown)
+{
+    GtkEventController *scroll = gtk_event_controller_scroll_new(
+        GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
+    g_signal_connect(scroll, "scroll", G_CALLBACK(on_dropdown_scroll), dropdown);
+    gtk_widget_add_controller(dropdown, GTK_EVENT_CONTROLLER(scroll));
+}
+
 /* ─── Helper: int-backed dropdown ──────────────────────────────────────────── */
 
 static void on_int_dropdown_changed(GObject *obj, GParamSpec *pspec, gpointer data)
@@ -174,6 +200,7 @@ static GtkWidget *make_int_dropdown(const char *label_text, const char **items,
 
     g_signal_connect(dropdown, "notify::selected",
                      G_CALLBACK(on_int_dropdown_changed), value_ptr);
+    add_dropdown_scroll(dropdown);
 
     return box;
 }
@@ -278,6 +305,7 @@ static void rebuild_controls(void)
 
         g_signal_connect(dropdown, "notify::selected",
                          G_CALLBACK(on_preset_selected), NULL);
+        add_dropdown_scroll(dropdown);
 
         gtk_box_append(GTK_BOX(s_content_box), sel_box);
     }
@@ -286,16 +314,23 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(s_content_box),
                   make_int_dropdown("Mode", synth_mode_names, 3, (int *)&p->synth_mode));
 
-    /* ── Oscillators ──────────────────────────────────────────────── */
-    add_section(s_content_box, "Oscillators");
-    gtk_box_append(GTK_BOX(s_content_box),
-                  make_int_dropdown("Osc1", wave_names, 4, (int *)&p->osc1_wave));
-    gtk_box_append(GTK_BOX(s_content_box),
-                  make_int_dropdown("Osc2", wave_names, 4, (int *)&p->osc2_wave));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Mix", 0, 1, &p->osc_mix));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Detune", -24, 24, &p->osc2_detune));
+    /* ── 4-column layout (matching ImGui) ─────────────────────────── */
+    GtkWidget *cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    gtk_widget_set_vexpand(cols, TRUE);
+    gtk_box_append(GTK_BOX(s_content_box), cols);
 
-    /* Unison — uses int slider helper since unison_voices is int */
+    /* Column 1: Oscillators */
+    GtkWidget *col1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(col1, TRUE);
+    gtk_box_append(GTK_BOX(cols), col1);
+
+    add_section(col1, "Oscillators");
+    gtk_box_append(GTK_BOX(col1),
+                  make_int_dropdown("Osc1", wave_names, 4, (int *)&p->osc1_wave));
+    gtk_box_append(GTK_BOX(col1),
+                  make_int_dropdown("Osc2", wave_names, 4, (int *)&p->osc2_wave));
+    gtk_box_append(GTK_BOX(col1), make_slider("Mix", 0, 1, &p->osc_mix));
+    gtk_box_append(GTK_BOX(col1), make_slider("Detune", -24, 24, &p->osc2_detune));
     {
         GtkWidget *uni_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
         GtkWidget *uni_lbl = gtk_label_new("Unison:");
@@ -307,48 +342,61 @@ static void rebuild_controls(void)
         g_object_set_data(G_OBJECT(uni_scale), "int_ptr", &p->unison_voices);
         g_signal_connect(uni_scale, "value-changed", G_CALLBACK(on_int_slider_changed), NULL);
         gtk_box_append(GTK_BOX(uni_box), uni_scale);
-        gtk_box_append(GTK_BOX(s_content_box), uni_box);
+        gtk_box_append(GTK_BOX(col1), uni_box);
     }
     if (p->unison_voices > 1)
-        gtk_box_append(GTK_BOX(s_content_box), make_slider("Spread", 0, 50, &p->unison_detune));
+        gtk_box_append(GTK_BOX(col1), make_slider("Spread", 0, 50, &p->unison_detune));
 
-    /* ── Filter ───────────────────────────────────────────────────── */
-    add_section(s_content_box, "Filter");
-    gtk_box_append(GTK_BOX(s_content_box),
+    /* Column 2: Filter */
+    GtkWidget *col2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(col2, TRUE);
+    gtk_box_append(GTK_BOX(cols), col2);
+
+    add_section(col2, "Filter");
+    gtk_box_append(GTK_BOX(col2),
                   make_int_dropdown("Type", filter_names, 3, (int *)&p->filter_type));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Cutoff", 20, 20000, &p->filter_cutoff));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Reso", 0.5, 20, &p->filter_resonance));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Env Dep", -10000, 10000, &p->filter_env_depth));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("F.Atk", 0.001, 2, &p->filter_env.attack));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("F.Dec", 0.001, 2, &p->filter_env.decay));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("F.Sus", 0, 1, &p->filter_env.sustain));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("F.Rel", 0.001, 5, &p->filter_env.release));
+    gtk_box_append(GTK_BOX(col2), make_slider("Cutoff", 20, 20000, &p->filter_cutoff));
+    gtk_box_append(GTK_BOX(col2), make_slider("Reso", 0.5, 20, &p->filter_resonance));
+    gtk_box_append(GTK_BOX(col2), make_slider("EnvDep", -10000, 10000, &p->filter_env_depth));
+    gtk_box_append(GTK_BOX(col2), make_slider("F.Atk", 0.001, 2, &p->filter_env.attack));
+    gtk_box_append(GTK_BOX(col2), make_slider("F.Dec", 0.001, 2, &p->filter_env.decay));
+    gtk_box_append(GTK_BOX(col2), make_slider("F.Sus", 0, 1, &p->filter_env.sustain));
+    gtk_box_append(GTK_BOX(col2), make_slider("F.Rel", 0.001, 5, &p->filter_env.release));
 
-    /* ── Amp Envelope ─────────────────────────────────────────────── */
-    add_section(s_content_box, "Amp Envelope");
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Attack", 0.001, 2, &p->amp_env.attack));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Decay", 0.001, 2, &p->amp_env.decay));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Sustain", 0, 1, &p->amp_env.sustain));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Release", 0.001, 5, &p->amp_env.release));
+    /* Column 3: Amp Envelope */
+    GtkWidget *col3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(col3, TRUE);
+    gtk_box_append(GTK_BOX(cols), col3);
+
+    add_section(col3, "Amp Envelope");
+    gtk_box_append(GTK_BOX(col3), make_slider("A", 0.001, 2, &p->amp_env.attack));
+    gtk_box_append(GTK_BOX(col3), make_slider("D", 0.001, 2, &p->amp_env.decay));
+    gtk_box_append(GTK_BOX(col3), make_slider("S", 0, 1, &p->amp_env.sustain));
+    gtk_box_append(GTK_BOX(col3), make_slider("R", 0.001, 5, &p->amp_env.release));
 
     s_adsr_ptr = &p->amp_env;
     s_adsr_area = gtk_drawing_area_new();
-    gtk_widget_set_size_request(s_adsr_area, -1, 80);
+    gtk_widget_set_size_request(s_adsr_area, -1, 60);
+    gtk_widget_set_vexpand(s_adsr_area, TRUE);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_adsr_area),
                                    adsr_draw, NULL, NULL);
-    gtk_box_append(GTK_BOX(s_content_box), s_adsr_area);
+    gtk_box_append(GTK_BOX(col3), s_adsr_area);
 
-    /* ── LFO ──────────────────────────────────────────────────────── */
-    add_section(s_content_box, "LFO");
-    gtk_box_append(GTK_BOX(s_content_box),
+    /* Column 4: LFO */
+    GtkWidget *col4 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_hexpand(col4, TRUE);
+    gtk_box_append(GTK_BOX(cols), col4);
+
+    add_section(col4, "LFO");
+    gtk_box_append(GTK_BOX(col4),
                   make_int_dropdown("Wave", wave_names, 4, (int *)&p->lfo.waveform));
-    gtk_box_append(GTK_BOX(s_content_box),
+    gtk_box_append(GTK_BOX(col4),
                   make_int_dropdown("Dest", lfo_dest_names, 4, (int *)&p->lfo.dest));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Rate", 0, 50, &p->lfo.rate));
-    gtk_box_append(GTK_BOX(s_content_box), make_slider("Depth", 0, 1, &p->lfo.depth));
-    gtk_box_append(GTK_BOX(s_content_box), make_toggle("BPM Sync", &p->lfo_bpm_sync));
+    gtk_box_append(GTK_BOX(col4), make_slider("Rate", 0, 50, &p->lfo.rate));
+    gtk_box_append(GTK_BOX(col4), make_slider("Depth", 0, 1, &p->lfo.depth));
+    gtk_box_append(GTK_BOX(col4), make_toggle("BPM Sync", &p->lfo_bpm_sync));
     if (p->lfo_bpm_sync)
-        gtk_box_append(GTK_BOX(s_content_box),
+        gtk_box_append(GTK_BOX(col4),
                       make_int_dropdown("Div", lfo_sync_names, 6, &p->lfo_sync_division));
 
     /* ── FM parameters ────────────────────────────────────────────── */

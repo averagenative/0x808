@@ -20,6 +20,7 @@ extern "C" {
 
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 
 static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus"};
 static const char *filter_mode_names[] = {"LowPass", "HiPass", "BandPass"};
@@ -228,62 +229,24 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
         return;
     }
 
-    ImGui::Text("Mixer / Master FX");
-    ImGui::Separator();
-
     ImDrawList *dl = ImGui::GetWindowDrawList();
 
-    float meter_panel_w = 180.0f;
-    float master_meter_w = 50.0f;
-    float effects_w = w - meter_panel_w - master_meter_w - 30.0f;
-    if (effects_w < 200.0f) effects_w = 200.0f;
-
-    float content_h = ImGui::GetContentRegionAvail().y;
-
-    /* --- Section 1: Per-track level meters --- */
-    if (ImGui::BeginChild("TrackMeters", ImVec2(meter_panel_w, content_h),
-                          ImGuiChildFlags_Borders)) {
-        int pat_idx = engine->transport.current_pattern;
-        uint32_t num_tracks = 0;
-        if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
-            num_tracks = engine->patterns[pat_idx].num_tracks;
-        }
-
-        ImGui::Text("Track Levels");
-
-        if (num_tracks > 0) {
-            float meter_w = (meter_panel_w - 20.0f) / (float)num_tracks;
-            if (meter_w > 16.0f) meter_w = 16.0f;
-            float meter_h = content_h - 50.0f;
-            if (meter_h < 40.0f) meter_h = 40.0f;
-
-            ImVec2 base = ImGui::GetCursorScreenPos();
-
-            /* Draw meters */
-            for (uint32_t t = 0; t < num_tracks; t++) {
-                ImVec2 mpos = ImVec2(base.x + t * (meter_w + 2.0f), base.y);
-                draw_level_meter(dl, mpos, meter_w, meter_h, engine->track_peaks[t]);
-            }
-
-            /* Advance cursor past meters */
-            ImGui::Dummy(ImVec2(num_tracks * (meter_w + 2.0f), meter_h));
-
-            /* Track number labels */
-            for (uint32_t t = 0; t < num_tracks; t++) {
-                if (t > 0) ImGui::SameLine();
-                char num[4];
-                snprintf(num, sizeof(num), "%u", t + 1);
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + t * 0.5f);
-                ImGui::Text("%s", num);
-            }
-        }
+    int pat_idx_g = engine->transport.current_pattern;
+    uint32_t num_tracks_g = 0;
+    sq_pattern_t *pat_g = NULL;
+    if (pat_idx_g >= 0 && (uint32_t)pat_idx_g < engine->num_patterns) {
+        pat_g = &engine->patterns[pat_idx_g];
+        num_tracks_g = pat_g->num_tracks;
     }
-    ImGui::EndChild();
 
-    ImGui::SameLine();
+    /* --- Top section: Effects browse + slots --- */
+    float total_h = ImGui::GetContentRegionAvail().y;
+    float bottom_h = total_h * 0.55f;
+    if (bottom_h < 100.0f) bottom_h = 100.0f;
+    float top_h = total_h - bottom_h;
+    if (top_h < 50.0f) top_h = 50.0f;
 
-    /* --- Section 2: Effects panel (browse: Master + per-track) --- */
-    if (ImGui::BeginChild("EffectsPanel", ImVec2(effects_w, content_h),
+    if (ImGui::BeginChild("EffectsPanel", ImVec2(0, top_h),
                           ImGuiChildFlags_Borders)) {
         static int fx_tab = 0; /* 0 = Master, 1+ = track index+1 */
 
@@ -392,32 +355,186 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
     }
     ImGui::EndChild();
 
-    ImGui::SameLine();
+    /*
+     * Bottom section (vertical stack matching GTK):
+     *   [< 1 2 3 ... >]   ← track selector
+     *   [VU meters + MST]  ← level meters full width
+     *   [Strips + MST]     ← vol/pan/mute + master meter
+     */
+    static int track_scroll = 0;
+    if (track_scroll >= (int)num_tracks_g) track_scroll = 0;
 
-    /* --- Section 3: Master output level meter --- */
-    if (ImGui::BeginChild("MasterMeter", ImVec2(master_meter_w, content_h),
-                          ImGuiChildFlags_Borders)) {
-        ImGui::Text("MST");
+    float full_w = ImGui::GetContentRegionAvail().x;
+    float master_col_w = 40.0f;
+    float track_area_w = full_w - master_col_w - 4.0f;
+    float strip_w = 32.0f;
+    int max_vis = (int)((track_area_w - 40.0f) / (strip_w + 2.0f));
+    if (max_vis < 1) max_vis = 1;
+    int end_t = track_scroll + max_vis;
+    if (end_t > (int)num_tracks_g) end_t = (int)num_tracks_g;
+    bool can_l = (track_scroll > 0);
+    bool can_r = (track_scroll + max_vis < (int)num_tracks_g);
 
-        float meter_h = content_h - 50.0f;
-        if (meter_h < 40.0f) meter_h = 40.0f;
+    /* --- Track selector row: [<] 1 2 3 ... [>] --- */
+    {
+        if (!can_l) ImGui::BeginDisabled();
+        if (ImGui::Button("<##ts", ImVec2(16, 16))) track_scroll--;
+        if (!can_l) ImGui::EndDisabled();
 
-        ImVec2 base = ImGui::GetCursorScreenPos();
+        for (int t = track_scroll; t < end_t; t++) {
+            ImGui::SameLine(0, 0);
+            char lbl[8];
+            snprintf(lbl, sizeof(lbl), " %d ", t + 1);
+            float tx = 20.0f + (float)(t - track_scroll) * (strip_w + 2.0f) +
+                       strip_w * 0.5f - 6.0f;
+            ImGui::SetCursorPosX(tx);
+            ImGui::Text("%s", lbl);
+        }
 
-        /* L meter */
-        draw_level_meter(dl, base, 14.0f, meter_h, engine->master_peak[0]);
-        /* R meter */
-        draw_level_meter(dl, ImVec2(base.x + 18.0f, base.y), 14.0f, meter_h,
-                         engine->master_peak[1]);
-
-        ImGui::Dummy(ImVec2(34.0f, meter_h));
-
-        /* L/R labels */
-        ImGui::Text("L");
-        ImGui::SameLine(20.0f);
-        ImGui::Text("R");
+        ImGui::SameLine(track_area_w + 2.0f);
+        if (!can_r) ImGui::BeginDisabled();
+        if (ImGui::Button(">##ts", ImVec2(16, 16))) track_scroll++;
+        if (!can_r) ImGui::EndDisabled();
     }
-    ImGui::EndChild();
+
+    /* --- Combined: [VU+Strips | Master meter] side by side --- */
+    float remaining_h = ImGui::GetContentRegionAvail().y;
+    if (remaining_h < 40.0f) remaining_h = 40.0f;
+
+    /* VU meter row */
+    float vu_h = 30.0f;
+    {
+        float meter_w = 10.0f;
+        ImVec2 base = ImGui::GetCursorScreenPos();
+        for (int t = track_scroll; t < end_t; t++) {
+            float cx = 20.0f + (float)(t - track_scroll) * (strip_w + 2.0f) +
+                       strip_w * 0.5f - meter_w * 0.5f;
+            draw_level_meter(dl, ImVec2(base.x + cx, base.y), meter_w, vu_h,
+                             engine->track_peaks[t]);
+        }
+
+        /* MST label above master meter column */
+        ImVec2 mst_pos(base.x + track_area_w + 4.0f, base.y);
+        dl->AddText(mst_pos, IM_COL32(255, 255, 255, 255), "MST");
+
+        ImGui::Dummy(ImVec2(full_w, vu_h + 2.0f));
+    }
+
+    /* Channel strips */
+    float strip_h = ImGui::GetContentRegionAvail().y;
+    if (strip_h < 20.0f) strip_h = 20.0f;
+    float vol_h = strip_h - 44.0f;
+    if (vol_h < 10.0f) vol_h = 10.0f;
+
+    if (num_tracks_g > 0 && pat_g) {
+        /* Style overrides for all strips */
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.24f, 0.24f, 0.28f, 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.28f, 0.28f, 0.33f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.40f, 0.60f, 0.90f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(0.50f, 0.70f, 1.0f, 1.0f));
+
+        for (int t = track_scroll; t < end_t; t++) {
+            if (t > track_scroll) ImGui::SameLine(0, 2);
+            ImGui::PushID(t);
+
+            ImVec4 bg = (t % 2 == 0)
+                ? ImVec4(0.22f, 0.22f, 0.26f, 1.0f)
+                : ImVec4(0.18f, 0.18f, 0.21f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, bg);
+
+            ImGuiWindowFlags sf = ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoScrollWithMouse;
+            if (ImGui::BeginChild("s", ImVec2(strip_w, strip_h),
+                                  ImGuiChildFlags_None, sf)) {
+                float sw = strip_w - 4.0f;
+
+                /* Volume slider */
+                ImGui::PushID("vol");
+                float vol = pat_g->tracks[t].volume * 100.0f;
+                if (ImGui::VSliderFloat("##v", ImVec2(sw, vol_h),
+                                        &vol, 0.0f, 100.0f, ""))
+                    pat_g->tracks[t].volume = vol / 100.0f;
+                ImGui::PopID();
+
+                /* Pan knob */
+                {
+                    float pan = pat_g->tracks[t].pan;
+                    ImVec2 kp = ImGui::GetCursorScreenPos();
+                    float kr = 9.0f;
+                    float kcx = kp.x + strip_w * 0.5f - 2.0f;
+                    float kcy = kp.y + kr + 1.0f;
+                    float a0 = (float)(M_PI * 0.75);
+                    float a1 = (float)(M_PI * 2.25);
+                    float norm = (pan + 1.0f) * 0.5f;
+                    float ca = (float)(M_PI * 1.5);
+                    float va = a0 + norm * (a1 - a0);
+
+                    /* Background arc */
+                    dl->PathArcTo(ImVec2(kcx, kcy), kr, a0, a1, 24);
+                    dl->PathStroke(IM_COL32(45, 45, 55, 160), 0, 2.5f);
+
+                    /* Value arc (bipolar from center) */
+                    if (va > ca) {
+                        dl->PathArcTo(ImVec2(kcx, kcy), kr, ca, va, 12);
+                    } else {
+                        dl->PathArcTo(ImVec2(kcx, kcy), kr, va, ca, 12);
+                    }
+                    dl->PathStroke(IM_COL32(50, 230, 50, 220), 0, 2.5f);
+
+                    /* Knob body */
+                    dl->AddCircleFilled(ImVec2(kcx, kcy), kr * 0.6f,
+                                        IM_COL32(75, 78, 88, 255));
+                    dl->AddCircle(ImVec2(kcx, kcy), kr * 0.6f,
+                                  IM_COL32(110, 115, 130, 255), 0, 1.5f);
+
+                    /* Indicator line */
+                    float ix = kcx + cosf(va) * kr * 0.5f;
+                    float iy = kcy + sinf(va) * kr * 0.5f;
+                    dl->AddLine(ImVec2(kcx, kcy), ImVec2(ix, iy),
+                                IM_COL32(50, 230, 50, 255), 2.0f);
+
+                    /* Drag interaction */
+                    ImGui::PushID("pan");
+                    ImGui::InvisibleButton("##pk", ImVec2(sw, kr * 2 + 2));
+                    if (ImGui::IsItemActive()) {
+                        pan -= ImGui::GetIO().MouseDelta.y * 0.01f;
+                        if (pan < -1.0f) pan = -1.0f;
+                        if (pan > 1.0f) pan = 1.0f;
+                        pat_g->tracks[t].pan = pan;
+                    }
+                    ImGui::PopID();
+                }
+
+                /* Mute button */
+                bool muted = pat_g->tracks[t].mute;
+                if (muted)
+                    ImGui::PushStyleColor(ImGuiCol_Button,
+                                          ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+                if (ImGui::Button("M", ImVec2(sw, 0)))
+                    pat_g->tracks[t].mute = !pat_g->tracks[t].mute;
+                if (muted) ImGui::PopStyleColor();
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleColor(); /* ChildBg */
+            ImGui::PopID();
+        }
+
+        ImGui::PopStyleColor(4); /* FrameBg, FrameBgHovered, SliderGrab, SliderGrabActive */
+
+        /* Master L/R VU meters (full strip height) */
+        ImGui::SameLine(track_area_w + 4.0f);
+        {
+            ImVec2 mst_base = ImGui::GetCursorScreenPos();
+            float mst_h = strip_h - 16.0f;
+            if (mst_h < 10.0f) mst_h = 10.0f;
+            draw_level_meter(dl, mst_base, 14.0f, mst_h, engine->master_peak[0]);
+            draw_level_meter(dl, ImVec2(mst_base.x + 18.0f, mst_base.y),
+                             14.0f, mst_h, engine->master_peak[1]);
+            ImGui::Dummy(ImVec2(34.0f, mst_h));
+            ImGui::SetCursorPosX(track_area_w + 6.0f);
+            ImGui::Text("L  R");
+        }
+    }
 
     ImGui::End();
 }

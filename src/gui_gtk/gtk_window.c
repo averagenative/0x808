@@ -19,6 +19,7 @@
 #include "gtk_gui.h"
 #include "gui/undo.h"
 #include "formats/project.h"
+#include "engine/export.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -29,6 +30,7 @@
 
 /* Forward declarations */
 static void update_pattern_buttons(void);
+static GtkWidget *s_rec_btn = NULL;
 
 /* ─── Panel visibility sync ───────────────────────────────────────────────── */
 
@@ -75,9 +77,9 @@ static void sync_panel_visibility(void)
     }
 
     /* Mixer */
+    bool show_mixer = g_gtk.app.panels[SQ_PANEL_MIXER];
     if (g_gtk.mixer_box) {
-        gtk_widget_set_visible(g_gtk.mixer_box,
-                               g_gtk.app.panels[SQ_PANEL_MIXER]);
+        gtk_widget_set_visible(g_gtk.mixer_box, show_mixer);
     }
 
     /* Bottom pane container */
@@ -86,6 +88,32 @@ static void sync_panel_visibility(void)
         GtkWidget *bottom = gtk_widget_get_last_child(g_gtk.grid_area);
         if (bottom && bottom != g_gtk.drum_grid_area)
             gtk_widget_set_visible(bottom, show_bottom);
+    }
+
+    /* Dynamic width allocation matching ImGui percentages:
+     *   Piano + Synth + Mixer: 40% / 30% / 30%
+     *   Piano + Synth:         55% / 45%
+     *   Piano + Mixer:         70% / 30%
+     *   Mixer only:            100%  */
+    if (show_bottom && g_gtk.window) {
+        int win_w = gtk_widget_get_width(g_gtk.window);
+        int browser_w = (g_gtk.app.panels[SQ_PANEL_BROWSER]) ? 300 : 0;
+        int main_w = win_w - browser_w;
+        if (main_w < 400) main_w = 400;
+
+        bool show_synth_ed = gtk_widget_get_visible(g_gtk.synth_editor_box);
+
+        if (show_synth_ed && show_mixer) {
+            /* 40% piano, 30% synth, 30% mixer */
+            gtk_widget_set_size_request(g_gtk.synth_editor_box, main_w * 30 / 100, -1);
+            gtk_widget_set_size_request(g_gtk.mixer_box, main_w * 30 / 100, -1);
+        } else if (show_synth_ed) {
+            /* 55% piano, 45% synth */
+            gtk_widget_set_size_request(g_gtk.synth_editor_box, main_w * 45 / 100, -1);
+        } else if (show_mixer) {
+            /* 70% piano (if visible), 30% mixer */
+            gtk_widget_set_size_request(g_gtk.mixer_box, main_w * 30 / 100, -1);
+        }
     }
 
     /* Virtual keyboard */
@@ -126,6 +154,17 @@ static gboolean on_redraw_tick(gpointer user_data)
                            engine->transport.playing ? "STOP" : "PLAY");
     }
 
+    /* Update REC button state */
+    if (s_rec_btn && GTK_IS_LABEL(s_rec_btn)) {
+        if (engine->recording) {
+            gtk_label_set_text(GTK_LABEL(s_rec_btn), "REC *");
+            gtk_widget_add_css_class(s_rec_btn, "recording");
+        } else {
+            gtk_label_set_text(GTK_LABEL(s_rec_btn), "REC");
+            gtk_widget_remove_css_class(s_rec_btn, "recording");
+        }
+    }
+
     /* Sync panel visibility + pattern buttons */
     sync_panel_visibility();
     update_pattern_buttons();
@@ -149,6 +188,10 @@ static gboolean on_redraw_tick(gpointer user_data)
         if (child) gtk_widget_queue_draw(child);
     }
 
+    /* Redraw mixer level meters */
+    if (g_gtk.mixer_box && gtk_widget_get_visible(g_gtk.mixer_box))
+        gtk_mixer_queue_redraw();
+
     return G_SOURCE_CONTINUE;
 }
 
@@ -165,6 +208,38 @@ static void on_play_clicked(GtkWidget *btn, gpointer user_data)
     g_gtk.app.visual_step = 0;
     if (engine->transport.playing)
         g_gtk.app.play_start_ticks = SDL_GetPerformanceCounter();
+}
+
+static void on_rec_clicked(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+
+    char rec_path[600];
+    snprintf(rec_path, sizeof(rec_path), "%srecording.wav",
+             engine->base_dir[0] ? engine->base_dir : "");
+
+    if (engine->recording) {
+        engine->recording = false;
+        if (engine->rec_frames > 0) {
+            sq_export_result_t rec_result;
+            memset(&rec_result, 0, sizeof(rec_result));
+            rec_result.data = engine->rec_buffer;
+            rec_result.num_frames = engine->rec_frames;
+            rec_result.sample_rate = engine->sample_rate;
+            sq_export_write_wav(rec_path, &rec_result, 16);
+            LOG_INFO("Saved recording: %u frames -> %s", engine->rec_frames, rec_path);
+            char msg[256];
+            snprintf(msg, sizeof(msg), "Saved: %s", rec_path);
+            sq_app_set_status(&g_gtk.app, msg, 300);
+        }
+        engine->rec_frames = 0;
+    } else {
+        sq_engine_start_recording(engine);
+        char msg[256];
+        snprintf(msg, sizeof(msg), "REC -> %s", rec_path);
+        sq_app_set_status(&g_gtk.app, msg, 0);
+    }
 }
 
 static void on_bpm_changed(GtkRange *range, gpointer user_data)
@@ -366,6 +441,11 @@ static GtkWidget *build_toolbar(void)
         G_CALLBACK(on_play_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), g_gtk.play_btn);
 
+    /* REC */
+    s_rec_btn = sq_flat_button_new("REC",
+        G_CALLBACK(on_rec_clicked), NULL);
+    gtk_box_append(GTK_BOX(row1), s_rec_btn);
+
     /* BPM */
     GtkWidget *bpm_label = gtk_label_new("BPM:");
     gtk_box_append(GTK_BOX(row1), bpm_label);
@@ -405,6 +485,33 @@ static GtkWidget *build_toolbar(void)
     GtkWidget *vsep1 = gtk_separator_new(GTK_ORIENTATION_VERTICAL);
     gtk_box_append(GTK_BOX(row1), vsep1);
 
+    /* Toolbar button order matches ImGui:
+     * EXPORT | PRESETS | PIANO | KEYS | PAT/SONG/PERF | MIXER/FX | BROWSE | THEME */
+
+    /* Export button */
+    GtkWidget *export_btn = sq_flat_button_new("EXPORT",
+        G_CALLBACK(on_export_clicked), NULL);
+    gtk_box_append(GTK_BOX(row1), export_btn);
+
+    /* Presets button */
+    GtkWidget *presets_btn = sq_flat_button_new("PRESETS",
+        G_CALLBACK(on_presets_clicked), NULL);
+    gtk_box_append(GTK_BOX(row1), presets_btn);
+
+    /* PIANO + KEYS panel buttons */
+    {
+        const int first_panels[] = { SQ_PANEL_PIANO_ROLL, SQ_PANEL_KEYBOARD };
+        const char *first_names[] = { "PIANO", "KEYS" };
+        for (int i = 0; i < 2; i++) {
+            int pi = first_panels[i];
+            s_panel_btns[pi] = sq_flat_button_new(first_names[i],
+                G_CALLBACK(on_panel_toggled), GINT_TO_POINTER(pi));
+            gtk_box_append(GTK_BOX(row1), s_panel_btns[pi]);
+            if (g_gtk.app.panels[pi])
+                gtk_widget_add_css_class(s_panel_btns[pi], "active");
+        }
+    }
+
     /* Mode buttons: PAT / SONG / PERF */
     const char *mode_names[] = {"PAT", "SONG", "PERF"};
     for (int i = 0; i < 3; i++) {
@@ -415,34 +522,24 @@ static GtkWidget *build_toolbar(void)
             gtk_widget_add_css_class(s_mode_btns[i], "active");
     }
 
-    /* Separator */
-    GtkWidget *vsep2 = gtk_separator_new(GTK_ORIENTATION_VERTICAL);
-    gtk_box_append(GTK_BOX(row1), vsep2);
-
-    /* Presets button */
-    GtkWidget *presets_btn = sq_flat_button_new("PRESETS",
-        G_CALLBACK(on_presets_clicked), NULL);
-    gtk_box_append(GTK_BOX(row1), presets_btn);
-
-    /* Export button */
-    GtkWidget *export_btn = sq_flat_button_new("EXPORT",
-        G_CALLBACK(on_export_clicked), NULL);
-    gtk_box_append(GTK_BOX(row1), export_btn);
+    /* MIXER/FX + BROWSE panel buttons */
+    {
+        const int last_panels[] = { SQ_PANEL_MIXER, SQ_PANEL_BROWSER };
+        const char *last_names[] = { "MIXER/FX", "BROWSE" };
+        for (int i = 0; i < 2; i++) {
+            int pi = last_panels[i];
+            s_panel_btns[pi] = sq_flat_button_new(last_names[i],
+                G_CALLBACK(on_panel_toggled), GINT_TO_POINTER(pi));
+            gtk_box_append(GTK_BOX(row1), s_panel_btns[pi]);
+            if (g_gtk.app.panels[pi])
+                gtk_widget_add_css_class(s_panel_btns[pi], "active");
+        }
+    }
 
     /* Theme button */
     GtkWidget *theme_btn = sq_flat_button_new("THEME",
         G_CALLBACK(on_theme_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), theme_btn);
-
-    /* Panel toggle buttons */
-    const char *panel_names[] = {"BROWSE", "MIXER", "PIANO", "KEYS"};
-    for (int i = 0; i < SQ_PANEL_COUNT; i++) {
-        s_panel_btns[i] = sq_flat_button_new(panel_names[i],
-            G_CALLBACK(on_panel_toggled), GINT_TO_POINTER(i));
-        gtk_box_append(GTK_BOX(row1), s_panel_btns[i]);
-        if (g_gtk.app.panels[i])
-            gtk_widget_add_css_class(s_panel_btns[i], "active");
-    }
 
     /* Status label */
     g_gtk.status_label = gtk_label_new("");
@@ -536,7 +633,7 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
 
     /* ── Bottom panel area (piano roll + synth editor + mixer) ────────── */
     GtkWidget *bottom_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_size_request(bottom_box, -1, 250);
+    gtk_widget_set_size_request(bottom_box, -1, 140);
     gtk_widget_set_visible(bottom_box, FALSE);
     gtk_box_append(GTK_BOX(g_gtk.grid_area), bottom_box);
 
@@ -546,17 +643,26 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
     gtk_widget_set_visible(g_gtk.piano_roll_area, FALSE);
     gtk_box_append(GTK_BOX(bottom_box), g_gtk.piano_roll_area);
 
-    /* Synth editor */
+    /* Synth editor — width set dynamically in sync_panel_visibility */
     g_gtk.synth_editor_box = gtk_synth_editor_new();
-    gtk_widget_set_size_request(g_gtk.synth_editor_box, 250, -1);
+    gtk_widget_set_hexpand(g_gtk.synth_editor_box, FALSE);
     gtk_widget_set_visible(g_gtk.synth_editor_box, FALSE);
     gtk_box_append(GTK_BOX(bottom_box), g_gtk.synth_editor_box);
 
-    /* Mixer */
-    g_gtk.mixer_box = gtk_mixer_new();
-    gtk_widget_set_hexpand(g_gtk.mixer_box, TRUE);
-    gtk_widget_set_visible(g_gtk.mixer_box, FALSE);
-    gtk_box_append(GTK_BOX(bottom_box), g_gtk.mixer_box);
+    /* Mixer — wrapped in scrolled window to prevent height overflow */
+    {
+        GtkWidget *mixer_scroll = gtk_scrolled_window_new();
+        gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(mixer_scroll),
+                                       GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+        gtk_widget_set_hexpand(mixer_scroll, FALSE);
+        gtk_widget_set_visible(mixer_scroll, FALSE);
+
+        GtkWidget *mixer_inner = gtk_mixer_new();
+        gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(mixer_scroll), mixer_inner);
+
+        g_gtk.mixer_box = mixer_scroll;
+        gtk_box_append(GTK_BOX(bottom_box), g_gtk.mixer_box);
+    }
 
     /* ── Browser (right side panel) ───────────────────────────────────── */
     g_gtk.browser_box = gtk_browser_new();
