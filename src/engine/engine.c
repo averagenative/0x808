@@ -56,32 +56,35 @@ void sq_engine_init(sq_engine_t *engine, uint32_t sample_rate)
         synth_init_wt_banks(engine);
     }
 
-    /* Create one pattern: 4 sampler tracks + 2 synth tracks */
-    engine->num_patterns = 1;
-    sq_pattern_t *p = &engine->patterns[0];
-    p->num_tracks = 6;
-    strncpy(p->name, "Pattern 1", SQ_PATTERN_NAME_LEN - 1);
-    p->name[SQ_PATTERN_NAME_LEN - 1] = '\0';
+    /* Create 5 default patterns */
+    engine->num_patterns = 5;
+    for (uint32_t pi = 0; pi < engine->num_patterns; pi++) {
+        sq_pattern_t *p = &engine->patterns[pi];
+        snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern %u", pi + 1);
+        p->num_tracks = (pi == 0) ? 6 : 4;
 
-    for (uint32_t t = 0; t < p->num_tracks; t++) {
-        p->tracks[t].type   = TRACK_SAMPLER;
-        p->tracks[t].length = 16;
-        p->tracks[t].volume = 0.8f;
-        p->tracks[t].pan    = 0.0f;
-        p->tracks[t].mute   = false;
-        p->tracks[t].solo   = false;
-        p->tracks[t].sample_index = -1;
-        p->tracks[t].synth_preset = -1;
+        for (uint32_t t = 0; t < p->num_tracks; t++) {
+            p->tracks[t].type   = TRACK_SAMPLER;
+            p->tracks[t].length = 16;
+            p->tracks[t].volume = 0.8f;
+            p->tracks[t].pan    = 0.0f;
+            p->tracks[t].mute   = false;
+            p->tracks[t].solo   = false;
+            p->tracks[t].sample_index = -1;
+            p->tracks[t].synth_preset = -1;
+        }
+
+        if (pi == 0) {
+            /* Pattern 1: synth tracks 4-5 */
+            p->tracks[4].type = TRACK_SYNTH;
+            p->tracks[4].synth_preset = 0; /* Bass preset */
+            p->tracks[4].volume = 0.6f;
+
+            p->tracks[5].type = TRACK_SYNTH;
+            p->tracks[5].synth_preset = 3; /* Pluck preset */
+            p->tracks[5].volume = 0.5f;
+        }
     }
-
-    /* Tracks 4-5: synth tracks */
-    p->tracks[4].type = TRACK_SYNTH;
-    p->tracks[4].synth_preset = 0; /* Bass preset */
-    p->tracks[4].volume = 0.6f;
-
-    p->tracks[5].type = TRACK_SYNTH;
-    p->tracks[5].synth_preset = 3; /* Pluck preset */
-    p->tracks[5].volume = 0.5f;
 }
 
 void sq_engine_shutdown(sq_engine_t *engine)

@@ -109,8 +109,29 @@ static char g_save_status[128] = "";
 static uint32_t g_status_timer = 0;
 static sq_pattern_t g_clipboard_pattern;
 static bool g_clipboard_valid = false;
+static int g_pat_scroll = 0;  /* scroll offset for pattern selector */
 
 static Uint64 g_play_start_ticks = 0;
+
+/* Initialize a new pattern by copying track layout from pattern 0 (no step data) */
+static void init_new_pattern(sq_engine_t *engine, int idx)
+{
+    sq_pattern_t *np = &engine->patterns[idx];
+    sq_pattern_t *src = &engine->patterns[0];
+    memset(np, 0, sizeof(*np));
+    snprintf(np->name, SQ_PATTERN_NAME_LEN, "Pattern %d", idx + 1);
+    np->num_tracks = src->num_tracks;
+    for (uint32_t t = 0; t < np->num_tracks; t++) {
+        np->tracks[t].type = src->tracks[t].type;
+        np->tracks[t].length = src->tracks[t].length;
+        np->tracks[t].volume = src->tracks[t].volume;
+        np->tracks[t].pan = src->tracks[t].pan;
+        np->tracks[t].sample_index = src->tracks[t].sample_index;
+        np->tracks[t].synth_preset = src->tracks[t].synth_preset;
+        np->tracks[t].sf2_preset = src->tracks[t].sf2_preset;
+        np->tracks[t].color_index = src->tracks[t].color_index;
+    }
+}
 static bool   g_was_playing      = false;
 
 /* ─── Helper: draw a soft glow behind a rect ─────────────────────────────── */
@@ -407,16 +428,7 @@ int gui_frame(sq_engine_t *engine)
                     if (engine->num_patterns < SQ_MAX_PATTERNS) {
                         int ni = (int)engine->num_patterns;
                         engine->num_patterns++;
-                        sq_pattern_t *np = &engine->patterns[ni];
-                        memset(np, 0, sizeof(*np));
-                        snprintf(np->name, SQ_PATTERN_NAME_LEN, "Pattern %d", ni + 1);
-                        np->num_tracks = 4;
-                        for (uint32_t t = 0; t < np->num_tracks; t++) {
-                            np->tracks[t].length = 16;
-                            np->tracks[t].volume = 0.8f;
-                            np->tracks[t].sample_index = -1;
-                            np->tracks[t].synth_preset = -1;
-                        }
+                        init_new_pattern(engine, ni);
                         engine->transport.current_pattern = ni;
                         snprintf(g_save_status, sizeof(g_save_status), "New pattern %d", ni + 1);
                         g_status_timer = 90;
@@ -455,7 +467,7 @@ int gui_frame(sq_engine_t *engine)
     g_was_playing = engine->transport.playing;
 
     /* ── Layout constants ─────────────────────────────────────────────────── */
-    float toolbar_h = 60.0f;
+    float toolbar_h = 80.0f;
 
     /* ── Toolbar (fixed at top) ───────────────────────────────────────────── */
     {
@@ -654,6 +666,7 @@ int gui_frame(sq_engine_t *engine)
         const ImVec2 btn_sz(btn_w, btn_h);
         const ImVec2 btn_sm(50.0f, btn_h);  /* narrow buttons (PAT/FX) */
 
+        float export_x = ImGui::GetCursorPosX();
         if (ImGui::Button("EXPORT", btn_sz))
             export_dialog_show();
         ImGui::SameLine();
@@ -680,41 +693,6 @@ int gui_frame(sq_engine_t *engine)
                               engine->transport.mode != MODE_PATTERN,
                               mode_colors[engine->transport.mode], btn_sm))
                 engine->transport.mode = (sq_play_mode_t)((engine->transport.mode + 1) % 3);
-        }
-        ImGui::SameLine();
-
-        /* Pattern selector: clickable numbered buttons, active one highlighted */
-        {
-            ImVec4 active_col(0.24f, 0.63f, 0.39f, 1.0f);
-            ImVec4 inactive_col(0.18f, 0.18f, 0.20f, 1.0f);
-            float pat_btn_w = 28.0f;
-            for (uint32_t p = 0; p < engine->num_patterns && p < 9; p++) {
-                char plbl[4];
-                snprintf(plbl, sizeof(plbl), "%u", p + 1);
-                bool is_active = ((int)p == engine->transport.current_pattern);
-                if (ColoredButton(plbl, is_active, is_active ? active_col : inactive_col,
-                                  ImVec2(pat_btn_w, btn_h)))
-                    engine->transport.current_pattern = (int)p;
-                ImGui::SameLine(0, 2);
-            }
-            /* "+" button to add pattern */
-            if (engine->num_patterns < SQ_MAX_PATTERNS) {
-                if (ImGui::Button("+##addpat", ImVec2(pat_btn_w, btn_h))) {
-                    int ni = (int)engine->num_patterns;
-                    engine->num_patterns++;
-                    sq_pattern_t *np = &engine->patterns[ni];
-                    memset(np, 0, sizeof(*np));
-                    snprintf(np->name, SQ_PATTERN_NAME_LEN, "Pattern %d", ni + 1);
-                    np->num_tracks = 4;
-                    for (uint32_t t = 0; t < np->num_tracks; t++) {
-                        np->tracks[t].volume = 1.0f;
-                        np->tracks[t].sample_index = (int)(t < engine->num_samples ? t : 0);
-                        np->tracks[t].synth_preset = -1;
-                    }
-                    engine->transport.current_pattern = ni;
-                }
-                ImGui::SameLine(0, 2);
-            }
         }
         ImGui::SameLine();
 
@@ -765,12 +743,71 @@ int gui_frame(sq_engine_t *engine)
         }
         ImGui::PopStyleColor(4);
 
-        /* Status message — stays visible while recording */
-        if (engine->recording) {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", g_save_status);
-        } else if (g_status_timer > 0) {
-            ImGui::TextColored(ImVec4(0.39f, 1.0f, 0.39f, 1.0f), "%s", g_save_status);
-            g_status_timer--;
+        /* ── Second row: pattern selector + status ─────────────────────── */
+        {
+            ImVec4 active_col(0.24f, 0.63f, 0.39f, 1.0f);
+            ImVec4 inactive_col(0.18f, 0.18f, 0.20f, 1.0f);
+            float pat_btn_w = 28.0f;
+            float pat_btn_h = 22.0f;
+
+            int max_visible = 9;
+            int total = (int)engine->num_patterns;
+            if (g_pat_scroll > total - max_visible) g_pat_scroll = total - max_visible;
+            if (g_pat_scroll < 0) g_pat_scroll = 0;
+
+            ImGui::SetCursorPosX(export_x);
+
+            /* Left scroll button */
+            if (g_pat_scroll > 0) {
+                if (ImGui::Button("<##patL", ImVec2(20, pat_btn_h)))
+                    g_pat_scroll--;
+                ImGui::SameLine(0, 2);
+            }
+
+            int end = g_pat_scroll + max_visible;
+            if (end > total) end = total;
+            for (int p = g_pat_scroll; p < end; p++) {
+                char plbl[8];
+                snprintf(plbl, sizeof(plbl), "%d##p%d", p + 1, p);
+                bool is_active = (p == engine->transport.current_pattern);
+                if (is_active)
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                if (ColoredButton(plbl, is_active, is_active ? active_col : inactive_col,
+                                  ImVec2(pat_btn_w, pat_btn_h)))
+                    engine->transport.current_pattern = p;
+                if (is_active)
+                    ImGui::PopStyleColor();
+                ImGui::SameLine(0, 2);
+            }
+
+            /* Right scroll button */
+            if (end < total) {
+                if (ImGui::Button(">##patR", ImVec2(20, pat_btn_h)))
+                    g_pat_scroll++;
+                ImGui::SameLine(0, 2);
+            }
+            /* "+" button to add pattern */
+            if (engine->num_patterns < 30) {
+                if (ImGui::Button("+##addpat", ImVec2(pat_btn_w, pat_btn_h))) {
+                    int ni = (int)engine->num_patterns;
+                    engine->num_patterns++;
+                    init_new_pattern(engine, ni);
+                    engine->transport.current_pattern = ni;
+                    /* Auto-scroll to show new pattern */
+                    if (ni >= g_pat_scroll + max_visible)
+                        g_pat_scroll = ni - max_visible + 1;
+                }
+                ImGui::SameLine(0, 2);
+            }
+
+            /* Status message */
+            ImGui::SameLine(0, 20);
+            if (engine->recording) {
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", g_save_status);
+            } else if (g_status_timer > 0) {
+                ImGui::TextColored(ImVec4(0.39f, 1.0f, 0.39f, 1.0f), "%s", g_save_status);
+                g_status_timer--;
+            }
         }
 
         ImGui::End();
