@@ -19,6 +19,8 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 ### Hacker Theme
 ![Hacker theme](screenshots/0x808_hacker_theme.png)
 
+3 built-in themes + user-defined themes via JSON files in the `themes/` folder.
+
 ## Features
 
 - **Drum grid** — 16-track step sequencer with velocity, pitch per step, mute/solo
