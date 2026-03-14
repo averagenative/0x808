@@ -61,11 +61,16 @@ cp -r samples           "${RELEASE_DIR}-windows-x64/"
 cp -r themes            "${RELEASE_DIR}-windows-x64/"
 cp README.md LICENSE     "${RELEASE_DIR}-windows-x64/"
 
-echo "  Creating zip..."
+echo "  Creating archive..."
 cd release
-zip -r "0x808-${VERSION}-windows-x64.zip" "0x808-${VERSION}-windows-x64" -q
+if command -v zip &>/dev/null; then
+    zip -r "0x808-${VERSION}-windows-x64.zip" "0x808-${VERSION}-windows-x64" -q
+    echo "  -> release/0x808-${VERSION}-windows-x64.zip"
+else
+    tar czf "0x808-${VERSION}-windows-x64.tar.gz" "0x808-${VERSION}-windows-x64"
+    echo "  -> release/0x808-${VERSION}-windows-x64.tar.gz (zip not available, used tar)"
+fi
 cd "$PROJECT_DIR"
-echo "  -> release/0x808-${VERSION}-windows-x64.zip"
 
 # ── Summary ──
 echo ""
