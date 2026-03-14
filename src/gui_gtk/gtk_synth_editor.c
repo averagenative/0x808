@@ -22,6 +22,7 @@ static int s_last_selected_track = -1;
 static GtkWidget *s_content_box = NULL;  /* inner box that holds all controls */
 static GtkWidget *s_adsr_area = NULL;
 static sq_adsr_params_t *s_adsr_ptr = NULL;
+static int s_adsr_drag_point = -1;  /* -1=none, 0=attack, 1=decay/sustain, 2=release */
 
 static void rebuild_controls(void); /* forward decl */
 
@@ -99,6 +100,76 @@ static void adsr_draw(GtkDrawingArea *area, cairo_t *cr,
     cairo_show_text(cr, "R");
 }
 
+/* ─── ADSR drag interaction ───────────────────────────────────────────────── */
+
+static void on_adsr_press(GtkGestureClick *gesture, int n_press,
+                           double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)user_data;
+    if (!s_adsr_ptr || !s_adsr_area) return;
+
+    int width = gtk_widget_get_width(s_adsr_area);
+    int height = gtk_widget_get_height(s_adsr_area);
+    float a = s_adsr_ptr->attack, d = s_adsr_ptr->decay;
+    float r = s_adsr_ptr->release;
+    float total = a + d + 0.3f + r;
+    if (total < 0.01f) total = 0.01f;
+
+    double pad = 6;
+    double w = width - pad * 2;
+    double ax = pad + (a / total) * w;
+    double dx = ax + (d / total) * w;
+    double sx = dx + (0.3f / total) * w;
+
+    /* Find closest control point */
+    s_adsr_drag_point = -1;
+    double best = 20.0;
+    if (fabs(x - ax) < best) { best = fabs(x - ax); s_adsr_drag_point = 0; }
+    if (fabs(x - dx) < best) { best = fabs(x - dx); s_adsr_drag_point = 1; }
+    if (fabs(x - sx) < best) { best = fabs(x - sx); s_adsr_drag_point = 2; }
+    (void)y; (void)height;
+}
+
+static void on_adsr_drag(GtkGestureDrag *gesture, double dx, double dy,
+                          gpointer user_data)
+{
+    (void)gesture; (void)user_data;
+    if (!s_adsr_ptr || s_adsr_drag_point < 0) return;
+
+    float scale_x = 0.01f;
+    float scale_y = 0.005f;
+
+    switch (s_adsr_drag_point) {
+    case 0: /* Attack — drag right = longer */
+        s_adsr_ptr->attack += (float)dx * scale_x;
+        if (s_adsr_ptr->attack < 0.001f) s_adsr_ptr->attack = 0.001f;
+        if (s_adsr_ptr->attack > 2.0f) s_adsr_ptr->attack = 2.0f;
+        break;
+    case 1: /* Decay/Sustain — drag right = longer decay, drag up = higher sustain */
+        s_adsr_ptr->decay += (float)dx * scale_x;
+        s_adsr_ptr->sustain -= (float)dy * scale_y;
+        if (s_adsr_ptr->decay < 0.001f) s_adsr_ptr->decay = 0.001f;
+        if (s_adsr_ptr->decay > 2.0f) s_adsr_ptr->decay = 2.0f;
+        if (s_adsr_ptr->sustain < 0) s_adsr_ptr->sustain = 0;
+        if (s_adsr_ptr->sustain > 1) s_adsr_ptr->sustain = 1;
+        break;
+    case 2: /* Release — drag right = longer */
+        s_adsr_ptr->release += (float)dx * scale_x;
+        if (s_adsr_ptr->release < 0.001f) s_adsr_ptr->release = 0.001f;
+        if (s_adsr_ptr->release > 5.0f) s_adsr_ptr->release = 5.0f;
+        break;
+    }
+
+    gtk_widget_queue_draw(s_adsr_area);
+}
+
+static void on_adsr_drag_end(GtkGestureDrag *gesture, double dx, double dy,
+                              gpointer user_data)
+{
+    (void)gesture; (void)dx; (void)dy; (void)user_data;
+    s_adsr_drag_point = -1;
+}
+
 /* ─── Slider callback ─────────────────────────────────────────────────────── */
 
 static void on_slider_changed(GtkRange *range, gpointer user_data)
@@ -139,6 +210,28 @@ static GtkWidget *make_slider(const char *label_text, float min, float max,
                      G_CALLBACK(on_slider_changed), NULL);
 
     return box;
+}
+
+/* ─── Helper: inline knob with label ──────────────────────────────────────── */
+
+static GtkWidget *make_knob(const char *label_text, float min, float max,
+                             float *value_ptr)
+{
+    GtkWidget *knob = gtk_knob_new(min, max, value_ptr, label_text);
+    gtk_widget_set_size_request(knob, 44, 50);
+    return knob;
+}
+
+/* Row of 4 ADSR knobs */
+static GtkWidget *make_adsr_knobs(float *a, float *d, float *s, float *r,
+                                   float a_max, float d_max, float r_max)
+{
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    gtk_box_append(GTK_BOX(row), make_knob("A", 0.001f, a_max, a));
+    gtk_box_append(GTK_BOX(row), make_knob("D", 0.001f, d_max, d));
+    gtk_box_append(GTK_BOX(row), make_knob("S", 0, 1, s));
+    gtk_box_append(GTK_BOX(row), make_knob("R", 0.001f, r_max, r));
+    return row;
 }
 
 /* ─── Helper: scroll wheel cycles dropdown values ─────────────────────────── */
@@ -331,16 +424,21 @@ static void rebuild_controls(void)
                   make_int_dropdown("Osc1", wave_names, 4, (int *)&p->osc1_wave));
     gtk_box_append(GTK_BOX(col1),
                   make_int_dropdown("Osc2", wave_names, 4, (int *)&p->osc2_wave));
-    gtk_box_append(GTK_BOX(col1), make_slider("Mix", 0, 1, &p->osc_mix));
-    gtk_box_append(GTK_BOX(col1), make_slider("Detune", -24, 24, &p->osc2_detune));
+    {
+        GtkWidget *osc_knobs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(osc_knobs), make_knob("Mix", 0, 1, &p->osc_mix));
+        gtk_box_append(GTK_BOX(osc_knobs), make_knob("Det", -24, 24, &p->osc2_detune));
+        gtk_box_append(GTK_BOX(col1), osc_knobs);
+    }
     {
         GtkWidget *uni_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
         GtkWidget *uni_lbl = gtk_label_new("Uni");
-        gtk_widget_set_size_request(uni_lbl, 36, -1);
+        gtk_widget_set_size_request(uni_lbl, 28, -1);
         gtk_widget_add_css_class(uni_lbl, "synth-label");
         gtk_box_append(GTK_BOX(uni_box), uni_lbl);
         GtkWidget *uni_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1, 7, 1);
         gtk_range_set_value(GTK_RANGE(uni_scale), p->unison_voices);
+        gtk_scale_set_draw_value(GTK_SCALE(uni_scale), FALSE);
         gtk_widget_set_hexpand(uni_scale, TRUE);
         g_object_set_data(G_OBJECT(uni_scale), "int_ptr", &p->unison_voices);
         g_signal_connect(uni_scale, "value-changed", G_CALLBACK(on_int_slider_changed), NULL);
@@ -348,7 +446,7 @@ static void rebuild_controls(void)
         gtk_box_append(GTK_BOX(col1), uni_box);
     }
     if (p->unison_voices > 1)
-        gtk_box_append(GTK_BOX(col1), make_slider("Spread", 0, 50, &p->unison_detune));
+        gtk_box_append(GTK_BOX(col1), make_knob("Sprd", 0, 50, &p->unison_detune));
 
     /* Column 2: Filter */
     GtkWidget *col2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
@@ -358,13 +456,18 @@ static void rebuild_controls(void)
     add_section(col2, "Filter");
     gtk_box_append(GTK_BOX(col2),
                   make_int_dropdown("Type", filter_names, 3, (int *)&p->filter_type));
-    gtk_box_append(GTK_BOX(col2), make_slider("Cutoff", 20, 20000, &p->filter_cutoff));
-    gtk_box_append(GTK_BOX(col2), make_slider("Reso", 0.5, 20, &p->filter_resonance));
-    gtk_box_append(GTK_BOX(col2), make_slider("EnvDep", -10000, 10000, &p->filter_env_depth));
-    gtk_box_append(GTK_BOX(col2), make_slider("F.Atk", 0.001, 2, &p->filter_env.attack));
-    gtk_box_append(GTK_BOX(col2), make_slider("F.Dec", 0.001, 2, &p->filter_env.decay));
-    gtk_box_append(GTK_BOX(col2), make_slider("F.Sus", 0, 1, &p->filter_env.sustain));
-    gtk_box_append(GTK_BOX(col2), make_slider("F.Rel", 0.001, 5, &p->filter_env.release));
+    {
+        GtkWidget *filt_knobs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Cut", 20, 20000, &p->filter_cutoff));
+        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Res", 0.5, 20, &p->filter_resonance));
+        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Env", -10000, 10000, &p->filter_env_depth));
+        gtk_box_append(GTK_BOX(col2), filt_knobs);
+    }
+    add_section(col2, "Filter Env");
+    gtk_box_append(GTK_BOX(col2),
+                  make_adsr_knobs(&p->filter_env.attack, &p->filter_env.decay,
+                                  &p->filter_env.sustain, &p->filter_env.release,
+                                  2.0f, 2.0f, 5.0f));
 
     /* Column 3: Amp Envelope */
     GtkWidget *col3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
@@ -372,10 +475,10 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(cols), col3);
 
     add_section(col3, "Amp Envelope");
-    gtk_box_append(GTK_BOX(col3), make_slider("A", 0.001, 2, &p->amp_env.attack));
-    gtk_box_append(GTK_BOX(col3), make_slider("D", 0.001, 2, &p->amp_env.decay));
-    gtk_box_append(GTK_BOX(col3), make_slider("S", 0, 1, &p->amp_env.sustain));
-    gtk_box_append(GTK_BOX(col3), make_slider("R", 0.001, 5, &p->amp_env.release));
+    gtk_box_append(GTK_BOX(col3),
+                  make_adsr_knobs(&p->amp_env.attack, &p->amp_env.decay,
+                                  &p->amp_env.sustain, &p->amp_env.release,
+                                  2.0f, 2.0f, 5.0f));
 
     s_adsr_ptr = &p->amp_env;
     s_adsr_area = gtk_drawing_area_new();
@@ -383,6 +486,17 @@ static void rebuild_controls(void)
     gtk_widget_set_vexpand(s_adsr_area, TRUE);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_adsr_area),
                                    adsr_draw, NULL, NULL);
+
+    /* Interactive drag on ADSR control points */
+    GtkGesture *adsr_click = gtk_gesture_click_new();
+    g_signal_connect(adsr_click, "pressed", G_CALLBACK(on_adsr_press), NULL);
+    gtk_widget_add_controller(s_adsr_area, GTK_EVENT_CONTROLLER(adsr_click));
+
+    GtkGesture *adsr_drag = gtk_gesture_drag_new();
+    g_signal_connect(adsr_drag, "drag-update", G_CALLBACK(on_adsr_drag), NULL);
+    g_signal_connect(adsr_drag, "drag-end", G_CALLBACK(on_adsr_drag_end), NULL);
+    gtk_widget_add_controller(s_adsr_area, GTK_EVENT_CONTROLLER(adsr_drag));
+
     gtk_box_append(GTK_BOX(col3), s_adsr_area);
 
     /* Column 4: LFO */
@@ -395,8 +509,12 @@ static void rebuild_controls(void)
                   make_int_dropdown("Wave", wave_names, 4, (int *)&p->lfo.waveform));
     gtk_box_append(GTK_BOX(col4),
                   make_int_dropdown("Dest", lfo_dest_names, 4, (int *)&p->lfo.dest));
-    gtk_box_append(GTK_BOX(col4), make_slider("Rate", 0, 50, &p->lfo.rate));
-    gtk_box_append(GTK_BOX(col4), make_slider("Depth", 0, 1, &p->lfo.depth));
+    {
+        GtkWidget *lfo_knobs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(lfo_knobs), make_knob("Rate", 0, 50, &p->lfo.rate));
+        gtk_box_append(GTK_BOX(lfo_knobs), make_knob("Dep", 0, 1, &p->lfo.depth));
+        gtk_box_append(GTK_BOX(col4), lfo_knobs);
+    }
     gtk_box_append(GTK_BOX(col4), make_toggle("BPM Sync", &p->lfo_bpm_sync));
     if (p->lfo_bpm_sync)
         gtk_box_append(GTK_BOX(col4),
