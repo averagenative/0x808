@@ -16,6 +16,36 @@ static const char *wave_names[] = {"Saw", "Square", "Triangle", "Sine"};
 static const char *filter_names[] = {"LowPass", "HiPass", "BandPass"};
 static const char *lfo_dest_names[] = {"None", "Pitch", "Filter", "Amp"};
 static const char *lfo_sync_names[] = {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32"};
+static const char *fm_alg_names[] = {
+    "0: 3>2>1>0",   "1: 2>1>0+3>0", "2: 3>2, 1>0", "3: 3>2>1, 0",
+    "4: 3,2,1>0",   "5: 3>2,1,0",   "6: 3,2,1,0",  "7: 3>(1,2),0"
+};
+
+/* FM algorithm visualization data — must match fm_algorithms[] in synth.c */
+static const struct {
+    int  mod_sources[FM_NUM_OPERATORS][FM_NUM_OPERATORS]; /* -1 terminated */
+    bool is_carrier[FM_NUM_OPERATORS];
+} fm_alg_vis[FM_NUM_ALGORITHMS] = {
+    /* 0: 3->2->1->0 */
+    {{{1,-1},{2,-1},{3,-1},{-1}},  {true,false,false,false}},
+    /* 1: 2->1->0, 3->0 */
+    {{{1,3,-1},{2,-1},{-1},{-1}},  {true,false,false,false}},
+    /* 2: 3->2, 1->0 */
+    {{{1,-1},{-1},{3,-1},{-1}},    {true,false,true,false}},
+    /* 3: 3->2->1, 0 */
+    {{{-1},{2,-1},{3,-1},{-1}},    {true,true,false,false}},
+    /* 4: 3,2, 1->0 */
+    {{{1,-1},{-1},{-1},{-1}},      {true,false,true,true}},
+    /* 5: 3->2, 1, 0 */
+    {{{-1},{-1},{3,-1},{-1}},      {true,true,true,false}},
+    /* 6: all carriers */
+    {{{-1},{-1},{-1},{-1}},        {true,true,true,true}},
+    /* 7: 3->(1,2), 0 */
+    {{{-1},{3,-1},{3,-1},{-1}},    {true,true,true,false}},
+};
+
+static GtkWidget *s_fm_algo_area = NULL;
+static sq_synth_preset_t *s_fm_preset = NULL;
 
 static int s_last_preset_idx = -1;   /* track which preset we built controls for */
 static int s_last_selected_track = -1;
@@ -28,6 +58,9 @@ static GtkWidget *s_filter_adsr_area = NULL;
 static sq_adsr_params_t *s_filter_adsr_ptr = NULL;
 static GtkWidget *s_filter_curve_area = NULL;
 static sq_synth_preset_t *s_filter_preset = NULL;
+
+static GtkWidget *s_wt_area = NULL;
+static sq_synth_preset_t *s_wt_preset = NULL;
 
 static void rebuild_controls(void); /* forward decl */
 
@@ -228,6 +261,268 @@ static void filter_curve_draw(GtkDrawingArea *area, cairo_t *cr,
         cairo_line_to(cr, (double)cutoff_x, height);
         cairo_stroke(cr);
     }
+}
+
+/* ─── Wavetable waveform visualization ─────────────────────────────────────── */
+
+static void wt_waveform_draw(GtkDrawingArea *area, cairo_t *cr,
+                              int width, int height, gpointer user_data)
+{
+    (void)area; (void)user_data;
+
+    /* Dark background */
+    cairo_set_source_rgb(cr, 0.06, 0.06, 0.08);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    if (!s_wt_preset) return;
+
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+
+    int bank_idx = s_wt_preset->wt_bank_index;
+    float position = s_wt_preset->wt_position;
+    double cy = height * 0.5;
+
+    /* Center line */
+    cairo_set_source_rgba(cr, 0.24, 0.24, 0.26, 0.6);
+    cairo_set_line_width(cr, 0.5);
+    cairo_move_to(cr, 0, cy);
+    cairo_line_to(cr, width, cy);
+    cairo_stroke(cr);
+
+    /* Try to draw real wavetable data if available */
+    if (engine->wt_banks && bank_idx >= 0 &&
+        (uint32_t)bank_idx < engine->num_wt_banks) {
+        const sq_wt_bank_t *bank = &engine->wt_banks[bank_idx];
+        if (bank->num_frames >= 1) {
+            /* Interpolate between two adjacent frames based on position */
+            float fpos = position * (bank->num_frames - 1);
+            int frame_a = (int)fpos;
+            int frame_b = frame_a + 1;
+            float frac = fpos - frame_a;
+            if (frame_a < 0) frame_a = 0;
+            if (frame_a >= bank->num_frames) frame_a = bank->num_frames - 1;
+            if (frame_b >= bank->num_frames) frame_b = bank->num_frames - 1;
+
+            cairo_set_source_rgba(cr, 0.47, 0.78, 0.71, 0.8);
+            cairo_set_line_width(cr, 1.5);
+
+            double prev_y = cy;
+            for (int px = 0; px < width; px++) {
+                int idx = (int)((float)px / (float)width * SQ_WAVETABLE_SIZE);
+                if (idx >= SQ_WAVETABLE_SIZE) idx = SQ_WAVETABLE_SIZE - 1;
+                float sample_a = bank->frames[frame_a][idx];
+                float sample_b = bank->frames[frame_b][idx];
+                float sample = sample_a + frac * (sample_b - sample_a);
+                double y = cy - sample * (height * 0.45);
+                if (px == 0) {
+                    cairo_move_to(cr, px, y);
+                } else {
+                    cairo_line_to(cr, px, y);
+                }
+                prev_y = y;
+            }
+            cairo_stroke(cr);
+            (void)prev_y;
+
+            /* Position indicator */
+            double pos_x = position * width;
+            cairo_set_source_rgba(cr, 1.0, 0.78, 0.31, 0.47);
+            cairo_set_line_width(cr, 1.0);
+            cairo_move_to(cr, pos_x, 0);
+            cairo_line_to(cr, pos_x, height);
+            cairo_stroke(cr);
+            return;
+        }
+    }
+
+    /* Fallback: draw a synthetic waveform that morphs with position */
+    cairo_set_source_rgba(cr, 0.47, 0.78, 0.71, 0.8);
+    cairo_set_line_width(cr, 1.5);
+
+    for (int px = 0; px < width; px++) {
+        double t = (double)px / (double)width;
+        double phase = t * 2.0 * M_PI;
+        /* Morph from sine -> saw-ish -> square-ish based on position */
+        double sample = sin(phase);
+        /* Add harmonics based on position to morph the waveform */
+        double harm_amt = position;
+        sample += harm_amt * 0.5 * sin(2.0 * phase);
+        sample += harm_amt * 0.33 * sin(3.0 * phase);
+        sample += harm_amt * 0.25 * sin(4.0 * phase);
+        sample += harm_amt * 0.2 * sin(5.0 * phase);
+        /* Normalize */
+        double max_amp = 1.0 + harm_amt * (0.5 + 0.33 + 0.25 + 0.2);
+        sample /= max_amp;
+
+        double y = cy - sample * (height * 0.42);
+        if (px == 0)
+            cairo_move_to(cr, px, y);
+        else
+            cairo_line_to(cr, px, y);
+    }
+    cairo_stroke(cr);
+
+    /* Position indicator */
+    double pos_x = position * width;
+    cairo_set_source_rgba(cr, 1.0, 0.78, 0.31, 0.47);
+    cairo_set_line_width(cr, 1.0);
+    cairo_move_to(cr, pos_x, 0);
+    cairo_line_to(cr, pos_x, height);
+    cairo_stroke(cr);
+}
+
+/* ─── FM algorithm diagram visualization ──────────────────────────────────── */
+
+static void fm_algo_draw(GtkDrawingArea *area, cairo_t *cr,
+                          int width, int height, gpointer user_data)
+{
+    (void)area; (void)user_data;
+    if (!s_fm_preset) return;
+
+    int algorithm = s_fm_preset->fm_algorithm;
+    if (algorithm < 0 || algorithm >= FM_NUM_ALGORITHMS) algorithm = 0;
+
+    /* Background */
+    cairo_set_source_rgb(cr, 0.14, 0.15, 0.18);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    float bw = 28, bh = 20;
+    float cx = width * 0.5f;
+    float cy = height * 0.5f;
+    float top_y = cy - 18;
+    float bot_y = cy + 12;
+
+    /* Operator positions per algorithm (matching ImGui layout) */
+    struct { float x, y; } ops[4];
+    switch (algorithm) {
+    case 0:
+        ops[3] = (typeof(ops[0])){cx - 54, top_y};
+        ops[2] = (typeof(ops[0])){cx - 18, top_y};
+        ops[1] = (typeof(ops[0])){cx + 18, top_y};
+        ops[0] = (typeof(ops[0])){cx + 54, bot_y};
+        break;
+    case 1:
+        ops[2] = (typeof(ops[0])){cx - 36, top_y};
+        ops[1] = (typeof(ops[0])){cx,      top_y};
+        ops[3] = (typeof(ops[0])){cx + 36, top_y};
+        ops[0] = (typeof(ops[0])){cx,      bot_y};
+        break;
+    case 2:
+        ops[1] = (typeof(ops[0])){cx - 30, top_y};
+        ops[0] = (typeof(ops[0])){cx - 30, bot_y};
+        ops[3] = (typeof(ops[0])){cx + 30, top_y};
+        ops[2] = (typeof(ops[0])){cx + 30, bot_y};
+        break;
+    case 3:
+        ops[3] = (typeof(ops[0])){cx - 36, top_y};
+        ops[2] = (typeof(ops[0])){cx,      top_y};
+        ops[1] = (typeof(ops[0])){cx + 36, bot_y};
+        ops[0] = (typeof(ops[0])){cx - 54, bot_y};
+        break;
+    case 4:
+        ops[1] = (typeof(ops[0])){cx - 18, top_y};
+        ops[0] = (typeof(ops[0])){cx - 18, bot_y};
+        ops[2] = (typeof(ops[0])){cx + 18, bot_y};
+        ops[3] = (typeof(ops[0])){cx + 54, bot_y};
+        break;
+    case 5:
+        ops[3] = (typeof(ops[0])){cx - 18, top_y};
+        ops[2] = (typeof(ops[0])){cx - 18, bot_y};
+        ops[1] = (typeof(ops[0])){cx + 18, bot_y};
+        ops[0] = (typeof(ops[0])){cx + 54, bot_y};
+        break;
+    case 6:
+        ops[0] = (typeof(ops[0])){cx - 54, bot_y};
+        ops[1] = (typeof(ops[0])){cx - 18, bot_y};
+        ops[2] = (typeof(ops[0])){cx + 18, bot_y};
+        ops[3] = (typeof(ops[0])){cx + 54, bot_y};
+        break;
+    case 7:
+        ops[3] = (typeof(ops[0])){cx,      top_y};
+        ops[1] = (typeof(ops[0])){cx - 24, bot_y};
+        ops[2] = (typeof(ops[0])){cx + 24, bot_y};
+        ops[0] = (typeof(ops[0])){cx - 60, bot_y};
+        break;
+    default:
+        for (int i = 0; i < 4; i++)
+            ops[i] = (typeof(ops[0])){cx - 54.0f + i * 36.0f, cy};
+        break;
+    }
+
+    /* Draw modulation arrows (green lines) */
+    cairo_set_source_rgba(cr, 0.4, 0.9, 0.3, 0.7);
+    cairo_set_line_width(cr, 1.5);
+    for (int op = 0; op < FM_NUM_OPERATORS; op++) {
+        for (int j = 0; j < FM_NUM_OPERATORS; j++) {
+            int src = fm_alg_vis[algorithm].mod_sources[op][j];
+            if (src < 0) break;
+            float sx = ops[src].x;
+            float sy = ops[src].y + bh / 2;
+            float dx = ops[op].x;
+            float dy = ops[op].y - bh / 2;
+            cairo_move_to(cr, sx, sy);
+            cairo_line_to(cr, dx, dy);
+            cairo_stroke(cr);
+
+            /* Arrowhead */
+            float ddx = dx - sx;
+            float ddy = dy - sy;
+            float len = sqrtf(ddx * ddx + ddy * ddy);
+            if (len > 0.01f) {
+                ddx /= len; ddy /= len;
+                float ax = dx - ddx * 5 - ddy * 3;
+                float ay = dy - ddy * 5 + ddx * 3;
+                float bx = dx - ddx * 5 + ddy * 3;
+                float by = dy - ddy * 5 - ddx * 3;
+                cairo_move_to(cr, dx, dy);
+                cairo_line_to(cr, ax, ay);
+                cairo_stroke(cr);
+                cairo_move_to(cr, dx, dy);
+                cairo_line_to(cr, bx, by);
+                cairo_stroke(cr);
+            }
+        }
+    }
+
+    /* Draw operator boxes */
+    for (int i = 0; i < 4; i++) {
+        float x = ops[i].x - bw / 2;
+        float y = ops[i].y - bh / 2;
+
+        if (fm_alg_vis[algorithm].is_carrier[i])
+            cairo_set_source_rgba(cr, 0.24, 0.55, 0.31, 0.8);  /* green = carrier */
+        else
+            cairo_set_source_rgba(cr, 0.31, 0.39, 0.63, 0.8);  /* blue = modulator */
+
+        /* Rounded rectangle */
+        double r = 3.0;
+        cairo_new_sub_path(cr);
+        cairo_arc(cr, x + bw - r, y + r,      r, -M_PI / 2, 0);
+        cairo_arc(cr, x + bw - r, y + bh - r, r, 0,          M_PI / 2);
+        cairo_arc(cr, x + r,      y + bh - r, r, M_PI / 2,   M_PI);
+        cairo_arc(cr, x + r,      y + r,      r, M_PI,        3 * M_PI / 2);
+        cairo_close_path(cr);
+        cairo_fill(cr);
+
+        /* Label */
+        cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.86);
+        cairo_set_font_size(cr, 11.0);
+        char label[4];
+        snprintf(label, sizeof(label), "%d", i + 1);
+        cairo_move_to(cr, ops[i].x - 3, ops[i].y + 4);
+        cairo_show_text(cr, label);
+    }
+
+    /* Algorithm label in top-left */
+    cairo_set_source_rgba(cr, 0.59, 0.59, 0.59, 0.7);
+    cairo_set_font_size(cr, 9.0);
+    char alg_label[16];
+    snprintf(alg_label, sizeof(alg_label), "Alg %d", algorithm + 1);
+    cairo_move_to(cr, 4, 11);
+    cairo_show_text(cr, alg_label);
 }
 
 /* ─── ADSR drag interaction ───────────────────────────────────────────────── */
@@ -497,6 +792,10 @@ static void rebuild_controls(void)
     s_filter_adsr_ptr = NULL;
     s_filter_curve_area = NULL;
     s_filter_preset = NULL;
+    s_fm_algo_area = NULL;
+    s_fm_preset = NULL;
+    s_wt_area = NULL;
+    s_wt_preset = NULL;
 
     int preset_idx = -1;
     sq_synth_preset_t *p = get_current_preset(&preset_idx);
@@ -700,9 +999,21 @@ static void rebuild_controls(void)
     /* ── Wavetable parameters ─────────────────────────────────────── */
     if (p->synth_mode == SYNTH_WAVETABLE) {
         add_section(s_content_box, "Wavetable");
-        gtk_box_append(GTK_BOX(s_content_box), make_slider("Pos", 0, 1, &p->wt_position));
-        gtk_box_append(GTK_BOX(s_content_box), make_slider("EnvDep", -1, 1, &p->wt_env_depth));
-        gtk_box_append(GTK_BOX(s_content_box), make_slider("LFODep", 0, 1, &p->wt_lfo_depth));
+
+        /* Waveform visualizer */
+        s_wt_preset = p;
+        s_wt_area = gtk_drawing_area_new();
+        gtk_widget_set_size_request(s_wt_area, -1, 60);
+        gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_wt_area),
+                                       wt_waveform_draw, NULL, NULL);
+        gtk_box_append(GTK_BOX(s_content_box), s_wt_area);
+
+        /* Knobs: Pos, EnvDep, LFODep */
+        GtkWidget *wt_knobs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(wt_knobs), make_knob("Pos", 0, 1, &p->wt_position));
+        gtk_box_append(GTK_BOX(wt_knobs), make_knob("EnvDep", -1, 1, &p->wt_env_depth));
+        gtk_box_append(GTK_BOX(wt_knobs), make_knob("LFODep", 0, 1, &p->wt_lfo_depth));
+        gtk_box_append(GTK_BOX(s_content_box), wt_knobs);
     }
 }
 
@@ -724,6 +1035,10 @@ void gtk_synth_editor_update(void)
         gtk_widget_queue_draw(s_filter_adsr_area);
     if (s_filter_curve_area && s_filter_preset)
         gtk_widget_queue_draw(s_filter_curve_area);
+
+    /* Redraw wavetable waveform */
+    if (s_wt_area && s_wt_preset)
+        gtk_widget_queue_draw(s_wt_area);
 }
 
 /* ─── Constructor ─────────────────────────────────────────────────────────── */
