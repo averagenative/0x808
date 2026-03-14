@@ -7,14 +7,20 @@
 
 #include "engine/engine.h"
 
-struct nk_context;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Draw the export dialog. Returns 1 if dialog wants to close. */
-int export_dialog_draw(struct nk_context *ctx, sq_engine_t *engine);
+/* Draw the export dialog (floating window). */
+void export_dialog_draw(sq_engine_t *engine);
 
 /* Show/hide the export dialog */
 void export_dialog_show(void);
 void export_dialog_hide(void);
 int  export_dialog_visible(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_EXPORT_DIALOG_H */

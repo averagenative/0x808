@@ -118,6 +118,60 @@ int main(void) {
     ASSERT(fabsf(buf[0] - first) < 1e-6f, "EFFECT_NONE should not modify signal");
     printf("  PASS: EFFECT_NONE is a no-op\n");
 
+    /* Test 7: Overdrive — should clip/saturate signal */
+    effect_init(&slot, EFFECT_OVERDRIVE, SAMPLE_RATE);
+    slot.overdrive.drive = 0.8f;
+    slot.overdrive.tone = 0.5f;
+    slot.overdrive.mix = 1.0f;
+    gen_sine(buf, NUM_FRAMES, 440.0f);
+    effect_process(&slot, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+    ASSERT(has_signal(buf, NUM_FRAMES), "Overdrive should produce output");
+    /* Overdrive soft-clips: output should be bounded */
+    float od_peak = 0;
+    for (uint32_t i = 0; i < NUM_FRAMES*2; i++) { float v = fabsf(buf[i]); if (v > od_peak) od_peak = v; }
+    ASSERT(od_peak <= 1.01f, "Overdrive output should be bounded near [-1,1]");
+    effect_free(&slot);
+    printf("  PASS: Overdrive produces bounded output\n");
+
+    /* Test 8: Fuzz — should hard-clip signal */
+    effect_init(&slot, EFFECT_FUZZ, SAMPLE_RATE);
+    slot.fuzz.gain = 0.8f;
+    slot.fuzz.tone = 0.5f;
+    slot.fuzz.mix = 1.0f;
+    gen_sine(buf, NUM_FRAMES, 440.0f);
+    effect_process(&slot, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+    ASSERT(has_signal(buf, NUM_FRAMES), "Fuzz should produce output");
+    float fz_peak = 0;
+    for (uint32_t i = 0; i < NUM_FRAMES*2; i++) { float v = fabsf(buf[i]); if (v > fz_peak) fz_peak = v; }
+    ASSERT(fz_peak <= 1.01f, "Fuzz output should be bounded near [-1,1]");
+    effect_free(&slot);
+    printf("  PASS: Fuzz produces bounded output\n");
+
+    /* Test 9: Chorus — should produce modulated signal */
+    effect_init(&slot, EFFECT_CHORUS, SAMPLE_RATE);
+    slot.chorus.rate = 2.0f;
+    slot.chorus.depth = 0.5f;
+    slot.chorus.mix = 0.5f;
+    gen_sine(buf, NUM_FRAMES, 440.0f);
+    effect_process(&slot, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+    ASSERT(has_signal(buf, NUM_FRAMES), "Chorus should produce output");
+    effect_free(&slot);
+    printf("  PASS: Chorus produces output\n");
+
+    /* Test 10: New effects in chain */
+    effect_init(&chain[0], EFFECT_OVERDRIVE, SAMPLE_RATE);
+    chain[0].overdrive.drive = 0.5f;
+    chain[0].overdrive.mix = 1.0f;
+    effect_init(&chain[1], EFFECT_CHORUS, SAMPLE_RATE);
+    chain[1].chorus.mix = 0.3f;
+    effect_init(&chain[2], EFFECT_REVERB, SAMPLE_RATE);
+    chain[2].reverb.wet = 0.2f;
+    gen_sine(buf, NUM_FRAMES, 440.0f);
+    effects_chain_process(chain, 3, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+    ASSERT(has_signal(buf, NUM_FRAMES), "Chain with new effects should produce output");
+    for (int i = 0; i < 3; i++) effect_free(&chain[i]);
+    printf("  PASS: Chain with overdrive+chorus+reverb works\n");
+
     free(buf);
     printf("\n=== ALL EFFECTS TESTS PASSED ===\n");
     return 0;

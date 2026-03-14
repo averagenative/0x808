@@ -10,15 +10,21 @@
 
 #include "engine/engine.h"
 
-struct nk_context;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Draw the preset selector dropdown and apply buttons.
  * Call from the main GUI toolbar area.
  */
-void pattern_presets_draw(struct nk_context *ctx, sq_engine_t *engine);
+void pattern_presets_draw(sq_engine_t *engine);
 
 /* Return pointer to the visibility flag (used by gui.c for keyboard toggle) */
 int *pattern_presets_visible_ptr(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_PATTERN_PRESETS_H */

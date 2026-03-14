@@ -1,7 +1,7 @@
 /*
  * plugin_gui.h — Embedded GUI for the DAW plugin.
  *
- * Creates an SDL2+OpenGL+Nuklear surface inside the host's native window.
+ * Creates an SDL2+OpenGL surface inside the host's native window.
  * Called from the CPLUG GUI callbacks in plugin.c.
  */
 
@@ -10,6 +10,10 @@
 
 #include "engine/engine.h"
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct sq_plugin_gui sq_plugin_gui_t;
 
@@ -33,5 +37,9 @@ void plugin_gui_get_size(sq_plugin_gui_t *gui, uint32_t *width, uint32_t *height
 
 /* Set the scale factor (for HiDPI). */
 void plugin_gui_set_scale(sq_plugin_gui_t *gui, float scale);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_PLUGIN_GUI_H */

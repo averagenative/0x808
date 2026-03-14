@@ -5,6 +5,10 @@
 #ifndef SQ_ENVELOPE_H
 #define SQ_ENVELOPE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /* Initialize an envelope to idle state */
@@ -28,5 +32,9 @@ float lfo_process(sq_lfo_t *lfo, uint32_t sample_rate,
 
 /* Initialize LFO phase */
 void lfo_init(sq_lfo_t *lfo);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_ENVELOPE_H */

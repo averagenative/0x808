@@ -8,6 +8,10 @@
 #ifndef SQ_MIXER_H
 #define SQ_MIXER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -22,5 +26,9 @@
  * num_frames: how many stereo frames to produce
  */
 void mixer_process(sq_engine_t *engine, float *output, uint32_t num_frames);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_MIXER_H */

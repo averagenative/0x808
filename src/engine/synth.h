@@ -5,6 +5,10 @@
 #ifndef SQ_SYNTH_H
 #define SQ_SYNTH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /* Generate wavetables at startup (saw, square, triangle, sine) */
@@ -33,5 +37,9 @@ void synth_release_all(sq_engine_t *engine);
 
 /* Render all active synth voices into the output buffer (additive) */
 void synth_render(sq_engine_t *engine, float *output, uint32_t num_frames);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_SYNTH_H */

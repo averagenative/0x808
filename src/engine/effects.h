@@ -7,6 +7,10 @@
 #ifndef SQ_EFFECTS_H
 #define SQ_EFFECTS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -17,6 +21,9 @@ typedef enum {
     EFFECT_FILTER,
     EFFECT_DELAY,
     EFFECT_REVERB,
+    EFFECT_OVERDRIVE,
+    EFFECT_FUZZ,
+    EFFECT_CHORUS,
     EFFECT_TYPE_COUNT
 } sq_effect_type_t;
 
@@ -87,6 +94,42 @@ typedef struct {
     bool initialized;
 } sq_efx_reverb_t;
 
+/* ─── Overdrive effect (soft-clipping saturation) ───────────────────────── */
+
+typedef struct {
+    float drive;            /* drive amount (0-1) */
+    float tone;             /* tone control (0-1), LP filter on output */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float tone_z1[2];       /* one-pole LP filter state [L,R] */
+} sq_efx_overdrive_t;
+
+/* ─── Fuzz effect (hard-clipping distortion) ────────────────────────────── */
+
+typedef struct {
+    float gain;             /* gain/distortion amount (0-1) */
+    float tone;             /* tone control (0-1), LP filter on output */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float tone_z1[2];       /* one-pole LP filter state [L,R] */
+} sq_efx_fuzz_t;
+
+/* ─── Chorus effect (modulated delay) ───────────────────────────────────── */
+
+#define CHORUS_MAX_SAMPLES 4096  /* ~93ms at 44100 Hz */
+
+typedef struct {
+    float rate;             /* LFO rate in Hz (0.1-10) */
+    float depth;            /* modulation depth (0-1) */
+    float mix;              /* wet/dry mix (0-1) */
+    /* State */
+    float *buffer;          /* heap-allocated stereo delay buffer */
+    int   write_pos;
+    int   buffer_size;
+    float lfo_phase;        /* 0-1 */
+    bool  allocated;
+} sq_efx_chorus_t;
+
 /* ─── Generic effect slot ────────────────────────────────────────────────── */
 
 #define MAX_TRACK_EFFECTS 3
@@ -95,9 +138,12 @@ typedef struct {
     sq_effect_type_t type;
     bool bypass;
     union {
-        sq_efx_filter_t filter;
-        sq_efx_delay_t  delay;
-        sq_efx_reverb_t reverb;
+        sq_efx_filter_t    filter;
+        sq_efx_delay_t     delay;
+        sq_efx_reverb_t    reverb;
+        sq_efx_overdrive_t overdrive;
+        sq_efx_fuzz_t      fuzz;
+        sq_efx_chorus_t    chorus;
     };
 } sq_effect_slot_t;
 
@@ -119,5 +165,9 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
 void effects_chain_process(sq_effect_slot_t *slots, int num_slots,
                            float *buffer, uint32_t num_frames,
                            uint32_t sample_rate, double bpm);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_EFFECTS_H */

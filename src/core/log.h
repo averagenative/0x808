@@ -16,6 +16,10 @@
 #ifndef SQ_LOG_H
 #define SQ_LOG_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <time.h>
 
@@ -94,5 +98,9 @@ static inline void sq_log_localtime(char *buf, size_t len) {
 #define LOG_INFO(fmt, ...)  SQ_LOG(SQ_LOG_INFO,  LOG_TAG, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...)  SQ_LOG(SQ_LOG_WARN,  LOG_TAG, fmt, ##__VA_ARGS__)
 #define LOG_ERROR(fmt, ...) SQ_LOG(SQ_LOG_ERROR, LOG_TAG, fmt, ##__VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_LOG_H */

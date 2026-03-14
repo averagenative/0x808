@@ -394,6 +394,20 @@ Goal: Make the app feel like a real instrument — better defaults, richer visua
 
 ---
 
+## Phase 14: Live Performance & Flexibility (P5 — Features)
+
+Goal: Support live performance workflows — variable pattern lengths, scene memory for instant recall, and expanded sequencing options.
+
+### 14A: Variable Pattern Length
+
+- [ ] TASK-210: Variable pattern length per track — support 8, 16, 32, 64 steps per track. Add length selector UI in drum grid track controls (dropdown or +/- buttons). Update grid rendering to handle different step counts. Default remains 16.
+
+### 14B: Scene Memory / Live Recall
+
+- [ ] TASK-211: Scene memory system — "MEMORY" button in toolbar opens a bank of 8-16 scene slots. Each slot stores the current pattern data + synth preset settings. Click to save current state, click to recall. For live DAW use — instant switching between prepared scenes.
+
+---
+
 ## Task Summary
 
 | Phase | Tasks | Delivers | Priority |

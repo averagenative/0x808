@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gdb": {
+      "type": "stdio",
+      "command": "/home/dmichael/projects/mcp-gdb-glib/run-gdb-mcp.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

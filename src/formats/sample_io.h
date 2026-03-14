@@ -8,6 +8,10 @@
 #ifndef SQ_SAMPLE_IO_H
 #define SQ_SAMPLE_IO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -25,5 +29,9 @@ int sample_io_load(const char *filepath, sq_sample_t *sample);
  * Does not free the sq_sample_t struct itself.
  */
 void sample_io_free(sq_sample_t *sample);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_SAMPLE_IO_H */

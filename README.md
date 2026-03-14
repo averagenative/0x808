@@ -1,6 +1,6 @@
 # 0x808
 
-**Drum machine & synth workstation written in C**
+**Drum machine & synth workstation — C engine, C++ GUI**
 
 ![0x808 screenshot](0x808_demo.png)
 
@@ -14,7 +14,7 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 - **SoundFont support** — load .sf2 files via TinySoundFont
 - **Sample browser** — load WAV/MP3/FLAC samples, 72 bundled CC0 drum samples
 - **Song arrangement** — pattern chaining with song/perform modes
-- **Effects** — per-track and master bus filter, delay, reverb
+- **Effects** — per-track and master bus filter, delay, reverb, overdrive, fuzz, chorus
 - **Export** — offline render to WAV (16/24/32-bit)
 - **Project save/load** — JSON-based .sqproj format
 - **Undo/redo** — Ctrl+Z / Ctrl+Shift+Z with 32 levels
@@ -51,17 +51,18 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 
 ### Requirements
 
-- C11 compiler (GCC, Clang, or MSVC)
+- C11 compiler (GCC, Clang, or MSVC) — engine and tests
+- C++17 compiler — GUI layer (Dear ImGui)
 - CMake 3.16+
 - SDL2 (for GUI targets)
 - OpenGL 3.3 (for GUI targets)
 
-All other dependencies are vendored single-header libraries in `deps/`.
+All other dependencies are vendored in `deps/`.
 
 ### Linux
 
 ```bash
-sudo apt install libsdl2-dev libgl-dev   # Debian/Ubuntu
+sudo apt install libsdl2-dev libgl-dev g++   # Debian/Ubuntu
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ```
@@ -85,6 +86,7 @@ cmake --build build --config Release
 ### Windows (MinGW cross-compile from Linux)
 
 ```bash
+sudo apt install gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
 cmake -B build_win -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake
 cmake --build build_win -j$(nproc)
 ```
@@ -93,7 +95,7 @@ cmake --build build_win -j$(nproc)
 
 | Target | Description |
 |--------|-------------|
-| `sequencer_gui` | Full GUI application (SDL2 + OpenGL + Nuklear) |
+| `sequencer_gui` | Full GUI application (SDL2 + OpenGL + Dear ImGui) |
 | `sequencer_standalone` | Terminal-only audio engine (miniaudio) |
 | `sequencer_vst3` | VST3 plugin |
 | `sequencer_clap` | CLAP plugin |
@@ -127,7 +129,7 @@ cmake --build build_win -j$(nproc)
 |  Layer 3: Host Wrapper                      |
 |  Standalone (miniaudio) | VST3 | CLAP      |
 +---------------------------------------------+
-|  Layer 2: GUI (Nuklear + SDL2 + OpenGL)     |
+|  Layer 2: GUI (Dear ImGui + SDL2 + OpenGL)  |
 |  Drum grid, piano roll, knobs, arrangement  |
 +---------------------------------------------+
 |  Layer 1: DSP Engine (pure C, zero deps)    |
@@ -162,7 +164,7 @@ The engine (Layer 1) has zero knowledge of GUI or audio drivers. It receives tra
 | Library | License | Purpose |
 |---------|---------|---------|
 | [miniaudio](https://miniaud.io/) | Public Domain | Cross-platform audio I/O |
-| [Nuklear](https://github.com/Immediate-Mode-UI/Nuklear) | Public Domain | Immediate-mode GUI |
+| [Dear ImGui](https://github.com/ocornut/imgui) | MIT | Immediate-mode GUI (C++) |
 | [dr_wav/dr_mp3/dr_flac](https://github.com/mackron/dr_libs) | Public Domain | Audio file decoding |
 | [TinySoundFont](https://github.com/schellingb/TinySoundFont) | MIT | SoundFont2 synthesis |
 | [cJSON](https://github.com/DaveGamble/cJSON) | MIT | JSON parsing for project files |

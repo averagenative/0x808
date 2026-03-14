@@ -5,6 +5,10 @@
 #ifndef SQ_SEQUENCER_H
 #define SQ_SEQUENCER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -23,5 +27,9 @@ void sequencer_tick(sq_engine_t *engine);
  * Called by engine.c when the transport crosses a step boundary.
  */
 void sequencer_trigger_step(sq_engine_t *engine, int step);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_SEQUENCER_H */

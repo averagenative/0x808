@@ -12,6 +12,10 @@
 #ifndef SQ_ENGINE_H
 #define SQ_ENGINE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 #include "engine/effects.h"
@@ -378,6 +382,9 @@ typedef struct {
 
     /* Lock-free command queue: GUI pushes, audio thread pops */
     sq_command_queue_t cmd_queue;
+
+    /* Base directory (where exe lives) for resolving output paths */
+    char base_dir[512];
 } sq_engine_t;
 
 /* ─── Engine API ──────────────────────────────────────────────────────────── */
@@ -422,5 +429,9 @@ void sq_engine_stop_recording(sq_engine_t *engine);
  * Returns 0 on success, -1 on failure.
  */
 int sq_engine_safe_load(sq_engine_t *engine, const char *filepath);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_ENGINE_H */

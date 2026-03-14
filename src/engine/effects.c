@@ -75,8 +75,6 @@ static void filter_process(sq_efx_filter_t *f, float *buf, uint32_t frames,
     for (uint32_t i = 0; i < frames; i++) {
         for (int ch = 0; ch < 2; ch++) {
             float in = buf[i * 2 + ch];
-            float out = f->b0 * in + f->b1 * f->z1[ch] + f->b2 * f->z2[ch]
-                       - f->a1 * f->z1[ch] - f->a2 * f->z2[ch];
 
             /* Transposed direct form II */
             float y = f->b0 * in + f->z1[ch];
@@ -196,6 +194,113 @@ static void reverb_process(sq_efx_reverb_t *r, float *buf, uint32_t frames)
     }
 }
 
+/* ─── Overdrive (soft-clipping saturation) ────────────────────────────────── */
+
+static void overdrive_process(sq_efx_overdrive_t *od, float *buf, uint32_t frames,
+                              uint32_t sample_rate)
+{
+    /* Drive maps to gain: 1x at 0, ~40x at 1 */
+    float gain = 1.0f + od->drive * 39.0f;
+    float mix = od->mix;
+
+    /* Tone filter: one-pole LP, cutoff from 800 Hz (tone=0) to 12000 Hz (tone=1) */
+    float fc = 800.0f + od->tone * 11200.0f;
+    float rc = 1.0f / (2.0f * (float)M_PI * fc / (float)sample_rate + 1.0f);
+
+    for (uint32_t i = 0; i < frames; i++) {
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch];
+            /* Apply gain */
+            float x = in * gain;
+            /* Soft clip using tanh approximation: x / (1 + |x|) */
+            float clipped = x / (1.0f + fabsf(x));
+            /* Tone filter (one-pole LP) */
+            od->tone_z1[ch] += rc * (clipped - od->tone_z1[ch]);
+            float wet_out = od->tone_z1[ch];
+            /* Mix */
+            buf[i * 2 + ch] = in * (1.0f - mix) + wet_out * mix;
+        }
+    }
+}
+
+/* ─── Fuzz (hard-clipping distortion) ─────────────────────────────────────── */
+
+static void fuzz_process(sq_efx_fuzz_t *fz, float *buf, uint32_t frames,
+                         uint32_t sample_rate)
+{
+    /* Gain maps to boost: 1x at 0, ~100x at 1 */
+    float gain = 1.0f + fz->gain * 99.0f;
+    float mix = fz->mix;
+
+    /* Tone filter: one-pole LP */
+    float fc = 600.0f + fz->tone * 9400.0f;
+    float rc = 1.0f / (2.0f * (float)M_PI * fc / (float)sample_rate + 1.0f);
+
+    for (uint32_t i = 0; i < frames; i++) {
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch];
+            float x = in * gain;
+            /* Hard clip to [-1, 1] */
+            float clipped = x;
+            if (clipped > 1.0f) clipped = 1.0f;
+            else if (clipped < -1.0f) clipped = -1.0f;
+            /* Tone filter */
+            fz->tone_z1[ch] += rc * (clipped - fz->tone_z1[ch]);
+            float wet_out = fz->tone_z1[ch];
+            buf[i * 2 + ch] = in * (1.0f - mix) + wet_out * mix;
+        }
+    }
+}
+
+/* ─── Chorus (modulated delay) ────────────────────────────────────────────── */
+
+static void chorus_process(sq_efx_chorus_t *ch_fx, float *buf, uint32_t frames,
+                           uint32_t sample_rate)
+{
+    if (!ch_fx->allocated) return;
+
+    float mix = ch_fx->mix;
+    float depth = ch_fx->depth;
+    float rate = ch_fx->rate;
+    /* Base delay ~7ms, modulation range ~7ms */
+    float base_delay = 0.007f * (float)sample_rate;
+    float mod_range = 0.007f * (float)sample_rate * depth;
+    float phase_inc = rate / (float)sample_rate;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        /* LFO (sine) */
+        float lfo = sinf(ch_fx->lfo_phase * 2.0f * (float)M_PI);
+        ch_fx->lfo_phase += phase_inc;
+        if (ch_fx->lfo_phase >= 1.0f) ch_fx->lfo_phase -= 1.0f;
+
+        float delay_samples = base_delay + lfo * mod_range;
+        if (delay_samples < 1.0f) delay_samples = 1.0f;
+        if (delay_samples >= (float)(ch_fx->buffer_size - 1))
+            delay_samples = (float)(ch_fx->buffer_size - 2);
+
+        for (int c = 0; c < 2; c++) {
+            float in = buf[i * 2 + c];
+
+            /* Write to circular buffer */
+            ch_fx->buffer[ch_fx->write_pos * 2 + c] = in;
+
+            /* Read with linear interpolation */
+            float read_f = (float)ch_fx->write_pos - delay_samples;
+            if (read_f < 0.0f) read_f += (float)ch_fx->buffer_size;
+            int read_i = (int)read_f;
+            float frac = read_f - (float)read_i;
+            int r0 = read_i % ch_fx->buffer_size;
+            int r1 = (read_i + 1) % ch_fx->buffer_size;
+            float delayed = ch_fx->buffer[r0 * 2 + c] * (1.0f - frac)
+                          + ch_fx->buffer[r1 * 2 + c] * frac;
+
+            buf[i * 2 + c] = in * (1.0f - mix) + delayed * mix;
+        }
+
+        ch_fx->write_pos = (ch_fx->write_pos + 1) % ch_fx->buffer_size;
+    }
+}
+
 /* ─── Public API ─────────────────────────────────────────────────────────── */
 
 void effect_free(sq_effect_slot_t *slot)
@@ -221,6 +326,15 @@ void effect_free(sq_effect_slot_t *slot)
         }
         slot->reverb.initialized = false;
         break;
+    case EFFECT_CHORUS:
+        if (slot->chorus.buffer) {
+            free(slot->chorus.buffer);
+            slot->chorus.buffer = NULL;
+        }
+        slot->chorus.allocated = false;
+        break;
+    case EFFECT_OVERDRIVE:
+    case EFFECT_FUZZ:
     default:
         break;
     }
@@ -277,6 +391,24 @@ void effect_init(sq_effect_slot_t *slot, sq_effect_type_t type, uint32_t sample_
             slot->reverb.initialized = false;
         }
         break;
+    case EFFECT_OVERDRIVE:
+        slot->overdrive.drive = 0.3f;
+        slot->overdrive.tone = 0.5f;
+        slot->overdrive.mix = 1.0f;
+        break;
+    case EFFECT_FUZZ:
+        slot->fuzz.gain = 0.4f;
+        slot->fuzz.tone = 0.5f;
+        slot->fuzz.mix = 1.0f;
+        break;
+    case EFFECT_CHORUS:
+        slot->chorus.rate = 1.0f;
+        slot->chorus.depth = 0.5f;
+        slot->chorus.mix = 0.5f;
+        slot->chorus.buffer_size = CHORUS_MAX_SAMPLES;
+        slot->chorus.buffer = calloc(CHORUS_MAX_SAMPLES * 2, sizeof(float));
+        slot->chorus.allocated = (slot->chorus.buffer != NULL);
+        break;
     default:
         break;
     }
@@ -296,6 +428,15 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
         break;
     case EFFECT_REVERB:
         reverb_process(&slot->reverb, buffer, num_frames);
+        break;
+    case EFFECT_OVERDRIVE:
+        overdrive_process(&slot->overdrive, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_FUZZ:
+        fuzz_process(&slot->fuzz, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_CHORUS:
+        chorus_process(&slot->chorus, buffer, num_frames, sample_rate);
         break;
     default:
         break;

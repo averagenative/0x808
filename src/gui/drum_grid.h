@@ -11,14 +11,11 @@
 
 #include "engine/engine.h"
 
-/* Forward declare Nuklear context to avoid including the full header */
-struct nk_context;
-
 /*
  * Draw the drum grid at the specified position and size.
  * Handles all interaction (clicking cells, adjusting track controls).
  */
-void drum_grid_draw(struct nk_context *ctx, sq_engine_t *engine,
+void drum_grid_draw(sq_engine_t *engine,
                     float x, float y, float w, float h);
 
 #endif /* SQ_DRUM_GRID_H */

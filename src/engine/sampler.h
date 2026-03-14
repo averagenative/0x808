@@ -9,6 +9,10 @@
 #ifndef SQ_SAMPLER_H
 #define SQ_SAMPLER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -35,5 +39,9 @@ void sampler_trigger(sq_engine_t *engine, int sample_index,
  * num_frames: how many stereo frames to render
  */
 void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_SAMPLER_H */

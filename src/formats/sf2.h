@@ -5,6 +5,10 @@
 #ifndef SQ_SF2_H
 #define SQ_SF2_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -37,5 +41,9 @@ void sf2_note_off(sq_engine_t *engine, int preset_idx, int key);
  *   num_frames: number of stereo frames to render
  */
 void sf2_render(sq_engine_t *engine, float *output, uint32_t num_frames);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_SF2_H */

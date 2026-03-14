@@ -8,6 +8,10 @@
 #ifndef SQ_PROJECT_H
 #define SQ_PROJECT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -23,5 +27,9 @@ int project_save(const sq_engine_t *engine, const char *filepath);
  * Returns 0 on success, -1 on failure.
  */
 int project_load(sq_engine_t *engine, const char *filepath);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_PROJECT_H */

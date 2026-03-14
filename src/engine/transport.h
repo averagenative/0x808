@@ -8,6 +8,10 @@
 #ifndef SQ_TRANSPORT_H
 #define SQ_TRANSPORT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 
 /*
@@ -24,5 +28,9 @@ void transport_init(sq_transport_t *transport);
  */
 int transport_advance(sq_transport_t *transport, uint32_t sample_rate,
                       uint32_t num_frames, uint32_t pattern_length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_TRANSPORT_H */

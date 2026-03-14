@@ -18,18 +18,51 @@
 #include "engine/sampler.h"
 #include "formats/sample_io.h"
 #include "gui/gui.h"
+#include "gui/theme.h"
 
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <signal.h>
 #include <stdatomic.h>
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <unistd.h>
 #endif
+
+/* ─── Crash handler — logs signal and flushes before dying ─────────────────── */
+
+static void crash_handler(int sig)
+{
+    const char *name = "UNKNOWN";
+    switch (sig) {
+    case SIGSEGV: name = "SIGSEGV (segmentation fault)"; break;
+    case SIGABRT: name = "SIGABRT (abort)"; break;
+    case SIGFPE:  name = "SIGFPE (floating point exception)"; break;
+#ifndef _WIN32
+    case SIGBUS:  name = "SIGBUS (bus error)"; break;
+#endif
+    }
+    fprintf(stderr, "\n*** CRASH: signal %d (%s) ***\n", sig, name);
+#ifdef _WIN32
+    /* Walk the stack using CaptureStackBackTrace (no extra deps needed) */
+    {
+        void *frames[32];
+        USHORT n = CaptureStackBackTrace(0, 32, frames, NULL);
+        fprintf(stderr, "Stack frames (%d):\n", (int)n);
+        for (USHORT i = 0; i < n; i++)
+            fprintf(stderr, "  [%d] %p\n", i, frames[i]);
+    }
+#endif
+    fflush(stderr);
+    fflush(stdout);
+    /* Re-raise to get default behavior (core dump / WER report) */
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
 
 /* ─── Global engine state ─────────────────────────────────────────────────── */
 
@@ -237,6 +270,14 @@ int main(int argc, char *argv[])
     freopen("0x808_log.txt", "w", stderr);
 #endif
 
+    /* Install crash handlers so we get stack info in the log */
+    signal(SIGSEGV, crash_handler);
+    signal(SIGABRT, crash_handler);
+    signal(SIGFPE,  crash_handler);
+#ifndef _WIN32
+    signal(SIGBUS, crash_handler);
+#endif
+
     sq_log_init();
 
     LOG_INFO("0x808 v0.9");
@@ -275,6 +316,7 @@ int main(int argc, char *argv[])
         }
 #endif
         LOG_INFO("Base directory: %s", base_dir[0] ? base_dir : "(CWD)");
+        snprintf(g_engine.base_dir, sizeof(g_engine.base_dir), "%s", base_dir);
     }
 
     /* Load samples */
@@ -334,6 +376,13 @@ int main(int argc, char *argv[])
         LOG_ERROR("Failed to initialize GUI");
         sq_engine_shutdown(&g_engine);
         return 1;
+    }
+
+    /* Scan for user JSON themes in {base_dir}/themes/ */
+    {
+        char themes_dir[600];
+        snprintf(themes_dir, sizeof(themes_dir), "%sthemes", base_dir);
+        theme_scan_user_themes(themes_dir);
     }
 
     /* Open SDL2 audio device in queue mode (no callback) */

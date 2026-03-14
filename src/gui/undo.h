@@ -10,6 +10,10 @@
 
 #include "engine/engine.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Max undo levels (circular buffer) */
 #define UNDO_MAX_LEVELS 32
 
@@ -36,5 +40,9 @@ bool undo_redo(sq_engine_t *engine);
  * Clear all undo/redo history (e.g., when loading a new project).
  */
 void undo_clear(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_UNDO_H */

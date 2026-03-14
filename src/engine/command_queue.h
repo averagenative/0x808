@@ -12,7 +12,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+
+#ifndef __cplusplus
 #include <stdatomic.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define CMD_QUEUE_SIZE 256  /* must be power of 2 */
 
@@ -62,8 +70,13 @@ typedef struct {
 
 typedef struct {
     sq_command_t commands[CMD_QUEUE_SIZE];
+#ifdef __cplusplus
+    volatile unsigned int write_idx;   /* GUI thread writes here */
+    volatile unsigned int read_idx;    /* audio thread reads here */
+#else
     atomic_uint  write_idx;   /* GUI thread writes here */
     atomic_uint  read_idx;    /* audio thread reads here */
+#endif
 } sq_command_queue_t;
 
 /* Initialize queue (call once at startup) */
@@ -77,24 +90,44 @@ bool cmd_queue_pop(sq_command_queue_t *q, sq_command_t *cmd);
 
 /* Convenience push helpers */
 static inline void cmd_play(sq_command_queue_t *q) {
-    sq_command_t c = { .type = CMD_PLAY };
+    sq_command_t c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_PLAY;
     cmd_queue_push(q, &c);
 }
 static inline void cmd_stop(sq_command_queue_t *q) {
-    sq_command_t c = { .type = CMD_STOP };
+    sq_command_t c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_STOP;
     cmd_queue_push(q, &c);
 }
 static inline void cmd_set_bpm(sq_command_queue_t *q, double bpm) {
-    sq_command_t c = { .type = CMD_SET_BPM, .f64_val = bpm };
+    sq_command_t c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_SET_BPM;
+    c.f64_val = bpm;
     cmd_queue_push(q, &c);
 }
 static inline void cmd_set_volume(sq_command_queue_t *q, float vol) {
-    sq_command_t c = { .type = CMD_SET_VOLUME, .f32_val = vol };
+    sq_command_t c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_SET_VOLUME;
+    c.f32_val = vol;
     cmd_queue_push(q, &c);
 }
 static inline void cmd_set_step(sq_command_queue_t *q, uint16_t track, uint16_t step, uint8_t vel, int8_t pitch) {
-    sq_command_t c = { .type = CMD_SET_STEP, .step = { track, step, vel, pitch } };
+    sq_command_t c;
+    memset(&c, 0, sizeof(c));
+    c.type = CMD_SET_STEP;
+    c.step.track = track;
+    c.step.step = step;
+    c.step.velocity = vel;
+    c.step.pitch = pitch;
     cmd_queue_push(q, &c);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_COMMAND_QUEUE_H */

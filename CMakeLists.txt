@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(0x808 VERSION 0.1.0 LANGUAGES C)
+project(0x808 VERSION 0.1.0 LANGUAGES C CXX)
 
 # Use C11 standard (future-proofs for stdatomic.h, static_assert, etc.)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# C++ for GUI layer (Dear ImGui)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Compiler warnings — disable pedantic for vendored headers using extensions
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -128,42 +132,79 @@ endif()
 if(SDL2_FOUND AND OpenGL_FOUND)
     message(STATUS "SDL2 and OpenGL found — building GUI target")
 
+    # ── Dear ImGui library (C++) ──────────────────────────────────
+    add_library(imgui STATIC
+        deps/imgui/imgui.cpp
+        deps/imgui/imgui_draw.cpp
+        deps/imgui/imgui_tables.cpp
+        deps/imgui/imgui_widgets.cpp
+        deps/imgui/imgui_demo.cpp
+        deps/imgui/backends/imgui_impl_sdl2.cpp
+        deps/imgui/backends/imgui_impl_opengl3.cpp
+    )
+    target_include_directories(imgui PUBLIC
+        ${CMAKE_SOURCE_DIR}/deps/imgui
+        ${CMAKE_SOURCE_DIR}/deps/imgui/backends
+        ${SDL2_INCLUDE_DIRS}
+    )
+    set_target_properties(imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(imgui PRIVATE -w)  # Suppress warnings in vendored code
+    endif()
+
+    # ── GUI component library (shared between standalone and plugin) ──
+    add_library(sq_gui STATIC
+        src/gui/gui_globals.cpp
+        src/gui/drum_grid.cpp
+        src/gui/knobs.cpp
+        src/gui/synth_editor.cpp
+        src/gui/sample_browser.cpp
+        src/gui/export_dialog.cpp
+        src/gui/piano_roll.cpp
+        src/gui/arrangement.cpp
+        src/gui/mixer_view.cpp
+        src/gui/undo.c
+        src/gui/pattern_presets.cpp
+        src/gui/virtual_keyboard.cpp
+        src/gui/theme.cpp
+    )
+    target_include_directories(sq_gui PUBLIC
+        ${CMAKE_SOURCE_DIR}/src
+        ${SDL2_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/deps/imgui
+        ${CMAKE_SOURCE_DIR}/deps/imgui/backends
+        ${CMAKE_SOURCE_DIR}/resources
+    )
+    target_link_libraries(sq_gui PUBLIC sq_engine imgui)
+    set_target_properties(sq_gui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
     add_executable(sequencer_gui
         src/standalone/main_gui.c
-        src/gui/gui.c
-        src/gui/drum_grid.c
-        src/gui/knobs.c
-        src/gui/synth_editor.c
-        src/gui/sample_browser.c
-        src/gui/export_dialog.c
-        src/gui/piano_roll.c
-        src/gui/arrangement.c
-        src/gui/mixer_view.c
-        src/gui/undo.c
-        src/gui/pattern_presets.c
-        src/gui/virtual_keyboard.c
-        src/gui/theme.c
+        src/gui/gui.cpp
     )
     target_include_directories(sequencer_gui PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${SDL2_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/deps/imgui
+        ${CMAKE_SOURCE_DIR}/deps/imgui/backends
     )
     if(MSVC)
         target_link_libraries(sequencer_gui PRIVATE
-            sq_engine
+            sq_gui
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
         )
     elseif(MINGW)
         target_link_libraries(sequencer_gui PRIVATE
-            sq_engine
+            sq_gui
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
+            comdlg32
         )
-        target_link_options(sequencer_gui PRIVATE -static)
+        target_link_options(sequencer_gui PRIVATE -static -static-libgcc -static-libstdc++)
     else()
         target_link_libraries(sequencer_gui PRIVATE
-            sq_engine
+            sq_gui
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
             m
@@ -205,21 +246,7 @@ if(BUILD_PLUGINS)
     # Plugin sources: always include plugin.c + embedded samples, conditionally include GUI
     set(PLUGIN_SOURCES src/plugin/plugin.c src/plugin/embedded_samples.c)
     if(PLUGIN_HAS_GUI)
-        list(APPEND PLUGIN_SOURCES
-            src/plugin/plugin_gui.c
-            src/gui/drum_grid.c
-            src/gui/knobs.c
-            src/gui/synth_editor.c
-            src/gui/sample_browser.c
-            src/gui/export_dialog.c
-            src/gui/piano_roll.c
-            src/gui/arrangement.c
-            src/gui/mixer_view.c
-            src/gui/undo.c
-            src/gui/pattern_presets.c
-            src/gui/virtual_keyboard.c
-            src/gui/theme.c
-        )
+        list(APPEND PLUGIN_SOURCES src/plugin/plugin_gui.cpp)
     endif()
     set(PLUGIN_CONFIG ${CMAKE_SOURCE_DIR}/src/plugin/config.h)
 
@@ -233,8 +260,12 @@ if(BUILD_PLUGINS)
         target_link_libraries(${target_name} PRIVATE sq_engine)
 
         if(PLUGIN_HAS_GUI)
-            target_include_directories(${target_name} PRIVATE ${SDL2_INCLUDE_DIRS})
-            target_link_libraries(${target_name} PRIVATE ${SDL2_LIBRARIES} ${SQ_OPENGL_LIB})
+            target_include_directories(${target_name} PRIVATE
+                ${SDL2_INCLUDE_DIRS}
+                ${CMAKE_SOURCE_DIR}/deps/imgui
+                ${CMAKE_SOURCE_DIR}/deps/imgui/backends
+            )
+            target_link_libraries(${target_name} PRIVATE sq_gui ${SDL2_LIBRARIES} ${SQ_OPENGL_LIB})
         else()
             target_compile_definitions(${target_name} PRIVATE SQ_PLUGIN_NO_GUI=1)
         endif()
@@ -255,7 +286,7 @@ if(BUILD_PLUGINS)
         set_target_properties(${target_name} PROPERTIES POSITION_INDEPENDENT_CODE ON)
         # Static-link all mingw runtimes into the DLL
         if(MINGW)
-            target_link_options(${target_name} PRIVATE -static)
+            target_link_options(${target_name} PRIVATE -static -static-libgcc -static-libstdc++)
         endif()
     endfunction()
 

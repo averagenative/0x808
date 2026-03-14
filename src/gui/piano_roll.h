@@ -10,13 +10,11 @@
 
 #include "engine/engine.h"
 
-struct nk_context;
-
 /*
  * Draw the piano roll for a specific track.
  * x,y,w,h define the drawing area.
  */
-void piano_roll_draw(struct nk_context *ctx, sq_engine_t *engine,
+void piano_roll_draw(sq_engine_t *engine,
                      int track_index,
                      float x, float y, float w, float h);
 

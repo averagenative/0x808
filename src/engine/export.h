@@ -8,6 +8,10 @@
 #ifndef SQ_EXPORT_H
 #define SQ_EXPORT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "engine/engine.h"
 #include <stdint.h>
 
@@ -54,5 +58,9 @@ int sq_export_write_wav(const char *filepath, const sq_export_result_t *result,
  */
 int sq_export_write_mp3(const char *filepath, const sq_export_result_t *result,
                         int bitrate);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_EXPORT_H */

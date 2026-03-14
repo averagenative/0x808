@@ -10,11 +10,16 @@
 
 #include "engine/engine.h"
 
-struct nk_context;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Draw the arrangement panel at the given position.
- * Returns 1 if a pattern change was triggered. */
-int arrangement_draw(struct nk_context *ctx, sq_engine_t *engine,
-                     float x, float y, float w, float h);
+/* Draw the arrangement panel at the given position. */
+void arrangement_draw(sq_engine_t *engine,
+                      float x, float y, float w, float h);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SQ_ARRANGEMENT_H */
