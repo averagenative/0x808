@@ -408,6 +408,36 @@ Goal: Support live performance workflows — variable pattern lengths, scene mem
 
 ---
 
+## Phase 15: Release & Distribution (P2 — Ship It)
+
+Goal: Package standalone exe, VST3, and CLAP for distribution. Code signing, installer, GitHub Releases CI.
+
+### 15A: Build Artifacts
+
+- [ ] TASK-212: CMake install target — `cmake --install` copies exe + samples/ + README + LICENSE into a clean staging folder. Separate install components for standalone vs plugin.
+- [ ] TASK-213: Windows zip package script — post-build script that creates `0x808-v{VERSION}-win64.zip` containing the standalone exe, samples/, presets/, themes/, README. No installer needed for portable app.
+- [ ] TASK-214: VST3 bundle packaging — build `0x808.vst3` bundle with correct directory structure (`Contents/x86_64-win/0x808.vst3`), embed or co-locate samples. Test loading in Reaper/Bitwig.
+- [ ] TASK-215: CLAP plugin packaging — build `0x808.clap` with bundled resources, test loading in Reaper/Bitwig.
+
+### 15B: Code Signing
+
+- [ ] TASK-216: Research Windows code signing — determine cheapest/free options: self-signed (SmartScreen warning), OV certificate (~$200/yr from Certum/Sectigo), or Azure Trusted Signing. Document the tradeoffs.
+- [ ] TASK-217: Sign Windows exe and plugins — integrate `signtool.exe` or `osslsigncode` into build/release pipeline. Sign standalone exe, VST3 .dll, CLAP .dll. Timestamped signatures.
+- [ ] TASK-218: macOS code signing + notarization (future) — Apple Developer ID ($99/yr), `codesign` + `xcrun notarytool`. Required for Gatekeeper. Deferred until macOS build is tested.
+
+### 15C: GitHub Releases CI
+
+- [ ] TASK-219: GitHub Actions release workflow — on git tag push (v*), build Windows standalone + VST3 + CLAP, create GitHub Release with attached zips. Matrix build for Debug/Release.
+- [ ] TASK-220: Version stamping — embed version string from git tag into exe (via CMake configure_file or resource file). Show in title bar and About dialog.
+- [ ] TASK-221: Release checklist — document manual steps: bump version, tag, push, verify CI artifacts, test downloaded zip on clean Windows machine, update README download link.
+
+### 15D: Installer (Optional)
+
+- [ ] TASK-222: Research installer options — NSIS (free, scriptable), WiX (MSI, free), Inno Setup (free). Determine if a portable zip is sufficient or if users expect an installer with Start Menu shortcuts and uninstaller.
+- [ ] TASK-223: Create installer script (if needed) — NSIS or Inno Setup script that installs exe + samples + VST3 to standard paths (`Program Files` for exe, `Common Files/VST3` for plugin), creates Start Menu entry, registers uninstaller.
+
+---
+
 ## Task Summary
 
 | Phase | Tasks | Delivers | Priority |
@@ -425,7 +455,9 @@ Goal: Support live performance workflows — variable pattern lengths, scene mem
 | 11. GUI Polish & Standalone | TASK-124 → 151 | Cross-platform parity, tests | P4 |
 | 12. Security & Robustness | TASK-152 → 183 | Thread safety, vuln fixes, fuzzing | P4 |
 | 13. UX Polish & Visual Design | TASK-184 → 209 | Knobs, visuals, packaging, UX | P5 |
+| 14. Live Performance | TASK-210 → 211 | Variable length, scene memory | P5 |
+| 15. Release & Distribution | TASK-212 → 223 | Signed builds, CI releases, installer | P2 |
 
-**Total: 209 tasks across 13 phases**
+**Total: 223 tasks across 15 phases**
 
-Each phase ends with a milestone test that proves the new capability works end-to-end. Phases 1-3 (P0) deliver the MVP. Phases 4-5 (P1) make it a real production tool. Phases 6-7 (P2) enable full songs. Phases 8-10 (P3) expand reach and polish. Phase 11 (P4) ensures cross-platform GUI parity. Phase 12 (P4) hardens the codebase. Phase 13 (P5) makes it feel like a real instrument.
+Each phase ends with a milestone test that proves the new capability works end-to-end. Phases 1-3 (P0) deliver the MVP. Phases 4-5 (P1) make it a real production tool. Phases 6-7 (P2) enable full songs and shipping. Phases 8-10 (P3) expand reach and polish. Phase 11 (P4) ensures cross-platform GUI parity. Phase 12 (P4) hardens the codebase. Phase 13 (P5) makes it feel like a real instrument. Phase 15 (P2) ships the product.
