@@ -14,6 +14,10 @@
  * | Loaded Samples                                    |
  * | 0: kick_01        1: snare_tight                  |
  * +--------------------------------------------------+
+ * | Preview: kick_01                                  |
+ * | [~~~~~~~~waveform~~~~~~~~]                        |
+ * | 1.23s  |  44100 Hz  |  mono                      |
+ * +--------------------------------------------------+
  */
 
 #include "gtk_gui.h"
@@ -41,11 +45,17 @@ static browser_entry_t s_entries[MAX_DIR_ENTRIES];
 static int s_num_entries = 0;
 static int s_needs_refresh = 1;
 
+/* --- Waveform preview state --- */
+static int s_preview_sample_idx = -1;  /* index into engine->samples[] */
+
 /* --- Widgets that need updating --- */
-static GtkWidget *s_path_label   = NULL;
-static GtkWidget *s_file_list    = NULL;
-static GtkWidget *s_loaded_list  = NULL;
-static GtkWidget *s_count_label  = NULL;
+static GtkWidget *s_path_label       = NULL;
+static GtkWidget *s_file_list        = NULL;
+static GtkWidget *s_loaded_list      = NULL;
+static GtkWidget *s_count_label      = NULL;
+static GtkWidget *s_waveform_area    = NULL;
+static GtkWidget *s_waveform_name    = NULL;
+static GtkWidget *s_waveform_info    = NULL;
 
 /* --- Helpers --- */
 
@@ -238,6 +248,109 @@ static void rebuild_file_list(void)
     update_path_label();
 }
 
+/* --- Waveform drawing --- */
+
+static void waveform_draw_cb(GtkDrawingArea *area, cairo_t *cr,
+                             int width, int height, gpointer user_data)
+{
+    (void)area; (void)user_data;
+
+    /* Dark background */
+    cairo_set_source_rgb(cr, 0.10, 0.10, 0.12);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    sq_engine_t *engine = g_gtk.engine;
+    if (s_preview_sample_idx < 0 ||
+        (uint32_t)s_preview_sample_idx >= engine->num_samples) {
+        /* No sample selected — draw placeholder text */
+        cairo_set_source_rgb(cr, 0.35, 0.35, 0.40);
+        cairo_select_font_face(cr, "monospace",
+                               CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_set_font_size(cr, 11.0);
+        cairo_move_to(cr, 8, height / 2.0 + 4);
+        cairo_show_text(cr, "Select a loaded sample to preview");
+        return;
+    }
+
+    sq_sample_t *smp = &engine->samples[s_preview_sample_idx];
+    if (!smp->data || smp->num_frames == 0) return;
+
+    float *sdata   = smp->data;
+    uint32_t nframes = smp->num_frames;
+    uint32_t nch     = smp->num_channels;
+
+    /* Center line (dim) */
+    double cy = height * 0.5;
+    cairo_set_source_rgb(cr, 0.24, 0.24, 0.26);
+    cairo_set_line_width(cr, 1.0);
+    cairo_move_to(cr, 0, cy);
+    cairo_line_to(cr, width, cy);
+    cairo_stroke(cr);
+
+    /* Draw waveform: min/max vertical lines per pixel (blue/cyan) */
+    cairo_set_source_rgba(cr, 0.31, 0.71, 0.86, 0.85);
+    cairo_set_line_width(cr, 1.0);
+
+    int pw = width;
+    if (pw <= 0) return;
+
+    for (int px = 0; px < pw; px++) {
+        uint32_t start = (uint32_t)((uint64_t)px * nframes / (uint32_t)pw);
+        uint32_t end   = (uint32_t)((uint64_t)(px + 1) * nframes / (uint32_t)pw);
+        if (end > nframes) end = nframes;
+
+        float mn = 0.0f, mx = 0.0f;
+        for (uint32_t f = start; f < end; f++) {
+            float v = sdata[f * nch]; /* left channel */
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+        }
+
+        double half_h = height * 0.5;
+        double y0 = cy - mx * half_h;
+        double y1 = cy - mn * half_h;
+        if (y1 - y0 < 1.0) y1 = y0 + 1.0;
+
+        cairo_move_to(cr, px + 0.5, y0);
+        cairo_line_to(cr, px + 0.5, y1);
+    }
+    cairo_stroke(cr);
+}
+
+static void update_waveform_labels(void)
+{
+    sq_engine_t *engine = g_gtk.engine;
+
+    if (s_preview_sample_idx < 0 ||
+        (uint32_t)s_preview_sample_idx >= engine->num_samples) {
+        if (s_waveform_name)
+            gtk_label_set_text(GTK_LABEL(s_waveform_name), "Waveform Preview");
+        if (s_waveform_info)
+            gtk_label_set_text(GTK_LABEL(s_waveform_info), "");
+        return;
+    }
+
+    sq_sample_t *smp = &engine->samples[s_preview_sample_idx];
+
+    if (s_waveform_name) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Preview: %s", smp->name);
+        gtk_label_set_text(GTK_LABEL(s_waveform_name), buf);
+    }
+
+    if (s_waveform_info) {
+        char buf[128];
+        float duration = (smp->sample_rate > 0)
+            ? (float)smp->num_frames / (float)smp->sample_rate
+            : 0.0f;
+        snprintf(buf, sizeof(buf), "%.2fs  |  %u Hz  |  %s",
+                 duration, smp->sample_rate,
+                 smp->num_channels == 1 ? "mono" : "stereo");
+        gtk_label_set_text(GTK_LABEL(s_waveform_info), buf);
+    }
+}
+
 /* --- Callbacks --- */
 
 static void on_file_activated(GtkListBox *list, GtkListBoxRow *row,
@@ -317,10 +430,20 @@ static void on_loaded_sample_selected(GtkListBox *list, GtkListBoxRow *row,
     if (!row) return;
 
     int idx = gtk_list_box_row_get_index(row);
+    sq_engine_t *engine = g_gtk.engine;
+
+    /* Update waveform preview */
+    if (idx >= 0 && (uint32_t)idx < engine->num_samples) {
+        s_preview_sample_idx = idx;
+        update_waveform_labels();
+        if (s_waveform_area)
+            gtk_widget_queue_draw(s_waveform_area);
+    }
+
+    /* Assign to selected track if it's a sampler track */
     int sel = g_gtk.app.selected_track;
     if (sel < 0) return;
 
-    sq_engine_t *engine = g_gtk.engine;
     int pi = engine->transport.current_pattern;
     if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
     sq_pattern_t *pat = &engine->patterns[pi];
@@ -514,6 +637,25 @@ GtkWidget *gtk_browser_new(void)
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(loaded_scroll),
                                   s_loaded_list);
     gtk_box_append(GTK_BOX(box), loaded_scroll);
+
+    /* Separator before waveform */
+    gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+
+    /* Waveform preview section */
+    s_waveform_name = gtk_label_new("Waveform Preview");
+    gtk_widget_set_halign(s_waveform_name, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(box), s_waveform_name);
+
+    s_waveform_area = gtk_drawing_area_new();
+    gtk_widget_set_size_request(s_waveform_area, -1, 40);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_waveform_area),
+                                   waveform_draw_cb, NULL, NULL);
+    gtk_box_append(GTK_BOX(box), s_waveform_area);
+
+    /* Sample info label below waveform */
+    s_waveform_info = gtk_label_new("");
+    gtk_widget_set_halign(s_waveform_info, GTK_ALIGN_START);
+    gtk_box_append(GTK_BOX(box), s_waveform_info);
 
     /* Initial population */
     refresh_directory();

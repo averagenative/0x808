@@ -1,12 +1,23 @@
 /*
  * gtk_theme.c — Theme system for the GTK 4.0 frontend.
  *
- * 5 built-in themes matching the ImGui frontend:
- * Dark, Light, Hacker, Midnight, Amber
+ * 7 built-in themes matching the ImGui frontend:
+ * Dark, Light, Hacker, Midnight, Amber, Vaporwave, Neon
+ *
+ * User themes: loaded from JSON files in {base_dir}/themes/
+ * Supports both hex color format (#rrggbb) and ImGui float format (_r, _g, _b).
  */
 
 #include "gtk_gui.h"
+#include "cJSON.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <dirent.h>
+
+#define LOG_TAG "gtk_theme"
+#include "core/log.h"
 
 #define CSS_COMMON \
     "  font-family: 'DejaVu Sans Mono', monospace;" \
@@ -47,7 +58,8 @@
     "button.section-color-2.active, button.section-color-3.active," \
     "button.section-color-4.active, button.section-color-5.active," \
     "button.section-color-6.active, button.section-color-7.active {" \
-    "  border: 2px solid rgba(255,255,255,0.6); }"
+    "  border: 2px solid rgba(255,255,255,0.6); }" \
+    "label.status-flash { color: #fff; font-weight: bold; font-size: 12px; }"
 
 /* ─── Theme CSS strings ───────────────────────────────────────────────────── */
 

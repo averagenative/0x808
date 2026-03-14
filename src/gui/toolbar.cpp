@@ -443,6 +443,43 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         }
     }
 
+    /* Help button with keyboard/mouse controls popup */
+    ImGui::SameLine();
+    {
+        if (ImGui::Button("?", ImVec2(btn_h, btn_h)))
+            ImGui::OpenPopup("HelpPopup");
+        if (ImGui::BeginPopup("HelpPopup")) {
+            ImGui::Text("Keyboard Shortcuts");
+            ImGui::Separator();
+            ImGui::Text("Space          Play / Stop");
+            ImGui::Text("1-9            Select pattern");
+            ImGui::Text("Ctrl+Z         Undo");
+            ImGui::Text("Ctrl+Shift+Z   Redo");
+            ImGui::Text("Ctrl+T         Cycle themes");
+            ImGui::Text("Ctrl+S         Save project");
+            ImGui::Text("Ctrl+O         Open project");
+            ImGui::Text("Escape         Quit");
+
+            ImGui::Spacing();
+            ImGui::Text("QWERTY Piano (when KEYS panel open)");
+            ImGui::Separator();
+            ImGui::Text("Z/X/C/V/B/N/M          Lower octave white keys");
+            ImGui::Text("Q/W/E/R/T/Y/U/I/O/P    Upper octave white keys");
+
+            ImGui::Spacing();
+            ImGui::Text("Mouse Controls");
+            ImGui::Separator();
+            ImGui::Text("Left-click       Toggle step / Place note");
+            ImGui::Text("Left-drag        Paint steps / Extend note length");
+            ImGui::Text("Right-click      Velocity/pitch editor (drum grid)");
+            ImGui::Text("Right-drag       Erase notes (piano roll)");
+            ImGui::Text("Scroll wheel     Scroll / Cycle dropdown values");
+            ImGui::Text("Double-click knob  Reset to default");
+            ImGui::Text("Drag knob        Adjust value (Shift = fine)");
+            ImGui::EndPopup();
+        }
+    }
+
     /* ── Window controls: _ [] X (standalone only) ─────────────────── */
     if (!is_plugin && p->window) {
         ImGui::SameLine();

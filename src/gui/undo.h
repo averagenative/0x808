@@ -41,6 +41,12 @@ bool undo_redo(sq_engine_t *engine);
  */
 void undo_clear(void);
 
+/*
+ * Query whether undo/redo is available.
+ */
+bool undo_can_undo(void);
+bool undo_can_redo(void);
+
 #ifdef __cplusplus
 }
 #endif

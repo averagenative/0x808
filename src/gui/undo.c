@@ -116,3 +116,13 @@ void undo_clear(void)
     memset(g_undo_stack, 0, sizeof(g_undo_stack));
     memset(g_redo_stack, 0, sizeof(g_redo_stack));
 }
+
+bool undo_can_undo(void)
+{
+    return g_undo_count > 0;
+}
+
+bool undo_can_redo(void)
+{
+    return g_redo_count > 0;
+}

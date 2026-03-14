@@ -33,6 +33,10 @@
 /* Forward declarations */
 static void update_pattern_buttons(void);
 static GtkWidget *s_rec_btn = NULL;
+static GtkWidget *s_undo_btn = NULL;
+static GtkWidget *s_redo_btn = NULL;
+static int s_status_flash_frames = 0;
+static uint32_t s_prev_status_timer = 0;
 
 /* ─── Panel visibility sync ───────────────────────────────────────────────── */
 
@@ -177,6 +181,42 @@ static gboolean on_redraw_tick(gpointer user_data)
         }
     }
 
+    /* Update undo/redo button enabled state */
+    if (s_undo_btn) {
+        if (undo_can_undo()) {
+            gtk_widget_set_opacity(s_undo_btn, 1.0);
+            gtk_widget_set_sensitive(s_undo_btn, TRUE);
+        } else {
+            gtk_widget_set_opacity(s_undo_btn, 0.35);
+            gtk_widget_set_sensitive(s_undo_btn, FALSE);
+        }
+    }
+    if (s_redo_btn) {
+        if (undo_can_redo()) {
+            gtk_widget_set_opacity(s_redo_btn, 1.0);
+            gtk_widget_set_sensitive(s_redo_btn, TRUE);
+        } else {
+            gtk_widget_set_opacity(s_redo_btn, 0.35);
+            gtk_widget_set_sensitive(s_redo_btn, FALSE);
+        }
+    }
+
+    /* Status flash effect — highlight status label briefly on new messages */
+    if (g_gtk.status_label && GTK_IS_LABEL(g_gtk.status_label)) {
+        /* Detect new status message: timer jumped up (was decreasing or zero) */
+        if (g_gtk.app.status_timer > s_prev_status_timer && g_gtk.app.status_msg[0]) {
+            gtk_widget_add_css_class(g_gtk.status_label, "status-flash");
+            s_status_flash_frames = 20; /* ~320ms at 60fps */
+        }
+        s_prev_status_timer = g_gtk.app.status_timer;
+
+        if (s_status_flash_frames > 0) {
+            s_status_flash_frames--;
+            if (s_status_flash_frames == 0)
+                gtk_widget_remove_css_class(g_gtk.status_label, "status-flash");
+        }
+    }
+
     /* Sync panel visibility + pattern buttons */
     sync_panel_visibility();
     update_pattern_buttons();
@@ -220,6 +260,20 @@ static void on_play_clicked(GtkWidget *btn, gpointer user_data)
     g_gtk.app.visual_step = 0;
     if (engine->transport.playing)
         g_gtk.app.play_start_ticks = SDL_GetPerformanceCounter();
+}
+
+static void on_undo_clicked(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    if (undo_undo(g_gtk.engine))
+        sq_app_set_status(&g_gtk.app, "Undo", 90);
+}
+
+static void on_redo_clicked(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    if (undo_redo(g_gtk.engine))
+        sq_app_set_status(&g_gtk.app, "Redo", 90);
 }
 
 static void on_rec_clicked(GtkWidget *btn, gpointer user_data)
@@ -287,6 +341,97 @@ static void on_export_clicked(GtkWidget *btn, gpointer data)
 {
     (void)btn; (void)data;
     gtk_export_show(g_gtk.window);
+}
+
+/* ─── Help popover menu ───────────────────────────────────────────────────── */
+
+static GtkWidget *s_help_popover = NULL;
+
+static void on_help_clicked(GtkWidget *btn, gpointer data)
+{
+    (void)data;
+
+    /* If popover already exists, just toggle it */
+    if (s_help_popover && gtk_widget_get_parent(s_help_popover) == btn) {
+        gtk_popover_popup(GTK_POPOVER(s_help_popover));
+        return;
+    }
+
+    /* Destroy old popover if parent changed */
+    if (s_help_popover) {
+        gtk_widget_unparent(s_help_popover);
+        s_help_popover = NULL;
+    }
+
+    /* Create popover */
+    s_help_popover = gtk_popover_new();
+    gtk_widget_set_parent(s_help_popover, btn);
+
+    /* Scrolled window so content doesn't overflow */
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(scroll, 300, 380);
+
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_margin_start(box, 8);
+    gtk_widget_set_margin_end(box, 8);
+    gtk_widget_set_margin_top(box, 6);
+    gtk_widget_set_margin_bottom(box, 6);
+
+    /* Helper macros */
+    #define HELP_HEADER(text) { \
+        GtkWidget *h = gtk_label_new(NULL); \
+        gtk_label_set_markup(GTK_LABEL(h), "<b>" text "</b>"); \
+        gtk_widget_set_halign(h, GTK_ALIGN_START); \
+        gtk_widget_set_margin_top(h, 6); \
+        gtk_box_append(GTK_BOX(box), h); \
+        GtkWidget *s = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL); \
+        gtk_box_append(GTK_BOX(box), s); \
+    }
+
+    #define HELP_ROW(key, desc) { \
+        GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8); \
+        GtkWidget *k = gtk_label_new(NULL); \
+        gtk_label_set_markup(GTK_LABEL(k), "<b>" key "</b>"); \
+        gtk_widget_set_halign(k, GTK_ALIGN_START); \
+        gtk_widget_set_size_request(k, 120, -1); \
+        gtk_box_append(GTK_BOX(row), k); \
+        GtkWidget *d = gtk_label_new(desc); \
+        gtk_widget_set_halign(d, GTK_ALIGN_START); \
+        gtk_box_append(GTK_BOX(row), d); \
+        gtk_box_append(GTK_BOX(box), row); \
+    }
+
+    HELP_HEADER("Keyboard Shortcuts");
+    HELP_ROW("Space",          "Play / Stop");
+    HELP_ROW("1-9",            "Select pattern");
+    HELP_ROW("Ctrl+Z",         "Undo");
+    HELP_ROW("Ctrl+Shift+Z",   "Redo");
+    HELP_ROW("Ctrl+T",         "Cycle themes");
+    HELP_ROW("Ctrl+S",         "Save project");
+    HELP_ROW("Ctrl+O",         "Open project");
+    HELP_ROW("Escape",         "Quit");
+
+    HELP_HEADER("QWERTY Piano (when KEYS panel open)");
+    HELP_ROW("Z/X/C/V/B/N/M",  "Lower octave white keys");
+    HELP_ROW("Q/W/E/R/T/Y/U/I/O/P", "Upper octave white keys");
+
+    HELP_HEADER("Mouse Controls");
+    HELP_ROW("Left-click",      "Toggle step / Place note");
+    HELP_ROW("Left-drag",       "Paint steps / Extend note");
+    HELP_ROW("Right-click",     "Velocity/pitch editor");
+    HELP_ROW("Right-drag",      "Erase notes (piano roll)");
+    HELP_ROW("Scroll wheel",    "Scroll / Cycle values");
+    HELP_ROW("Double-click knob", "Reset to default");
+    HELP_ROW("Drag knob",       "Adjust value (Shift=fine)");
+
+    #undef HELP_HEADER
+    #undef HELP_ROW
+
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), box);
+    gtk_popover_set_child(GTK_POPOVER(s_help_popover), scroll);
+    gtk_popover_popup(GTK_POPOVER(s_help_popover));
 }
 
 /* ─── Theme popover menu ──────────────────────────────────────────────────── */
@@ -688,6 +833,17 @@ static GtkWidget *build_toolbar(void)
         G_CALLBACK(on_rec_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), s_rec_btn);
 
+    /* Undo / Redo */
+    s_undo_btn = sq_flat_button_new("UNDO",
+        G_CALLBACK(on_undo_clicked), NULL);
+    gtk_widget_set_opacity(s_undo_btn, 0.35);
+    gtk_box_append(GTK_BOX(row1), s_undo_btn);
+
+    s_redo_btn = sq_flat_button_new("REDO",
+        G_CALLBACK(on_redo_clicked), NULL);
+    gtk_widget_set_opacity(s_redo_btn, 0.35);
+    gtk_box_append(GTK_BOX(row1), s_redo_btn);
+
     /* BPM knob */
     s_bpm_float = (float)g_gtk.engine->transport.bpm;
     GtkWidget *bpm_knob = gtk_knob_new(60, 200, &s_bpm_float, "BPM");
@@ -765,6 +921,12 @@ static GtkWidget *build_toolbar(void)
     GtkWidget *theme_btn = sq_flat_button_new("THEME",
         G_CALLBACK(on_theme_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), theme_btn);
+
+    /* Help button */
+    GtkWidget *help_btn = sq_flat_button_new("?",
+        G_CALLBACK(on_help_clicked), NULL);
+    gtk_widget_set_size_request(help_btn, 28, -1);
+    gtk_box_append(GTK_BOX(row1), help_btn);
 
     /* Status label */
     g_gtk.status_label = gtk_label_new("");

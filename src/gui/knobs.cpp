@@ -162,11 +162,10 @@ int knob_float(const char *label, float *value, float min, float max,
 {
     ImGui::PushID(label);
 
-    /* Calculate layout */
+    /* Calculate layout — consistent size, centered */
     float avail_w = ImGui::GetContentRegionAvail().x;
-    float knob_w = avail_w;
-    if (knob_w > 60.0f) knob_w = 60.0f;
-    if (knob_w < 20.0f) knob_w = 20.0f;
+    float knob_w = 36.0f;  /* consistent size across all columns */
+    float knob_h = 36.0f;
 
     /* Center horizontally */
     float indent = (avail_w - knob_w) * 0.5f;
@@ -179,7 +178,7 @@ int knob_float(const char *label, float *value, float min, float max,
     if (indent > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indent);
 
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 size(knob_w, 40.0f);
+    ImVec2 size(knob_w, knob_h);
 
     int changed = knob_core(label, value, min, max, default_val, step, pos, size);
 
@@ -187,9 +186,9 @@ int knob_float(const char *label, float *value, float min, float max,
     char val_text[32];
     snprintf(val_text, sizeof(val_text), "%.1f", *value);
     float text_w = ImGui::CalcTextSize(val_text).x;
-    if (indent > 0.0f) {
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - text_w) * 0.5f);
-    }
+    float val_indent = (avail_w - text_w) * 0.5f;
+    if (val_indent > 0.0f)
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + val_indent);
     ImGui::TextUnformatted(val_text);
 
     ImGui::PopID();
