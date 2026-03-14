@@ -84,6 +84,12 @@ static bool  drag_set_on     = false;  /* true = turning on, false = turning off
 static int   drag_last_track = -1;     /* last toggled cell (avoid re-toggling same) */
 static int   drag_last_step  = -1;
 
+/* --- State for right-click drag (velocity/pitch) ------------------------- */
+static int   rclick_drag_track = -1;
+static int   rclick_drag_step  = -1;
+static ImVec2 rclick_drag_origin;
+static bool  rclick_dragging = false;
+
 /* --- Globals ------------------------------------------------------------- */
 extern "C" {
     extern int g_win_width;
@@ -563,31 +569,40 @@ void drum_grid_draw(sq_engine_t *engine,
                         }
                     }
 
-                    /* Right click: one-shot detection */
+                    /* Right click: start drag for velocity/pitch, or open popup */
                     {
                         bool rb_down = io.MouseDown[1];
 
-                        if (!popup_open && rb_down && !rclick_was_down) {
+                        if (rb_down && !rclick_was_down) {
                             if (!is_active) {
                                 step->velocity = 100;
                             }
-                            popup_track = (int)t;
-                            popup_step  = (int)s;
-                            popup_open  = true;
-                            popup_just_opened = true;
-                            LOG_DEBUG("RIGHT click: track %u step %u -> popup (vel=%d)",
-                                     t, s, step->velocity);
+                            rclick_drag_track = (int)t;
+                            rclick_drag_step = (int)s;
+                            rclick_drag_origin = io.MousePos;
+                            rclick_dragging = false;
                         }
-                    }
 
-                    /* Scroll wheel: adjust velocity when hovering */
-                    if (io.MouseWheel != 0.0f) {
-                        int new_vel = (int)step->velocity + (int)(io.MouseWheel * 5);
-                        if (new_vel < 0) new_vel = 0;
-                        if (new_vel > 127) new_vel = 127;
-                        step->velocity = (uint8_t)new_vel;
-                        LOG_DEBUG("SCROLL: track %u step %u -> vel=%d",
-                                 t, s, new_vel);
+                        /* Right-click+hold drag: left/right = velocity, up/down = pitch */
+                        if (rb_down && rclick_drag_track == (int)t && rclick_drag_step == (int)s) {
+                            float dx = io.MousePos.x - rclick_drag_origin.x;
+                            float dy = io.MousePos.y - rclick_drag_origin.y;
+                            if (fabsf(dx) > 3.0f || fabsf(dy) > 3.0f) {
+                                rclick_dragging = true;
+                            }
+                            if (rclick_dragging) {
+                                /* Horizontal: velocity (1 pixel = 1 unit) */
+                                int new_vel = 100 + (int)(dx * 0.5f);
+                                if (new_vel < 1) new_vel = 1;
+                                if (new_vel > 127) new_vel = 127;
+                                step->velocity = (uint8_t)new_vel;
+                                /* Vertical: pitch (inverted — drag up = pitch up) */
+                                int new_pitch = -(int)(dy * 0.2f);
+                                if (new_pitch < -24) new_pitch = -24;
+                                if (new_pitch > 24) new_pitch = 24;
+                                step->pitch_offset = (int8_t)new_pitch;
+                            }
+                        }
                     }
                 }
             }
@@ -596,6 +611,57 @@ void drum_grid_draw(sq_engine_t *engine,
             ImGui::Dummy(ImVec2(cells_region_w, row_h - 6));
         }
         ImGui::EndChild();
+    }
+
+    /* --- Add track buttons ----------------------------------------------- */
+    if (pattern->num_tracks < SQ_MAX_TRACKS) {
+        /* Count sampler and synth tracks */
+        uint32_t num_samplers = 0, num_synths = 0;
+        for (uint32_t t = 0; t < pattern->num_tracks; t++) {
+            if (pattern->tracks[t].type == TRACK_SAMPLER || pattern->tracks[t].type == TRACK_SF2)
+                num_samplers++;
+            else
+                num_synths++;
+        }
+
+        float add_btn_h = 24.0f;
+        ImVec4 sampler_col(0.24f, 0.39f, 0.24f, 1.0f);
+        ImVec4 synth_col(0.31f, 0.24f, 0.63f, 1.0f);
+
+        if (ImGui::Button("+ Sampler Track", ImVec2(track_panel_w - 10, add_btn_h))) {
+            /* Insert new sampler track before the first synth track */
+            uint32_t insert_at = num_samplers;
+            if (insert_at < pattern->num_tracks) {
+                /* Shift synth tracks down */
+                for (uint32_t t = pattern->num_tracks; t > insert_at; t--) {
+                    pattern->tracks[t] = pattern->tracks[t - 1];
+                }
+            }
+            sq_track_t *nt = &pattern->tracks[insert_at];
+            memset(nt, 0, sizeof(*nt));
+            nt->type = TRACK_SAMPLER;
+            nt->length = 16;
+            nt->volume = 0.8f;
+            nt->sample_index = (int)(insert_at < engine->num_samples ? insert_at : 0);
+            nt->synth_preset = -1;
+            pattern->num_tracks++;
+            LOG_INFO("Added sampler track at index %u", insert_at);
+        }
+
+        if (pattern->num_tracks < SQ_MAX_TRACKS) {
+            if (ImGui::Button("+ Synth Track", ImVec2(track_panel_w - 10, add_btn_h))) {
+                uint32_t idx = pattern->num_tracks;
+                sq_track_t *nt = &pattern->tracks[idx];
+                memset(nt, 0, sizeof(*nt));
+                nt->type = TRACK_SYNTH;
+                nt->length = 16;
+                nt->volume = 0.6f;
+                nt->synth_preset = 0;
+                nt->sample_index = -1;
+                pattern->num_tracks++;
+                LOG_INFO("Added synth track at index %u", idx);
+            }
+        }
     }
 
     /* --- Smooth playhead line -------------------------------------------- */
@@ -623,6 +689,20 @@ void drum_grid_draw(sq_engine_t *engine,
     }
 
     ImGui::End(); /* DrumGrid */
+
+    /* Right-click release: open popup if it was a click (no drag) */
+    if (rclick_was_down && !io.MouseDown[1]) {
+        if (!rclick_dragging && rclick_drag_track >= 0) {
+            popup_track = rclick_drag_track;
+            popup_step = rclick_drag_step;
+            popup_open = true;
+            popup_just_opened = true;
+            LOG_DEBUG("RIGHT click: track %d step %d -> popup", popup_track, popup_step);
+        }
+        rclick_drag_track = -1;
+        rclick_drag_step = -1;
+        rclick_dragging = false;
+    }
 
     /* Update right-click state for one-shot detection */
     rclick_was_down = io.MouseDown[1];

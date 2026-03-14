@@ -282,21 +282,60 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
 
     ImGui::SameLine();
 
-    /* --- Section 2: Master effects slots --- */
+    /* --- Section 2: Effects panel (tabs: Master + per-track) --- */
     if (ImGui::BeginChild("EffectsPanel", ImVec2(effects_w, content_h),
                           ImGuiChildFlags_Borders)) {
-        /* Divide effects panel into columns */
-        if (ImGui::BeginTable("FXSlots", MAX_TRACK_EFFECTS,
-                              ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
-                ImGui::TableSetColumnIndex(i);
-                char slot_label[32];
-                snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
-                draw_effect_slot(&engine->master_effects[i], slot_label,
-                                 engine->sample_rate, i);
+        static int fx_tab = 0; /* 0 = Master, 1+ = track index+1 */
+
+        /* Tab bar: Master | Track 1 | Track 2 | ... */
+        if (ImGui::BeginTabBar("FXTabs")) {
+            if (ImGui::BeginTabItem("Master")) {
+                fx_tab = 0;
+                ImGui::EndTabItem();
             }
-            ImGui::EndTable();
+
+            int pat_idx2 = engine->transport.current_pattern;
+            uint32_t nt = 0;
+            if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns)
+                nt = engine->patterns[pat_idx2].num_tracks;
+
+            for (uint32_t ti = 0; ti < nt; ti++) {
+                char tab_label[32];
+                snprintf(tab_label, sizeof(tab_label), "Trk %u", ti + 1);
+                if (ImGui::BeginTabItem(tab_label)) {
+                    fx_tab = (int)ti + 1;
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+
+        /* Draw effect slots for selected tab */
+        sq_effect_slot_t *slots = NULL;
+        if (fx_tab == 0) {
+            slots = engine->master_effects;
+        } else {
+            int pat_idx2 = engine->transport.current_pattern;
+            if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns) {
+                uint32_t ti = (uint32_t)(fx_tab - 1);
+                if (ti < engine->patterns[pat_idx2].num_tracks)
+                    slots = engine->patterns[pat_idx2].tracks[ti].effects;
+            }
+        }
+
+        if (slots) {
+            if (ImGui::BeginTable("FXSlots", MAX_TRACK_EFFECTS,
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableNextRow();
+                for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
+                    ImGui::TableSetColumnIndex(i);
+                    char slot_label[32];
+                    snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
+                    draw_effect_slot(&slots[i], slot_label,
+                                     engine->sample_rate, i + fx_tab * 10);
+                }
+                ImGui::EndTable();
+            }
         }
     }
     ImGui::EndChild();

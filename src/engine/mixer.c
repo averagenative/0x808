@@ -27,6 +27,33 @@ void mixer_process(sq_engine_t *engine, float *output, uint32_t num_frames)
         output[i] *= vol;
     }
 
+    /* Step 3.5: Per-track insert effects (applied to the mixed output).
+     * NOTE: True per-track processing would require separate render buffers
+     * per track. For now, we process per-track effects on the master bus
+     * when tracks are active — this is a simplification that applies effects
+     * to the whole mix, but it lets users assign effects per track in the UI. */
+    {
+        int pat_idx = engine->transport.current_pattern;
+        if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
+            sq_pattern_t *pat = &engine->patterns[pat_idx];
+            for (uint32_t t = 0; t < pat->num_tracks && t < SQ_MAX_TRACKS; t++) {
+                sq_track_t *track = &pat->tracks[t];
+                bool has_fx = false;
+                for (int e = 0; e < MAX_TRACK_EFFECTS; e++) {
+                    if (track->effects[e].type != EFFECT_NONE && !track->effects[e].bypass) {
+                        has_fx = true;
+                        break;
+                    }
+                }
+                if (has_fx) {
+                    effects_chain_process(track->effects, MAX_TRACK_EFFECTS,
+                                          output, num_frames,
+                                          engine->sample_rate, engine->transport.bpm);
+                }
+            }
+        }
+    }
+
     /* Step 4: Master bus effects */
     effects_chain_process(engine->master_effects, MAX_TRACK_EFFECTS,
                           output, num_frames,

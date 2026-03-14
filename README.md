@@ -47,6 +47,42 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 | Ctrl+T | Toggle theme |
 | Escape | Quit |
 
+## Mouse Controls
+
+### Drum Grid (Step Sequencer)
+
+| Action | Behavior |
+|--------|----------|
+| **Left-click** | Toggle pad on/off (velocity 100) |
+| **Left-click + drag** | Paint pads on or off across the grid |
+| **Right-click (tap)** | Open velocity/pitch popup editor |
+| **Right-click + hold + drag left/right** | Adjust velocity in real-time |
+| **Right-click + hold + drag up/down** | Adjust pitch offset in real-time |
+
+### Piano Roll
+
+| Action | Behavior |
+|--------|----------|
+| **Left-click** | Place or remove a note |
+| **Scroll wheel** | Scroll the view vertically |
+
+### Virtual Keyboard
+
+| Action | Behavior |
+|--------|----------|
+| **Click keys** | Trigger synth notes |
+| **QWERTY keys** (when Piano panel is open) | Play notes — Z-M = lower octave, Q-P = upper octave |
+| **<< / >>** | Shift keyboard octave range |
+
+### Track Management
+
+| Action | Behavior |
+|--------|----------|
+| **"+ Sampler Track" button** | Add a new sampler track (inserted before synth tracks) |
+| **"+ Synth Track" button** | Add a new synth track (appended at end) |
+| **Right-click track name** | Cycle track color |
+| **Click track name** | Select track (shows piano roll / synth editor for synth tracks) |
+
 ## Building
 
 ### Requirements
