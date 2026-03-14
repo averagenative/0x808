@@ -71,6 +71,9 @@ int  gtk_theme_count(void);
 const char *gtk_theme_name(int index);
 void gtk_theme_apply_index(GtkWidget *widget, int index);
 
+/* Theme-aware accent color for Cairo drawing (drum grid glow, ADSR, knobs) */
+void gtk_theme_get_accent_color(double *r, double *g, double *b);
+
 /* User theme (JSON) API */
 void gtk_theme_scan_user_themes(const char *dir);
 int  gtk_theme_num_user_themes(void);

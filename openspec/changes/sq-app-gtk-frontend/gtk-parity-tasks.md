@@ -15,7 +15,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] BPM slider
 - [x] Swing slider
 - [x] Volume slider
-- [ ] Replace sliders with rotary knobs (arc + value display, drag interaction)
+- [x] Replace sliders with rotary knobs (arc + value display, drag interaction)
 - [ ] Logo with animated pulse effect
 - [x] REC button with red highlight
 - [x] Mode selector (PAT/SONG/PERF) buttons with active highlight
@@ -37,7 +37,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Mute/Solo buttons (clickable)
 - [x] Selected track highlight
 - [x] Track controls column (200px): color bar, type badge, volume bar
-- [ ] Track type selector button (Sampler/Synth/SF2 — currently display-only)
+- [x] Track type selector button (Sampler/Synth/SF2 — clickable badge cycles)
 - [ ] Sample/preset dropdown in track controls
 - [x] Right-click popup: velocity/pitch editor with copy/paste
 - [x] Velocity number + pitch offset displayed in cells
@@ -45,7 +45,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Beat-aligned shading (alternating 8-step groups)
 - [x] Separator line before synth tracks ("SYNTH")
 - [x] Add Track buttons (+ Sampler, + Synth)
-- [ ] Kit selector dropdown
+- [x] Kit selector dropdown
 - [x] Multi-step drag editing (drag to paint/erase steps)
 - [x] Vertical scroll for many tracks
 - [x] Hover highlight on cells
@@ -62,8 +62,8 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Alternating beat shading (black/white key rows)
 - [x] Bold grid lines every 4 steps
 - [x] Rounded note corners
-- [ ] Left-click + drag to extend note length
-- [ ] Right-click + drag to erase
+- [x] Left-click + drag to extend note length
+- [x] Right-click + drag to erase
 
 ## 4. Synth Editor Parity
 
@@ -112,9 +112,9 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Click to assign sample to selected track
 - [x] Directory navigation (current path, Up, Refresh)
 - [x] File size display
-- [ ] Waveform preview (40px, blue line)
+- [x] Waveform preview (40px, blue line)
 - [ ] Audition button (preview playback)
-- [ ] Sample info (duration, sample rate)
+- [x] Sample info (duration, sample rate)
 - [x] "Load Sample" button with file dialog
 
 ## 7. Virtual Keyboard Parity
@@ -169,21 +169,21 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Ctrl+T cycles themes with status message
 - [x] Theme provider properly removes old CSS on switch
 - [x] Theme selector popup/menu
-- [ ] User theme loading from JSON
+- [x] User theme loading from JSON
 - [ ] Theme-aware Cairo drawing colors (pad glow, etc.)
 
 ## 12. Missing Interactions
 
 - [x] Right-click context menus (drum grid velocity/pitch editor)
 - [x] Scroll wheel on dropdowns to cycle values
-- [ ] Double-click knobs to reset
-- [ ] Undo/redo visual feedback
+- [x] Double-click knobs to reset
+- [x] Undo/redo visual feedback (toolbar buttons + status flash)
 - [x] Native file dialogs (GtkFileDialog for sample loading)
 
 ## 13. Help Dialog (both frontends)
 
-- [ ] Help button (?) in toolbar — clickable
-- [ ] Popup/panel listing keyboard shortcuts (Space, 1-9, Ctrl+Z, Ctrl+T, etc.)
-- [ ] Mouse controls reference (left-click, right-click, drag, scroll wheel)
-- [ ] QWERTY keyboard mapping diagram
-- [ ] Brief feature descriptions
+- [x] Help button (?) in toolbar — clickable
+- [x] Popup/panel listing keyboard shortcuts (Space, 1-9, Ctrl+Z, Ctrl+T, etc.)
+- [x] Mouse controls reference (left-click, right-click, drag, scroll wheel)
+- [x] QWERTY keyboard mapping diagram
+- [x] Brief feature descriptions

@@ -710,6 +710,41 @@ void gtk_theme_apply_index(GtkWidget *widget, int index)
     sq_app_set_status(&g_gtk.app, msg, 90);
 }
 
+/* ─── Theme-aware accent color for Cairo drawing areas ────────────────────── */
+
+/* Accent colors for each built-in theme (index matches THEME_CSS order) */
+static const struct { double r, g, b; } s_accent_colors[NUM_THEMES] = {
+    { 0.392, 0.600, 0.800 },  /* 0 Dark:      #6499cc - blue           */
+    { 0.200, 0.451, 0.702 },  /* 1 Light:     #3373b3 - blue           */
+    { 0.000, 1.000, 0.000 },  /* 2 Hacker:    #00ff00 - green          */
+    { 0.600, 0.400, 0.800 },  /* 3 Midnight:  #9966cc - purple         */
+    { 0.800, 0.549, 0.102 },  /* 4 Amber:     #cc8c1a - orange/amber   */
+    { 0.800, 0.200, 0.800 },  /* 5 Vaporwave: #cc33cc - pink/magenta   */
+    { 0.200, 0.800, 1.000 },  /* 6 Neon:      #33ccff - cyan           */
+};
+
+void gtk_theme_get_accent_color(double *r, double *g, double *b)
+{
+    /* If a user theme is active, parse its accent hex color */
+    if (s_active_user_theme >= 0 && s_active_user_theme < s_num_user_themes) {
+        int ri, gi, bi;
+        if (parse_hex_color(s_user_themes[s_active_user_theme].accent,
+                            &ri, &gi, &bi) == 0) {
+            *r = ri / 255.0;
+            *g = gi / 255.0;
+            *b = bi / 255.0;
+            return;
+        }
+    }
+
+    /* Built-in theme */
+    int idx = s_current_theme;
+    if (idx < 0 || idx >= NUM_THEMES) idx = 0;
+    *r = s_accent_colors[idx].r;
+    *g = s_accent_colors[idx].g;
+    *b = s_accent_colors[idx].b;
+}
+
 /* ─── Flat button: GtkLabel + GtkGestureClick, no GtkButton chrome ────────── */
 
 static void sq_flat_btn_click(GtkGestureClick *gesture, int n_press,

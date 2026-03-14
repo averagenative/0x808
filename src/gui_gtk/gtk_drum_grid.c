@@ -215,6 +215,19 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
         cairo_move_to(cr, 8, ty + 14);
         cairo_show_text(cr, label);
 
+        /* Cycle indicator arrows for clickable track name */
+        if (track->type == TRACK_SAMPLER || track->type == TRACK_SYNTH) {
+            cairo_text_extents_t ext;
+            cairo_text_extents(cr, label, &ext);
+            double arrow_x = 8 + ext.x_advance + 4;
+            if (arrow_x < CTRL_W - 50) {
+                cairo_set_source_rgba(cr, 0.5, 0.5, 0.5, 0.6);
+                cairo_set_font_size(cr, 8.0);
+                cairo_move_to(cr, arrow_x, ty + 13);
+                cairo_show_text(cr, "\xe2\x96\xb2\xe2\x96\xbc"); /* small up/down arrows */
+            }
+        }
+
         /* Type badge (clickable — cycles track type) */
         {
             const char *badge_text;
@@ -449,6 +462,32 @@ static void on_click(GtkGestureClick *gesture, int n_press,
             if (x >= CTRL_W - 22 && x < CTRL_W - 4 &&
                 y >= btn_y && y < btn_y + 14) {
                 pat->tracks[track].solo = !pat->tracks[track].solo;
+            }
+
+            /* Track name click: cycle sample/preset */
+            double name_x0 = 8;
+            double name_x1 = CTRL_W - 44;
+            double name_y0 = ty;
+            double name_y1 = ty + 18;
+            if (x >= name_x0 && x < name_x1 &&
+                y >= name_y0 && y < name_y1) {
+                sq_track_t *trk = &pat->tracks[track];
+                if (trk->type == TRACK_SAMPLER && engine->num_samples > 0) {
+                    trk->sample_index = (trk->sample_index + 1) %
+                                        (int)engine->num_samples;
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "Sample: %s",
+                             engine->samples[trk->sample_index].name);
+                    sq_app_set_status(&g_gtk.app, msg, 90);
+                } else if (trk->type == TRACK_SYNTH &&
+                           engine->num_synth_presets > 0) {
+                    trk->synth_preset = (trk->synth_preset + 1) %
+                                        (int)engine->num_synth_presets;
+                    char msg[64];
+                    snprintf(msg, sizeof(msg), "Preset: %s",
+                             engine->synth_presets[trk->synth_preset].name);
+                    sq_app_set_status(&g_gtk.app, msg, 90);
+                }
             }
 
             /* Type badge click: cycle SAMPLER -> SYNTH -> SF2 -> SAMPLER */

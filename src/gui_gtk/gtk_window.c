@@ -37,6 +37,7 @@ static GtkWidget *s_undo_btn = NULL;
 static GtkWidget *s_redo_btn = NULL;
 static int s_status_flash_frames = 0;
 static uint32_t s_prev_status_timer = 0;
+static GtkWidget *s_logo_area = NULL;
 
 /* ─── Panel visibility sync ───────────────────────────────────────────────── */
 
@@ -223,6 +224,10 @@ static gboolean on_redraw_tick(gpointer user_data)
 
     /* Rebuild synth editor if selected track changed */
     gtk_synth_editor_update();
+
+    /* Redraw logo (pulse animation during playback) */
+    if (s_logo_area)
+        gtk_widget_queue_draw(s_logo_area);
 
     /* Redraw visible drawing areas */
     if (g_gtk.drum_grid_area)
@@ -819,6 +824,67 @@ static void update_pattern_buttons(void)
     }
 }
 
+/* ─── Logo drawing area with pulsing glow ─────────────────────────────────── */
+
+static void logo_draw_cb(GtkDrawingArea *area, cairo_t *cr,
+                          int width, int height, gpointer data)
+{
+    (void)area; (void)data;
+
+    /* Get accent color for glow */
+    double ar, ag, ab;
+    gtk_theme_get_accent_color(&ar, &ag, &ab);
+
+    /* Text setup */
+    cairo_select_font_face(cr, "DejaVu Sans Mono",
+                           CAIRO_FONT_SLANT_NORMAL,
+                           CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size(cr, 16.0);
+
+    cairo_text_extents_t ext;
+    cairo_text_extents(cr, "0x808", &ext);
+    double tx = (width - ext.width) / 2.0 - ext.x_bearing;
+    double ty = (height - ext.height) / 2.0 - ext.y_bearing;
+
+    /* Compute glow intensity: pulse when playing, off when stopped */
+    double glow = 0.0;
+    sq_engine_t *engine = g_gtk.engine;
+    if (engine && engine->transport.playing) {
+        /* Pulse based on fractional beat — peaks on each beat */
+        double beat_frac = engine->transport.current_beat;
+        beat_frac = beat_frac - floor(beat_frac);  /* 0..1 within one beat */
+        /* Sharp attack, exponential decay: bright flash on the beat */
+        glow = exp(-beat_frac * 4.0);  /* peaks at 1.0, decays to ~0.02 */
+        glow = 0.3 + glow * 0.7;      /* range: 0.3 .. 1.0 */
+    }
+
+    if (glow > 0.01) {
+        /* Draw glow layers behind text */
+        for (int pass = 3; pass >= 1; pass--) {
+            double spread = pass * 2.0;
+            double alpha = glow * 0.15 / pass;
+            cairo_set_source_rgba(cr, ar, ag, ab, alpha);
+            cairo_move_to(cr, tx - spread, ty + spread * 0.3);
+            cairo_show_text(cr, "0x808");
+            cairo_move_to(cr, tx + spread, ty - spread * 0.3);
+            cairo_show_text(cr, "0x808");
+        }
+        /* Inner glow */
+        cairo_set_source_rgba(cr, ar, ag, ab, glow * 0.35);
+        cairo_move_to(cr, tx, ty);
+        cairo_show_text(cr, "0x808");
+    }
+
+    /* Draw crisp text on top — use theme text color from widget style */
+    GdkRGBA text_color;
+    GtkStyleContext *ctx = gtk_widget_get_style_context(GTK_WIDGET(area));
+    gtk_style_context_get_color(ctx, &text_color);
+    cairo_set_source_rgba(cr, text_color.red, text_color.green,
+                          text_color.blue, text_color.alpha);
+    cairo_move_to(cr, tx, ty);
+    cairo_show_text(cr, "0x808");
+}
+
 /* ─── Build the toolbar ───────────────────────────────────────────────────── */
 
 static GtkWidget *build_toolbar(void)
@@ -832,10 +898,12 @@ static GtkWidget *build_toolbar(void)
     gtk_widget_set_margin_top(row1, 4);
     gtk_box_append(GTK_BOX(outer), row1);
 
-    /* Logo */
-    GtkWidget *logo = gtk_label_new("0x808");
-    gtk_widget_add_css_class(logo, "logo");
-    gtk_box_append(GTK_BOX(row1), logo);
+    /* Logo (Cairo drawing area with pulsing glow during playback) */
+    s_logo_area = gtk_drawing_area_new();
+    gtk_widget_set_size_request(s_logo_area, 60, 30);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_logo_area),
+                                   logo_draw_cb, NULL, NULL);
+    gtk_box_append(GTK_BOX(row1), s_logo_area);
 
     /* Play/Stop */
     g_gtk.play_btn = sq_flat_button_new("PLAY",
