@@ -141,9 +141,12 @@ set_target_properties(sq_app PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ─── GUI executable (Phase 3+: requires SDL2 and OpenGL) ─────────────────────
 
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND AND NOT SDL2_FOUND)
-    pkg_check_modules(SDL2 QUIET sdl2)
+find_package(SDL2 QUIET)
+if(NOT SDL2_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SDL2 QUIET sdl2)
+    endif()
 endif()
 if(NOT OpenGL_FOUND)
     find_package(OpenGL QUIET)

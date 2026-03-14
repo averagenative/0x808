@@ -66,6 +66,8 @@ static void sq_plugin_log(const char *level, const char *tag, const char *fmt, .
 #define PLOG_WARN(fmt, ...)  sq_plugin_log("WARN ", "plugin", fmt, ##__VA_ARGS__)
 #define PLOG_ERROR(fmt, ...) sq_plugin_log("ERROR", "plugin", fmt, ##__VA_ARGS__)
 #else
+#include "core/log.h"
+#define LOG_TAG "plugin"
 #define PLOG_DEBUG(fmt, ...) LOG_DEBUG(fmt, ##__VA_ARGS__)
 #define PLOG_INFO(fmt, ...)  LOG_INFO(fmt, ##__VA_ARGS__)
 #define PLOG_WARN(fmt, ...)  LOG_WARN(fmt, ##__VA_ARGS__)

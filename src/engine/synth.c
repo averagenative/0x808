@@ -23,6 +23,7 @@
 #include "engine/synth.h"
 #include "engine/envelope.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #ifndef M_PI
