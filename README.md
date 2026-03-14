@@ -8,6 +8,17 @@
 
 A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV export. All dependencies vendored, zero external runtime dependencies.
 
+## Screenshots
+
+### Light Theme
+![Light theme](screenshots/0x808_light_theme.png)
+
+### Dark Theme
+![Dark theme](screenshots/0x808_dark_theme.png)
+
+### Hacker Theme
+![Hacker theme](screenshots/0x808_hacker_theme.png)
+
 ## Features
 
 - **Drum grid** — 16-track step sequencer with velocity, pitch per step, mute/solo
