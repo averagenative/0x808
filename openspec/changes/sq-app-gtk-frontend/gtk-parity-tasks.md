@@ -179,3 +179,11 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [ ] Double-click knobs to reset
 - [ ] Undo/redo visual feedback
 - [x] Native file dialogs (GtkFileDialog for sample loading)
+
+## 13. Help Dialog (both frontends)
+
+- [ ] Help button (?) in toolbar — clickable
+- [ ] Popup/panel listing keyboard shortcuts (Space, 1-9, Ctrl+Z, Ctrl+T, etc.)
+- [ ] Mouse controls reference (left-click, right-click, drag, scroll wheel)
+- [ ] QWERTY keyboard mapping diagram
+- [ ] Brief feature descriptions

@@ -21,6 +21,7 @@
 #include "formats/project.h"
 #include "engine/export.h"
 #include "engine/synth.h"
+#include "engine/kits.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -124,6 +125,11 @@ static void sync_panel_visibility(void)
     }
 }
 
+/* Static floats for knob widgets (synced to engine in on_redraw_tick) */
+static float s_bpm_float   = 120.0f;
+static float s_swing_float = 0.0f;
+static float s_vol_float   = 80.0f;
+
 /* ─── Periodic redraw timer ───────────────────────────────────────────────── */
 
 static gboolean on_redraw_tick(gpointer user_data)
@@ -134,6 +140,11 @@ static gboolean on_redraw_tick(gpointer user_data)
     /* Guard: don't touch widgets before window is fully built */
     if (!g_gtk.window || !gtk_widget_get_realized(g_gtk.window))
         return G_SOURCE_CONTINUE;
+
+    /* Sync knob values → engine */
+    engine->transport.bpm = (double)s_bpm_float;
+    engine->transport.swing = s_swing_float / 100.0f;
+    engine->master_volume = s_vol_float / 100.0f;
 
     /* Update playhead */
     sq_app_update_playhead(&g_gtk.app, engine,
@@ -243,23 +254,6 @@ static void on_rec_clicked(GtkWidget *btn, gpointer user_data)
     }
 }
 
-static void on_bpm_changed(GtkRange *range, gpointer user_data)
-{
-    (void)user_data;
-    g_gtk.engine->transport.bpm = gtk_range_get_value(range);
-}
-
-static void on_swing_changed(GtkRange *range, gpointer user_data)
-{
-    (void)user_data;
-    g_gtk.engine->transport.swing = (float)gtk_range_get_value(range) / 100.0f;
-}
-
-static void on_volume_changed(GtkRange *range, gpointer user_data)
-{
-    (void)user_data;
-    g_gtk.engine->master_volume = (float)gtk_range_get_value(range) / 100.0f;
-}
 
 static GtkWidget *s_panel_btns[SQ_PANEL_COUNT] = {0};
 
@@ -694,40 +688,23 @@ static GtkWidget *build_toolbar(void)
         G_CALLBACK(on_rec_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), s_rec_btn);
 
-    /* BPM */
-    GtkWidget *bpm_label = gtk_label_new("BPM:");
-    gtk_box_append(GTK_BOX(row1), bpm_label);
-    g_gtk.bpm_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                40.0, 300.0, 1.0);
-    gtk_range_set_value(GTK_RANGE(g_gtk.bpm_scale), g_gtk.engine->transport.bpm);
-    gtk_widget_set_size_request(g_gtk.bpm_scale, 100, -1);
-    gtk_scale_set_draw_value(GTK_SCALE(g_gtk.bpm_scale), TRUE);
-    g_signal_connect(g_gtk.bpm_scale, "value-changed",
-                     G_CALLBACK(on_bpm_changed), NULL);
-    gtk_box_append(GTK_BOX(row1), g_gtk.bpm_scale);
+    /* BPM knob */
+    s_bpm_float = (float)g_gtk.engine->transport.bpm;
+    GtkWidget *bpm_knob = gtk_knob_new(60, 200, &s_bpm_float, "BPM");
+    gtk_widget_set_size_request(bpm_knob, 50, 55);
+    gtk_box_append(GTK_BOX(row1), bpm_knob);
 
-    /* Swing */
-    GtkWidget *swing_label = gtk_label_new("Sw:");
-    gtk_box_append(GTK_BOX(row1), swing_label);
-    g_gtk.swing_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                  0.0, 100.0, 1.0);
-    gtk_range_set_value(GTK_RANGE(g_gtk.swing_scale),
-                        g_gtk.engine->transport.swing * 100.0f);
-    gtk_widget_set_size_request(g_gtk.swing_scale, 70, -1);
-    g_signal_connect(g_gtk.swing_scale, "value-changed",
-                     G_CALLBACK(on_swing_changed), NULL);
-    gtk_box_append(GTK_BOX(row1), g_gtk.swing_scale);
+    /* Swing knob */
+    s_swing_float = g_gtk.engine->transport.swing * 100.0f;
+    GtkWidget *swing_knob = gtk_knob_new(0, 100, &s_swing_float, "Sw");
+    gtk_widget_set_size_request(swing_knob, 50, 55);
+    gtk_box_append(GTK_BOX(row1), swing_knob);
 
-    /* Volume */
-    GtkWidget *vol_label = gtk_label_new("Vol:");
-    gtk_box_append(GTK_BOX(row1), vol_label);
-    g_gtk.volume_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-                                                   0.0, 100.0, 1.0);
-    gtk_range_set_value(GTK_RANGE(g_gtk.volume_scale), 80.0);
-    gtk_widget_set_size_request(g_gtk.volume_scale, 70, -1);
-    g_signal_connect(g_gtk.volume_scale, "value-changed",
-                     G_CALLBACK(on_volume_changed), NULL);
-    gtk_box_append(GTK_BOX(row1), g_gtk.volume_scale);
+    /* Volume knob */
+    s_vol_float = g_gtk.engine->master_volume * 100.0f;
+    GtkWidget *vol_knob = gtk_knob_new(0, 100, &s_vol_float, "Vol");
+    gtk_widget_set_size_request(vol_knob, 50, 55);
+    gtk_box_append(GTK_BOX(row1), vol_knob);
 
     /* Separator */
     GtkWidget *vsep1 = gtk_separator_new(GTK_ORIENTATION_VERTICAL);
@@ -823,6 +800,27 @@ static GtkWidget *build_toolbar(void)
     return outer;
 }
 
+/* ─── Kit selector callback ────────────────────────────────────────────────── */
+
+static void on_kit_selected(GtkDropDown *dropdown, GParamSpec *pspec, gpointer data)
+{
+    (void)pspec; (void)data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+
+    guint idx = gtk_drop_down_get_selected(dropdown);
+    if (idx == GTK_INVALID_LIST_POSITION) return;
+    int kit_idx = (int)idx;
+    if (kit_idx == sq_current_kit) return;
+
+    if (sq_kit_load(engine, kit_idx, engine->base_dir) == 0) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Kit: %s", sq_kits[kit_idx].name);
+        sq_app_set_status(&g_gtk.app, msg, 90);
+        gtk_drum_grid_queue_redraw();
+    }
+}
+
 /* ─── Window activation ───────────────────────────────────────────────────── */
 
 void gtk_window_setup(GtkApplication *app, gpointer user_data)
@@ -874,6 +872,48 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
     gtk_widget_set_hexpand(g_gtk.grid_area, TRUE);
     gtk_widget_set_vexpand(g_gtk.grid_area, TRUE);
     gtk_box_append(GTK_BOX(content_box), g_gtk.grid_area);
+
+    /* Kit selector bar */
+    {
+        GtkWidget *kit_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        gtk_widget_set_margin_start(kit_bar, 6);
+        gtk_widget_set_margin_end(kit_bar, 6);
+        gtk_widget_set_margin_top(kit_bar, 2);
+        gtk_widget_set_margin_bottom(kit_bar, 2);
+
+        GtkWidget *kit_lbl = gtk_label_new("Kit:");
+        gtk_box_append(GTK_BOX(kit_bar), kit_lbl);
+
+        /* Build NULL-terminated string list of kit names */
+        const char *kit_names[SQ_NUM_KITS + 1];
+        for (int ki = 0; ki < SQ_NUM_KITS; ki++)
+            kit_names[ki] = sq_kits[ki].name;
+        kit_names[SQ_NUM_KITS] = NULL;
+
+        GtkStringList *kit_model = gtk_string_list_new(kit_names);
+
+        GtkWidget *kit_dropdown = gtk_drop_down_new(
+            G_LIST_MODEL(kit_model), NULL);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(kit_dropdown),
+            (sq_current_kit >= 0 && sq_current_kit < SQ_NUM_KITS)
+                ? (guint)sq_current_kit : 0);
+        g_signal_connect(kit_dropdown, "notify::selected",
+                         G_CALLBACK(on_kit_selected), NULL);
+        gtk_box_append(GTK_BOX(kit_bar), kit_dropdown);
+
+        /* Sample count label */
+        GtkWidget *samp_lbl = gtk_label_new(NULL);
+        if (g_gtk.engine) {
+            char sbuf[48];
+            snprintf(sbuf, sizeof(sbuf), "(%u samples loaded)",
+                     g_gtk.engine->num_samples);
+            gtk_label_set_text(GTK_LABEL(samp_lbl), sbuf);
+        }
+        gtk_widget_set_opacity(samp_lbl, 0.5);
+        gtk_box_append(GTK_BOX(kit_bar), samp_lbl);
+
+        gtk_box_append(GTK_BOX(g_gtk.grid_area), kit_bar);
+    }
 
     /* Drum grid */
     g_gtk.drum_grid_area = gtk_drum_grid_new();

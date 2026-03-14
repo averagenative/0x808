@@ -36,9 +36,6 @@ typedef struct {
 
     /* Toolbar controls */
     GtkWidget *play_btn;
-    GtkWidget *bpm_scale;
-    GtkWidget *swing_scale;
-    GtkWidget *volume_scale;
     GtkWidget *status_label;
 
     /* Audio thread (managed by main_gtk.c — opaque here) */

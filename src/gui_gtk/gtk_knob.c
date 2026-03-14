@@ -12,6 +12,7 @@
 typedef struct {
     float *value;
     float  min, max;
+    float  default_val;
     char   label[32];
     double drag_start_y;
     float  drag_start_val;
@@ -140,12 +141,32 @@ static void on_drag_end(GtkGestureDrag *gesture, double dx, double dy,
     kd->dragging = FALSE;
 }
 
+static void on_click_pressed(GtkGestureClick *gesture, int n_press,
+                             double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)x; (void)y;
+    if (n_press != 2) return;
+
+    knob_data_t *kd = (knob_data_t *)user_data;
+    *kd->value = kd->default_val;
+
+    GtkWidget *w = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+    gtk_widget_queue_draw(w);
+}
+
 GtkWidget *gtk_knob_new(float min, float max, float *value, const char *label)
 {
     knob_data_t *kd = g_new0(knob_data_t, 1);
     kd->min = min;
     kd->max = max;
     kd->value = value;
+
+    /* Default value: midpoint for bipolar knobs, min for unipolar */
+    if (min < 0 && max > 0)
+        kd->default_val = 0.0f;
+    else
+        kd->default_val = min;
+
     snprintf(kd->label, sizeof(kd->label), "%s", label);
 
     GtkWidget *area = gtk_drawing_area_new();
@@ -157,6 +178,12 @@ GtkWidget *gtk_knob_new(float min, float max, float *value, const char *label)
     g_signal_connect_data(drag, "drag-update", G_CALLBACK(on_drag_update), kd, NULL, 0);
     g_signal_connect_data(drag, "drag-end", G_CALLBACK(on_drag_end), kd, NULL, 0);
     gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(drag));
+
+    /* Double-click to reset to default */
+    GtkGesture *click = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), GDK_BUTTON_PRIMARY);
+    g_signal_connect_data(click, "pressed", G_CALLBACK(on_click_pressed), kd, NULL, 0);
+    gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(click));
 
     return area;
 }

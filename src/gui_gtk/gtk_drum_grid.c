@@ -8,6 +8,7 @@
 
 #include "gtk_gui.h"
 #include "gui/undo.h"
+#include "engine/kits.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -214,16 +215,36 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
         cairo_move_to(cr, 8, ty + 14);
         cairo_show_text(cr, label);
 
-        /* Type badge */
-        cairo_set_font_size(cr, 8.0);
-        if (track->type == TRACK_SAMPLER) {
-            cairo_set_source_rgba(cr, 0.31, 0.78, 0.47, 0.6);
-            cairo_move_to(cr, 8, ty + g.cell_h - 4);
-            cairo_show_text(cr, "SMP");
-        } else if (track->type == TRACK_SYNTH) {
-            cairo_set_source_rgba(cr, 0.71, 0.39, 0.86, 0.6);
-            cairo_move_to(cr, 8, ty + g.cell_h - 4);
-            cairo_show_text(cr, "SYN");
+        /* Type badge (clickable — cycles track type) */
+        {
+            const char *badge_text;
+            double br, bg2, bb;
+            if (track->type == TRACK_SYNTH) {
+                badge_text = "SYN"; br = 0.71; bg2 = 0.39; bb = 0.86;
+            } else if (track->type == TRACK_SF2) {
+                badge_text = "SF2"; br = 0.86; bg2 = 0.71; bb = 0.24;
+            } else {
+                badge_text = "SMP"; br = 0.31; bg2 = 0.78; bb = 0.47;
+            }
+            double badge_x = 6;
+            double badge_y = ty + g.cell_h - 16;
+            double badge_w = 28;
+            double badge_h = 13;
+
+            /* Badge background */
+            cairo_set_source_rgba(cr, br, bg2, bb, 0.25);
+            cairo_rectangle(cr, badge_x, badge_y, badge_w, badge_h);
+            cairo_fill(cr);
+            /* Badge border */
+            cairo_set_source_rgba(cr, br, bg2, bb, 0.5);
+            cairo_set_line_width(cr, 0.8);
+            cairo_rectangle(cr, badge_x, badge_y, badge_w, badge_h);
+            cairo_stroke(cr);
+            /* Badge text */
+            cairo_set_font_size(cr, 8.0);
+            cairo_set_source_rgba(cr, br, bg2, bb, 0.9);
+            cairo_move_to(cr, badge_x + 3, badge_y + 10);
+            cairo_show_text(cr, badge_text);
         }
 
         /* Mute button */
@@ -409,7 +430,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
     grid_geom_t g;
     if (!get_geom(w, h, &g)) return;
 
-    /* Track area click — select track or toggle mute/solo */
+    /* Track area click — select track or toggle mute/solo or cycle type */
     if (x < CTRL_W && y >= g.grid_y) {
         int track = (int)((y - g.grid_y + s_scroll_offset) / g.cell_h);
         if (track >= 0 && (uint32_t)track < pat->num_tracks) {
@@ -428,6 +449,30 @@ static void on_click(GtkGestureClick *gesture, int n_press,
             if (x >= CTRL_W - 22 && x < CTRL_W - 4 &&
                 y >= btn_y && y < btn_y + 14) {
                 pat->tracks[track].solo = !pat->tracks[track].solo;
+            }
+
+            /* Type badge click: cycle SAMPLER -> SYNTH -> SF2 -> SAMPLER */
+            double badge_x = 6;
+            double badge_y2 = ty + g.cell_h - 16;
+            double badge_w = 28;
+            double badge_h = 13;
+            if (x >= badge_x && x < badge_x + badge_w &&
+                y >= badge_y2 && y < badge_y2 + badge_h) {
+                sq_track_t *trk = &pat->tracks[track];
+                if (trk->type == TRACK_SAMPLER) {
+                    trk->type = TRACK_SYNTH;
+                    trk->synth_preset = 0;
+                    sq_app_set_status(&g_gtk.app, "Track -> Synth", 60);
+                } else if (trk->type == TRACK_SYNTH) {
+                    trk->type = TRACK_SF2;
+                    if (trk->sf2_preset < 0)
+                        trk->sf2_preset = 0;
+                    sq_app_set_status(&g_gtk.app, "Track -> SF2", 60);
+                } else {
+                    trk->type = TRACK_SAMPLER;
+                    trk->sample_index = 0;
+                    sq_app_set_status(&g_gtk.app, "Track -> Sampler", 60);
+                }
             }
         }
         gtk_widget_queue_draw(g_gtk.drum_grid_area);
