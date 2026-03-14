@@ -2,9 +2,7 @@
 
 **Drum machine & synth workstation — C engine, C++ GUI**
 
-[![0x808 demo video](0x808_demo.png)](https://github.com/averagenative/0x808/releases/download/v0.0.0-assets/0x808_demo.mp4)
-
-*Click the image above to watch the demo video*
+https://projects.dcmichael.com/0x808_demo.mp4
 
 A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV export. All dependencies vendored, zero external runtime dependencies.
 
