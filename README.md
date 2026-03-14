@@ -10,14 +10,7 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 
 ## Screenshots
 
-### Light Theme
-![Light theme](screenshots/0x808_light_theme.png)
-
-### Dark Theme
-![Dark theme](screenshots/0x808_dark_theme.png)
-
-### Hacker Theme
-![Hacker theme](screenshots/0x808_hacker_theme.png)
+<img src="screenshots/0x808_light_theme.png" width="270"> <img src="screenshots/0x808_dark_theme.png" width="270"> <img src="screenshots/0x808_hacker_theme.png" width="270">
 
 5 built-in themes (Dark, Light, Hacker, Midnight, Amber) + user-defined themes via JSON files in the `themes/` folder.
 
