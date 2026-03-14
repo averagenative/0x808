@@ -38,3 +38,4 @@ Thumbs.db
 # Compiled test binaries
 *_test
 deps/SDL2-2.30.12/test/sample.wav
+release/

@@ -1,9 +1,0 @@
-{
-    "name": "Cyberpunk",
-    "background": "#0a0a1a",
-    "text": "#00ffcc",
-    "accent": "#ff0066",
-    "button": "#1a1a33",
-    "button_hover": "#2a2a44",
-    "button_active": "#ff0066"
-}
