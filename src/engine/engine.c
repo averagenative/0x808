@@ -61,7 +61,7 @@ void sq_engine_init(sq_engine_t *engine, uint32_t sample_rate)
     for (uint32_t pi = 0; pi < engine->num_patterns; pi++) {
         sq_pattern_t *p = &engine->patterns[pi];
         snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern %u", pi + 1);
-        p->num_tracks = (pi == 0) ? 6 : 4;
+        p->num_tracks = 6;  /* 4 sampler + 2 synth for all patterns */
 
         for (uint32_t t = 0; t < p->num_tracks; t++) {
             p->tracks[t].type   = TRACK_SAMPLER;
@@ -74,16 +74,14 @@ void sq_engine_init(sq_engine_t *engine, uint32_t sample_rate)
             p->tracks[t].synth_preset = -1;
         }
 
-        if (pi == 0) {
-            /* Pattern 1: synth tracks 4-5 */
-            p->tracks[4].type = TRACK_SYNTH;
-            p->tracks[4].synth_preset = 0; /* Bass preset */
-            p->tracks[4].volume = 0.6f;
+        /* Tracks 4-5: synth tracks */
+        p->tracks[4].type = TRACK_SYNTH;
+        p->tracks[4].synth_preset = 0; /* Bass preset */
+        p->tracks[4].volume = 0.6f;
 
-            p->tracks[5].type = TRACK_SYNTH;
-            p->tracks[5].synth_preset = 3; /* Pluck preset */
-            p->tracks[5].volume = 0.5f;
-        }
+        p->tracks[5].type = TRACK_SYNTH;
+        p->tracks[5].synth_preset = 3; /* Pluck preset */
+        p->tracks[5].volume = 0.5f;
     }
 }
 

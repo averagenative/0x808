@@ -21,7 +21,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 
-static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb"};
+static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus"};
 static const char *filter_mode_names[] = {"LowPass", "HiPass", "BandPass"};
 static const char *delay_sync_names[]  = {"1/1", "1/2", "1/4", "1/8", "1/16"};
 
@@ -156,6 +156,51 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
             ImGui::Text("Wet: %.0f%%", slot->reverb.wet * 100);
             ImGui::SetNextItemWidth(-1);
             ImGui::SliderFloat("##RvWet", &slot->reverb.wet, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_OVERDRIVE: {
+            ImGui::Text("Drive: %.0f%%", slot->overdrive.drive * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##OdDrive", &slot->overdrive.drive, 0.0f, 1.0f);
+
+            ImGui::Text("Tone: %.0f%%", slot->overdrive.tone * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##OdTone", &slot->overdrive.tone, 0.0f, 1.0f);
+
+            ImGui::Text("Mix: %.0f%%", slot->overdrive.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##OdMix", &slot->overdrive.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_FUZZ: {
+            ImGui::Text("Gain: %.0f%%", slot->fuzz.gain * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FzGain", &slot->fuzz.gain, 0.0f, 1.0f);
+
+            ImGui::Text("Tone: %.0f%%", slot->fuzz.tone * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FzTone", &slot->fuzz.tone, 0.0f, 1.0f);
+
+            ImGui::Text("Mix: %.0f%%", slot->fuzz.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FzMix", &slot->fuzz.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_CHORUS: {
+            ImGui::Text("Rate: %.1f Hz", slot->chorus.rate);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ChRate", &slot->chorus.rate, 0.1f, 10.0f);
+
+            ImGui::Text("Depth: %.0f%%", slot->chorus.depth * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ChDepth", &slot->chorus.depth, 0.0f, 1.0f);
+
+            ImGui::Text("Mix: %.0f%%", slot->chorus.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##ChMix", &slot->chorus.mix, 0.0f, 1.0f);
             break;
         }
 

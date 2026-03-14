@@ -172,6 +172,29 @@ int main(void) {
     for (int i = 0; i < 3; i++) effect_free(&chain[i]);
     printf("  PASS: Chain with overdrive+chorus+reverb works\n");
 
+    /* Test 11: Every effect type in the enum can be init/process/free without crash */
+    {
+        const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus"};
+        int name_count = (int)(sizeof(type_names) / sizeof(type_names[0]));
+        ASSERT(name_count == EFFECT_TYPE_COUNT,
+               "Effect type names array must match EFFECT_TYPE_COUNT — did you add a new effect?");
+        printf("  PASS: Effect names array matches enum count (%d)\n", EFFECT_TYPE_COUNT);
+
+        for (int i = 0; i < EFFECT_TYPE_COUNT; i++) {
+            sq_effect_slot_t s;
+            memset(&s, 0, sizeof(s));
+            effect_init(&s, (sq_effect_type_t)i, SAMPLE_RATE);
+            ASSERT((int)s.type == i, "Effect type should match after init");
+
+            gen_sine(buf, NUM_FRAMES, 440.0f);
+            effect_process(&s, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+
+            effect_free(&s);
+            ASSERT(s.type == EFFECT_NONE, "Effect should be NONE after free");
+            printf("  PASS: Effect type %d (%s) init/process/free OK\n", i, type_names[i]);
+        }
+    }
+
     free(buf);
     printf("\n=== ALL EFFECTS TESTS PASSED ===\n");
     return 0;
