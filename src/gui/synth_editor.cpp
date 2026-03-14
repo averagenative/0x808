@@ -510,15 +510,16 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     combo_with_scroll("Osc2", &w2, wave_names, 4);
     p->osc2_wave = (sq_waveform_t)w2;
 
-    ImGui::SliderFloat("Mix", &p->osc_mix, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("Detune", &p->osc2_detune, -24.0f, 24.0f, "%.1f st");
+    knob_float("Mix", &p->osc_mix, 0.0f, 1.0f, 0.5f, 0.01f);
+    ImGui::SameLine();
+    knob_float("Det", &p->osc2_detune, -24.0f, 24.0f, 0.0f, 0.1f);
 
     int uv = p->unison_voices;
     ImGui::SliderInt("Unison", &uv, 1, 7);
     p->unison_voices = uv;
 
     if (p->unison_voices > 1) {
-        ImGui::SliderFloat("Spread", &p->unison_detune, 0.0f, 50.0f, "%.0f c");
+        knob_float("Spread", &p->unison_detune, 0.0f, 50.0f, 0.0f, 0.5f);
     }
 
     ImGui::EndChild();
@@ -533,15 +534,18 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     combo_with_scroll("Type", &ft, filter_names, 3);
     p->filter_type = (sq_filter_type_t)ft;
 
-    ImGui::SliderFloat("Cutoff", &p->filter_cutoff, 20.0f, 20000.0f, "%.0f Hz");
-    ImGui::SliderFloat("Reso", &p->filter_resonance, 0.5f, 20.0f, "%.1f");
-    ImGui::SliderFloat("EnvDep", &p->filter_env_depth, -10000.0f, 10000.0f, "%.0f");
+    knob_float("Cut", &p->filter_cutoff, 20.0f, 20000.0f, 1000.0f, 10.0f);
+    ImGui::SameLine();
+    knob_float("Res", &p->filter_resonance, 0.5f, 20.0f, 1.0f, 0.1f);
+    knob_float("Env", &p->filter_env_depth, -10000.0f, 10000.0f, 0.0f, 50.0f);
 
     ImGui::Text("Filter Env:");
-    ImGui::SliderFloat("F.A", &p->filter_env.attack, 0.001f, 2.0f, "%.3f");
-    ImGui::SliderFloat("F.D", &p->filter_env.decay, 0.001f, 2.0f, "%.3f");
-    ImGui::SliderFloat("F.S", &p->filter_env.sustain, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("F.R", &p->filter_env.release, 0.001f, 5.0f, "%.3f");
+    knob_float("A##fe", &p->filter_env.attack, 0.001f, 2.0f, 0.005f, 0.001f);
+    ImGui::SameLine();
+    knob_float("D##fe", &p->filter_env.decay, 0.001f, 2.0f, 0.3f, 0.001f);
+    knob_float("S##fe", &p->filter_env.sustain, 0.0f, 1.0f, 0.5f, 0.01f);
+    ImGui::SameLine();
+    knob_float("R##fe", &p->filter_env.release, 0.001f, 5.0f, 0.5f, 0.001f);
 
     /* Filter frequency response curve */
     float avail_w = ImGui::GetContentRegionAvail().x;
@@ -559,10 +563,12 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     ImGui::Text("Amp Envelope");
     ImGui::Separator();
 
-    ImGui::SliderFloat("A##amp", &p->amp_env.attack, 0.001f, 2.0f, "%.3f");
-    ImGui::SliderFloat("D##amp", &p->amp_env.decay, 0.001f, 2.0f, "%.3f");
-    ImGui::SliderFloat("S##amp", &p->amp_env.sustain, 0.0f, 1.0f, "%.2f");
-    ImGui::SliderFloat("R##amp", &p->amp_env.release, 0.001f, 5.0f, "%.3f");
+    knob_float("A##amp", &p->amp_env.attack, 0.001f, 2.0f, 0.005f, 0.001f);
+    ImGui::SameLine();
+    knob_float("D##amp", &p->amp_env.decay, 0.001f, 2.0f, 0.3f, 0.001f);
+    knob_float("S##amp", &p->amp_env.sustain, 0.0f, 1.0f, 0.8f, 0.01f);
+    ImGui::SameLine();
+    knob_float("R##amp", &p->amp_env.release, 0.001f, 5.0f, 0.5f, 0.001f);
 
     /* Amp envelope visualization */
     float avail_w2 = ImGui::GetContentRegionAvail().x;
@@ -584,8 +590,9 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     combo_with_scroll("Dest", &ld, lfo_dest_names, 4);
     p->lfo.dest = (sq_lfo_dest_t)ld;
 
-    ImGui::SliderFloat("Rate", &p->lfo.rate, 0.0f, 50.0f, "%.1f Hz");
-    ImGui::SliderFloat("Depth", &p->lfo.depth, 0.0f, 1.0f, "%.2f");
+    knob_float("Rate", &p->lfo.rate, 0.0f, 50.0f, 1.0f, 0.1f);
+    ImGui::SameLine();
+    knob_float("Depth", &p->lfo.depth, 0.0f, 1.0f, 0.5f, 0.01f);
 
     /* BPM sync */
     bool sync = p->lfo_bpm_sync;

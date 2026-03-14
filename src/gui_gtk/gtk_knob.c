@@ -75,12 +75,25 @@ static void knob_draw(GtkDrawingArea *area, cairo_t *cr,
     cairo_line_to(cr, ix, iy);
     cairo_stroke(cr);
 
-    /* Label */
-    cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.9);
-    cairo_set_font_size(cr, 8.0);
+    /* Label (white text with black outline for readability on all themes) */
+    cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL,
+                           CAIRO_FONT_WEIGHT_BOLD);
+    cairo_set_font_size(cr, 9.0);
     cairo_text_extents_t te;
     cairo_text_extents(cr, kd->label, &te);
-    cairo_move_to(cr, cx - te.width / 2, height - 1);
+    double lx = cx - te.width / 2;
+    double ly = height - 1;
+
+    /* Black outline (draw text offset in 4 directions) */
+    cairo_set_source_rgb(cr, 0, 0, 0);
+    cairo_move_to(cr, lx - 1, ly);     cairo_show_text(cr, kd->label);
+    cairo_move_to(cr, lx + 1, ly);     cairo_show_text(cr, kd->label);
+    cairo_move_to(cr, lx, ly - 1);     cairo_show_text(cr, kd->label);
+    cairo_move_to(cr, lx, ly + 1);     cairo_show_text(cr, kd->label);
+
+    /* White foreground */
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_move_to(cr, lx, ly);
     cairo_show_text(cr, kd->label);
 }
 

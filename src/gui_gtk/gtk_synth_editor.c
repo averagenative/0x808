@@ -591,11 +591,14 @@ static void rebuild_controls(void)
     gtk_box_append(GTK_BOX(col2),
                   make_int_dropdown("Type", filter_names, 3, (int *)&p->filter_type));
     {
-        GtkWidget *filt_knobs = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
-        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Cut", 20, 20000, &p->filter_cutoff));
-        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Res", 0.5, 20, &p->filter_resonance));
-        gtk_box_append(GTK_BOX(filt_knobs), make_knob("Env", -10000, 10000, &p->filter_env_depth));
-        gtk_box_append(GTK_BOX(col2), filt_knobs);
+        GtkWidget *filt_row1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(filt_row1), make_knob("C", 20, 20000, &p->filter_cutoff));
+        gtk_box_append(GTK_BOX(filt_row1), make_knob("R", 0.5, 20, &p->filter_resonance));
+        gtk_box_append(GTK_BOX(col2), filt_row1);
+
+        GtkWidget *filt_row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+        gtk_box_append(GTK_BOX(filt_row2), make_knob("E", -10000, 10000, &p->filter_env_depth));
+        gtk_box_append(GTK_BOX(col2), filt_row2);
     }
     add_section(col2, "Filter Env");
     gtk_box_append(GTK_BOX(col2),
@@ -729,11 +732,13 @@ GtkWidget *gtk_synth_editor_new(void)
 {
     GtkWidget *scroll = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
-                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_propagate_natural_width(
+        GTK_SCROLLED_WINDOW(scroll), FALSE);
 
-    s_content_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-    gtk_widget_set_margin_start(s_content_box, 6);
-    gtk_widget_set_margin_end(s_content_box, 6);
+    s_content_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_margin_start(s_content_box, 4);
+    gtk_widget_set_margin_end(s_content_box, 4);
     gtk_widget_set_margin_top(s_content_box, 4);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), s_content_box);
 
