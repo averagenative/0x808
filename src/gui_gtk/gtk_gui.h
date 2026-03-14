@@ -74,6 +74,8 @@ const char *gtk_theme_current_name(void);
 /* gtk_drum_grid.c */
 GtkWidget *gtk_drum_grid_new(void);
 void       gtk_drum_grid_queue_redraw(void);
+void       gtk_drum_grid_add_sampler_track(GtkWidget *btn, gpointer data);
+void       gtk_drum_grid_add_synth_track(GtkWidget *btn, gpointer data);
 
 /* gtk_piano_roll.c */
 GtkWidget *gtk_piano_roll_new(void);

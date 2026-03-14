@@ -40,6 +40,12 @@ static bool s_undo_pushed = false;
 /* Scroll offset for vertical track scrolling */
 static double s_scroll_offset = 0.0;
 
+/* Hover state for cell highlight */
+static int  s_hover_track = -1;
+static int  s_hover_step  = -1;
+static double s_hover_x = -1.0;
+static double s_hover_y = -1.0;
+
 /* ─── Helper: get grid geometry ───────────────────────────────────────────── */
 
 typedef struct {
@@ -328,6 +334,13 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
             cairo_set_line_width(cr, 0.5);
             cairo_rectangle(cr, sx, sy, sw, sh);
             cairo_stroke(cr);
+
+            /* Hover highlight */
+            if ((int)t == s_hover_track && (int)s == s_hover_step) {
+                cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.12);
+                cairo_rectangle(cr, sx, sy, sw, sh);
+                cairo_fill(cr);
+            }
         }
     }
 
@@ -498,6 +511,109 @@ static gboolean on_scroll(GtkEventControllerScroll *ctrl,
     return TRUE;
 }
 
+/* ─── Hover interaction ────────────────────────────────────────────────────── */
+
+static void on_motion(GtkEventControllerMotion *ctrl,
+                      double x, double y, gpointer user_data)
+{
+    (void)ctrl; (void)user_data;
+    s_hover_x = x;
+    s_hover_y = y;
+
+    int old_track = s_hover_track;
+    int old_step  = s_hover_step;
+
+    int w = gtk_widget_get_width(g_gtk.drum_grid_area);
+    int h = gtk_widget_get_height(g_gtk.drum_grid_area);
+    grid_geom_t g;
+    if (!get_geom(w, h, &g) || x < g.grid_x || y < g.grid_y) {
+        s_hover_track = -1;
+        s_hover_step  = -1;
+    } else {
+        int step  = (int)((x - g.grid_x) / g.cell_w);
+        int track = (int)((y - g.grid_y + s_scroll_offset) / g.cell_h);
+        if (step >= 0 && (uint32_t)step < g.max_steps &&
+            track >= 0 && (uint32_t)track < g.num_tracks) {
+            s_hover_track = track;
+            s_hover_step  = step;
+        } else {
+            s_hover_track = -1;
+            s_hover_step  = -1;
+        }
+    }
+
+    if (s_hover_track != old_track || s_hover_step != old_step)
+        gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_motion_leave(GtkEventControllerMotion *ctrl, gpointer user_data)
+{
+    (void)ctrl; (void)user_data;
+    s_hover_track = -1;
+    s_hover_step  = -1;
+    s_hover_x = -1.0;
+    s_hover_y = -1.0;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+/* ─── Add track buttons ───────────────────────────────────────────────────── */
+
+static void on_add_sampler_track(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+
+    if (pat->num_tracks >= SQ_MAX_TRACKS) {
+        sq_app_set_status(&g_gtk.app, "Max tracks reached!", 90);
+        return;
+    }
+
+    sq_track_t *t = &pat->tracks[pat->num_tracks];
+    memset(t, 0, sizeof(*t));
+    t->type         = TRACK_SAMPLER;
+    t->sample_index = 0;
+    t->length       = 16;
+    t->volume       = 0.8f;
+    t->color_index  = (uint8_t)(pat->num_tracks % NUM_TRACK_COLORS);
+    pat->num_tracks++;
+
+    g_gtk.app.selected_track = (int)(pat->num_tracks - 1);
+    sq_app_set_status(&g_gtk.app, "+ Sampler track", 90);
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_add_synth_track(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+
+    if (pat->num_tracks >= SQ_MAX_TRACKS) {
+        sq_app_set_status(&g_gtk.app, "Max tracks reached!", 90);
+        return;
+    }
+
+    sq_track_t *t = &pat->tracks[pat->num_tracks];
+    memset(t, 0, sizeof(*t));
+    t->type         = TRACK_SYNTH;
+    t->synth_preset = 0;
+    t->length       = 16;
+    t->volume       = 0.6f;
+    t->color_index  = (uint8_t)(pat->num_tracks % NUM_TRACK_COLORS);
+    pat->num_tracks++;
+
+    g_gtk.app.selected_track = (int)(pat->num_tracks - 1);
+    sq_app_set_status(&g_gtk.app, "+ Synth track", 90);
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
 /* ─── Constructor ─────────────────────────────────────────────────────────── */
 
 GtkWidget *gtk_drum_grid_new(void)
@@ -516,6 +632,12 @@ GtkWidget *gtk_drum_grid_new(void)
     g_signal_connect(drag, "drag-end", G_CALLBACK(on_drag_end), NULL);
     gtk_widget_add_controller(area, GTK_EVENT_CONTROLLER(drag));
 
+    /* Motion for hover highlight */
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    g_signal_connect(motion, "motion", G_CALLBACK(on_motion), NULL);
+    g_signal_connect(motion, "leave", G_CALLBACK(on_motion_leave), NULL);
+    gtk_widget_add_controller(area, motion);
+
     /* Scroll for vertical track scrolling */
     GtkEventController *scroll = gtk_event_controller_scroll_new(
         GTK_EVENT_CONTROLLER_SCROLL_VERTICAL);
@@ -529,4 +651,14 @@ void gtk_drum_grid_queue_redraw(void)
 {
     if (g_gtk.drum_grid_area)
         gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+void gtk_drum_grid_add_sampler_track(GtkWidget *btn, gpointer data)
+{
+    on_add_sampler_track(btn, data);
+}
+
+void gtk_drum_grid_add_synth_track(GtkWidget *btn, gpointer data)
+{
+    on_add_synth_track(btn, data);
 }

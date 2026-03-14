@@ -20,6 +20,7 @@
 #include "gui/undo.h"
 #include "formats/project.h"
 #include "engine/export.h"
+#include "engine/synth.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -300,13 +301,170 @@ static void on_theme_clicked(GtkWidget *btn, gpointer data)
     gtk_theme_cycle(g_gtk.window);
 }
 
+/* ─── QWERTY keyboard → MIDI note mapping ─────────────────────────────────── */
+
+/* Two octaves mapped across QWERTY keyboard (matches ImGui frontend):
+ *
+ * Lower octave (Z row = white keys, A/S row = black keys):
+ *   Z  X  C  V  B  N  M  ,  .  /
+ *   C  D  E  F  G  A  B  C  D  E
+ *     S  D     G  H  J     L  ;
+ *     C# D#    F# G# A#    C# D#
+ *
+ * Upper octave (Q row = white keys, number row = black keys):
+ *   Q  W  E  R  T  Y  U  I  O  P
+ *   C  D  E  F  G  A  B  C  D  E
+ *     2  3     5  6  7     9  0
+ *     C# D#    F# G# A#    C# D#
+ */
+
+/* Map GDK keyval to semitone offset from base octave.
+ * Returns -1 if the key is not mapped.
+ * octave_out: 0 = lower octave (Z row), 1 = upper octave (Q row) */
+static int gdk_keyval_to_semitone(guint keyval, int *octave_out)
+{
+    *octave_out = 0;
+    switch (keyval) {
+    /* Lower octave — white keys (Z row) */
+    case GDK_KEY_z: return 0;   /* C */
+    case GDK_KEY_x: return 2;   /* D */
+    case GDK_KEY_c: return 4;   /* E */
+    case GDK_KEY_v: return 5;   /* F */
+    case GDK_KEY_b: return 7;   /* G */
+    case GDK_KEY_n: return 9;   /* A */
+    case GDK_KEY_m: return 11;  /* B */
+    case GDK_KEY_comma:     return 12; /* C+1 */
+    case GDK_KEY_period:    return 14; /* D+1 */
+    case GDK_KEY_slash:     return 16; /* E+1 */
+
+    /* Lower octave — black keys (A/S row) */
+    case GDK_KEY_s: return 1;   /* C# */
+    case GDK_KEY_d: return 3;   /* D# */
+    case GDK_KEY_g: return 6;   /* F# */
+    case GDK_KEY_h: return 8;   /* G# */
+    case GDK_KEY_j: return 10;  /* A# */
+    case GDK_KEY_l:         return 13; /* C#+1 */
+    case GDK_KEY_semicolon: return 15; /* D#+1 */
+
+    /* Upper octave — white keys (Q row) */
+    case GDK_KEY_q: *octave_out = 1; return 0;
+    case GDK_KEY_w: *octave_out = 1; return 2;
+    case GDK_KEY_e: *octave_out = 1; return 4;
+    case GDK_KEY_r: *octave_out = 1; return 5;
+    case GDK_KEY_t: *octave_out = 1; return 7;
+    case GDK_KEY_y: *octave_out = 1; return 9;
+    case GDK_KEY_u: *octave_out = 1; return 11;
+    case GDK_KEY_i: *octave_out = 1; return 12;
+    case GDK_KEY_o: *octave_out = 1; return 14;
+    case GDK_KEY_p: *octave_out = 1; return 16;
+
+    /* Upper octave — black keys (number row) */
+    case GDK_KEY_2: *octave_out = 1; return 1;
+    case GDK_KEY_3: *octave_out = 1; return 3;
+    case GDK_KEY_5: *octave_out = 1; return 6;
+    case GDK_KEY_6: *octave_out = 1; return 8;
+    case GDK_KEY_7: *octave_out = 1; return 10;
+    case GDK_KEY_9: *octave_out = 1; return 13;
+    case GDK_KEY_0: *octave_out = 1; return 15;
+
+    default: return -1;
+    }
+}
+
+/* Track which MIDI notes are held by QWERTY keys */
+#define MAX_QWERTY_HELD 16
+static struct { guint keyval; int midi_note; } s_qwerty_held[MAX_QWERTY_HELD];
+static int s_qwerty_held_count = 0;
+
+/* Base note for QWERTY keyboard (C3 = MIDI 48, matching gtk_keyboard.c) */
+#define QWERTY_BASE_NOTE 48
+
+static void qwerty_release_note(sq_engine_t *engine, int midi_note)
+{
+    float freq = 440.0f * powf(2.0f, ((float)midi_note - 69.0f) / 12.0f);
+    for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++) {
+        if (engine->synth_voices[v].active &&
+            fabsf(engine->synth_voices[v].frequency - freq) < 0.1f)
+            engine->synth_voices[v].amp_env.stage = ENV_RELEASE;
+    }
+}
+
+/* Handle a QWERTY key press/release for piano playing.
+ * Returns TRUE if the key was consumed (mapped to a note). */
+static gboolean qwerty_key_event(guint keyval, gboolean pressed)
+{
+    sq_engine_t *engine = g_gtk.engine;
+    int preset = sq_app_get_keyboard_preset(&g_gtk.app, engine);
+    if (preset < 0) preset = 0;
+
+    int octave;
+    int semitone = gdk_keyval_to_semitone(keyval, &octave);
+    if (semitone < 0) return FALSE;
+
+    int midi_note = QWERTY_BASE_NOTE + octave * 12 + semitone;
+    if (midi_note < 0 || midi_note > 127) return FALSE;
+
+    if (pressed) {
+        /* Don't re-trigger if already held (key repeat) */
+        for (int i = 0; i < s_qwerty_held_count; i++) {
+            if (s_qwerty_held[i].keyval == keyval) return TRUE;
+        }
+
+        /* Trigger note */
+        synth_trigger(engine, preset, 0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note);
+
+        if (s_qwerty_held_count < MAX_QWERTY_HELD) {
+            s_qwerty_held[s_qwerty_held_count].keyval = keyval;
+            s_qwerty_held[s_qwerty_held_count].midi_note = midi_note;
+            s_qwerty_held_count++;
+        }
+    } else {
+        /* Release: find and remove from held list, send note-off */
+        for (int i = 0; i < s_qwerty_held_count; i++) {
+            if (s_qwerty_held[i].keyval == keyval) {
+                qwerty_release_note(engine, s_qwerty_held[i].midi_note);
+                s_qwerty_held[i] = s_qwerty_held[s_qwerty_held_count - 1];
+                s_qwerty_held_count--;
+                break;
+            }
+        }
+    }
+
+    return TRUE;
+}
+
 /* ─── Keyboard shortcut handler ───────────────────────────────────────────── */
+
+static gboolean on_key_released(GtkEventControllerKey *ctrl,
+                                 guint keyval, guint keycode,
+                                 GdkModifierType state, gpointer user_data)
+{
+    (void)ctrl; (void)keycode; (void)state; (void)user_data;
+
+    /* QWERTY piano note-off */
+    if (g_gtk.app.panels[SQ_PANEL_KEYBOARD] &&
+        !(state & GDK_CONTROL_MASK) && !(state & GDK_ALT_MASK))
+    {
+        if (qwerty_key_event(keyval, FALSE))
+            return TRUE;
+    }
+
+    return FALSE;
+}
 
 static gboolean on_key_pressed(GtkEventControllerKey *ctrl,
                                 guint keyval, guint keycode,
                                 GdkModifierType state, gpointer user_data)
 {
     (void)ctrl; (void)keycode; (void)user_data;
+
+    /* QWERTY piano — active when keyboard panel is shown, no Ctrl/Alt */
+    if (g_gtk.app.panels[SQ_PANEL_KEYBOARD] &&
+        !(state & GDK_CONTROL_MASK) && !(state & GDK_ALT_MASK))
+    {
+        if (qwerty_key_event(keyval, TRUE))
+            return TRUE;
+    }
 
     int sq_key = gdk_to_sq_key(keyval);
     int sq_mod = gdk_to_sq_mod(state);
@@ -594,6 +752,8 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
     GtkEventController *key_ctrl = gtk_event_controller_key_new();
     g_signal_connect(key_ctrl, "key-pressed",
                      G_CALLBACK(on_key_pressed), NULL);
+    g_signal_connect(key_ctrl, "key-released",
+                     G_CALLBACK(on_key_released), NULL);
     gtk_widget_add_controller(g_gtk.window, key_ctrl);
 
     /* ── Top-level vertical layout: toolbar | content | keyboard ──────── */
@@ -630,6 +790,24 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
     gtk_widget_set_vexpand(g_gtk.drum_grid_area, TRUE);
     gtk_widget_set_hexpand(g_gtk.drum_grid_area, TRUE);
     gtk_box_append(GTK_BOX(g_gtk.grid_area), g_gtk.drum_grid_area);
+
+    /* Add track buttons below the drum grid */
+    {
+        GtkWidget *add_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+        gtk_widget_set_margin_start(add_row, 4);
+        gtk_widget_set_margin_top(add_row, 2);
+        gtk_widget_set_margin_bottom(add_row, 2);
+
+        GtkWidget *add_smp = sq_flat_button_new("+ Sampler",
+            G_CALLBACK(gtk_drum_grid_add_sampler_track), NULL);
+        gtk_box_append(GTK_BOX(add_row), add_smp);
+
+        GtkWidget *add_syn = sq_flat_button_new("+ Synth",
+            G_CALLBACK(gtk_drum_grid_add_synth_track), NULL);
+        gtk_box_append(GTK_BOX(add_row), add_syn);
+
+        gtk_box_append(GTK_BOX(g_gtk.grid_area), add_row);
+    }
 
     /* ── Bottom panel area (piano roll + synth editor + mixer) ────────── */
     GtkWidget *bottom_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);

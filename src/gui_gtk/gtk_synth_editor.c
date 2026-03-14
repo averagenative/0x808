@@ -24,6 +24,11 @@ static GtkWidget *s_adsr_area = NULL;
 static sq_adsr_params_t *s_adsr_ptr = NULL;
 static int s_adsr_drag_point = -1;  /* -1=none, 0=attack, 1=decay/sustain, 2=release */
 
+static GtkWidget *s_filter_adsr_area = NULL;
+static sq_adsr_params_t *s_filter_adsr_ptr = NULL;
+static GtkWidget *s_filter_curve_area = NULL;
+static sq_synth_preset_t *s_filter_preset = NULL;
+
 static void rebuild_controls(void); /* forward decl */
 
 static void on_preset_selected(GObject *obj, GParamSpec *pspec, gpointer data)
@@ -98,6 +103,131 @@ static void adsr_draw(GtkDrawingArea *area, cairo_t *cr,
     cairo_show_text(cr, "S");
     cairo_move_to(cr, sx + 2, height - 2);
     cairo_show_text(cr, "R");
+}
+
+/* ─── Filter envelope ADSR visualization ──────────────────────────────────── */
+
+static void filter_adsr_draw(GtkDrawingArea *area, cairo_t *cr,
+                              int width, int height, gpointer user_data)
+{
+    (void)area; (void)user_data;
+    if (!s_filter_adsr_ptr) return;
+
+    float a = s_filter_adsr_ptr->attack, d = s_filter_adsr_ptr->decay;
+    float s = s_filter_adsr_ptr->sustain, r = s_filter_adsr_ptr->release;
+    float total = a + d + 0.3f + r;
+    if (total < 0.01f) total = 0.01f;
+
+    double pad = 6;
+    double w = width - pad * 2;
+    double h = height - pad * 2;
+
+    cairo_set_source_rgb(cr, 0.06, 0.06, 0.08);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    double x0 = pad, y0 = pad + h;
+
+    cairo_set_source_rgba(cr, 0.2, 1.0, 0.2, 0.8);
+    cairo_set_line_width(cr, 2.0);
+
+    cairo_move_to(cr, x0, y0);
+    double ax = x0 + (a / total) * w;
+    cairo_line_to(cr, ax, pad);
+    double dx = ax + (d / total) * w;
+    double sy = pad + h * (1.0 - s);
+    cairo_line_to(cr, dx, sy);
+    double sx = dx + (0.3f / total) * w;
+    cairo_line_to(cr, sx, sy);
+    double rx = sx + (r / total) * w;
+    cairo_line_to(cr, rx, y0);
+    cairo_stroke(cr);
+
+    cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.6);
+    cairo_arc(cr, ax, pad, 3, 0, 2 * M_PI);
+    cairo_fill(cr);
+    cairo_arc(cr, dx, sy, 3, 0, 2 * M_PI);
+    cairo_fill(cr);
+
+    cairo_set_source_rgba(cr, 0.5, 0.5, 0.5, 0.7);
+    cairo_set_font_size(cr, 9.0);
+    cairo_move_to(cr, x0 + 2, height - 2);
+    cairo_show_text(cr, "A");
+    cairo_move_to(cr, ax + 2, height - 2);
+    cairo_show_text(cr, "D");
+    cairo_move_to(cr, dx + 2, height - 2);
+    cairo_show_text(cr, "S");
+    cairo_move_to(cr, sx + 2, height - 2);
+    cairo_show_text(cr, "R");
+}
+
+/* ─── Filter response curve visualization ─────────────────────────────────── */
+
+static void filter_curve_draw(GtkDrawingArea *area, cairo_t *cr,
+                               int width, int height, gpointer user_data)
+{
+    (void)area; (void)user_data;
+    if (!s_filter_preset) return;
+
+    sq_filter_type_t type = s_filter_preset->filter_type;
+    float cutoff = s_filter_preset->filter_cutoff;
+    float resonance = s_filter_preset->filter_resonance;
+
+    /* Background */
+    cairo_set_source_rgb(cr, 0.06, 0.06, 0.08);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    /* Draw filter magnitude response curve */
+    cairo_set_source_rgba(cr, 0.2, 1.0, 0.2, 0.8);
+    cairo_set_line_width(cr, 1.5);
+
+    float prev_y = 0;
+    for (int px = 0; px < width; px++) {
+        float t = (float)px / (float)width;
+        float freq = 20.0f * powf(1000.0f, t); /* 20 Hz to 20000 Hz */
+
+        float ratio = freq / cutoff;
+        float Q = resonance;
+        if (Q < 0.5f) Q = 0.5f;
+
+        float denom = sqrtf(1.0f + powf(ratio, 4.0f)
+                      - 2.0f * ratio * ratio * (1.0f - 1.0f / (2.0f * Q * Q)));
+        if (denom < 0.001f) denom = 0.001f;
+
+        float mag;
+        switch (type) {
+        case FILTER_LOWPASS:
+            mag = 1.0f / denom;
+            break;
+        case FILTER_HIGHPASS:
+            mag = (ratio * ratio) / denom;
+            break;
+        default: /* bandpass */
+            mag = (ratio / Q) / denom;
+            break;
+        }
+        if (mag > 2.0f) mag = 2.0f;
+        if (mag < 0.0f) mag = 0.0f;
+
+        float y = (float)height - (mag / 2.0f) * (float)height;
+        if (px > 0) {
+            cairo_move_to(cr, px - 1, (double)prev_y);
+            cairo_line_to(cr, px, (double)y);
+            cairo_stroke(cr);
+        }
+        prev_y = y;
+    }
+
+    /* Cutoff frequency indicator line */
+    float cutoff_x = (float)width * logf(cutoff / 20.0f) / logf(1000.0f);
+    if (cutoff_x > 0 && cutoff_x < (float)width) {
+        cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.25);
+        cairo_set_line_width(cr, 1.0);
+        cairo_move_to(cr, (double)cutoff_x, 0);
+        cairo_line_to(cr, (double)cutoff_x, height);
+        cairo_stroke(cr);
+    }
 }
 
 /* ─── ADSR drag interaction ───────────────────────────────────────────────── */
@@ -363,6 +493,10 @@ static void rebuild_controls(void)
 
     s_adsr_area = NULL;
     s_adsr_ptr = NULL;
+    s_filter_adsr_area = NULL;
+    s_filter_adsr_ptr = NULL;
+    s_filter_curve_area = NULL;
+    s_filter_preset = NULL;
 
     int preset_idx = -1;
     sq_synth_preset_t *p = get_current_preset(&preset_idx);
@@ -469,6 +603,22 @@ static void rebuild_controls(void)
                                   &p->filter_env.sustain, &p->filter_env.release,
                                   2.0f, 2.0f, 5.0f));
 
+    /* Filter envelope ADSR visualization */
+    s_filter_adsr_ptr = &p->filter_env;
+    s_filter_adsr_area = gtk_drawing_area_new();
+    gtk_widget_set_size_request(s_filter_adsr_area, -1, 50);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_filter_adsr_area),
+                                   filter_adsr_draw, NULL, NULL);
+    gtk_box_append(GTK_BOX(col2), s_filter_adsr_area);
+
+    /* Filter response curve */
+    s_filter_preset = p;
+    s_filter_curve_area = gtk_drawing_area_new();
+    gtk_widget_set_size_request(s_filter_curve_area, -1, 50);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(s_filter_curve_area),
+                                   filter_curve_draw, NULL, NULL);
+    gtk_box_append(GTK_BOX(col2), s_filter_curve_area);
+
     /* Column 3: Amp Envelope */
     GtkWidget *col3 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 1);
     gtk_widget_set_hexpand(col3, TRUE);
@@ -565,6 +715,12 @@ void gtk_synth_editor_update(void)
     /* Redraw ADSR visualization */
     if (s_adsr_area && s_adsr_ptr)
         gtk_widget_queue_draw(s_adsr_area);
+
+    /* Redraw filter envelope ADSR and filter curve */
+    if (s_filter_adsr_area && s_filter_adsr_ptr)
+        gtk_widget_queue_draw(s_filter_adsr_area);
+    if (s_filter_curve_area && s_filter_preset)
+        gtk_widget_queue_draw(s_filter_curve_area);
 }
 
 /* ─── Constructor ─────────────────────────────────────────────────────────── */
