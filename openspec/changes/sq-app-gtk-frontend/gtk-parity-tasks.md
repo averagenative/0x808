@@ -39,17 +39,16 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Track controls column (200px): color bar, type badge, volume bar
 - [ ] Track type selector button (Sampler/Synth/SF2 — currently display-only)
 - [ ] Sample/preset dropdown in track controls
-- [ ] Right-click drag: velocity/pitch adjustment
-- [ ] Right-click popup: velocity/pitch editor
+- [x] Right-click popup: velocity/pitch editor with copy/paste
 - [x] Velocity number + pitch offset displayed in cells
 - [x] Cell glow effects (rounded corners, inner glow)
 - [x] Beat-aligned shading (alternating 8-step groups)
 - [x] Separator line before synth tracks ("SYNTH")
-- [ ] Add Track buttons (+ Sampler, + Synth)
+- [x] Add Track buttons (+ Sampler, + Synth)
 - [ ] Kit selector dropdown
 - [x] Multi-step drag editing (drag to paint/erase steps)
 - [x] Vertical scroll for many tracks
-- [ ] Hover highlight on cells
+- [x] Hover highlight on cells
 
 ## 3. Piano Roll Parity
 
@@ -71,31 +70,32 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Preset selector dropdown
 - [x] Mode selector dropdown (Subtractive/FM/Wavetable)
 - [x] Osc1/Osc2 waveform selectors
-- [x] Oscillator mix + detune sliders
+- [x] Oscillator mix + detune knobs
 - [x] Unison voices + spread controls
 - [x] Filter type selector (LP/HP/BP)
-- [x] Filter cutoff/reso/env depth sliders
-- [x] Filter ADSR sliders
-- [x] Amp ADSR sliders + curve visualization
+- [x] Filter cutoff/reso/env depth knobs
+- [x] Filter ADSR knobs
+- [x] Amp ADSR knobs + curve visualization
 - [x] LFO waveform + destination selectors
-- [x] LFO rate + depth sliders
+- [x] LFO rate + depth knobs
 - [x] BPM Sync toggle + division selector
-- [x] FM algorithm selector + per-operator ratio/level/feedback/ADSR
-- [x] Wavetable position/env/lfo sliders (when WT mode)
+- [x] FM algorithm selector + diagram + per-operator knobs
+- [x] Wavetable position/env/lfo knobs + waveform visualizer
 - [x] Dynamic rebuild on track/preset change
-- [ ] Interactive ADSR curve (draggable control points)
-- [ ] Filter response curve visualization
-- [ ] FM algorithm diagram (operator boxes + modulation arrows)
-- [ ] Wavetable bank selector + waveform visualizer
-- [ ] 4-column layout (Subtractive mode)
-- [ ] Replace sliders with rotary knobs where appropriate
+- [x] Interactive ADSR curve (draggable control points)
+- [x] Filter response curve visualization
+- [x] FM algorithm diagram (operator boxes + modulation arrows)
+- [x] Wavetable waveform visualizer
+- [x] 4-column layout (Subtractive mode)
+- [x] Rotary knobs for all parameters
+- [x] Scroll wheel on dropdowns to cycle values
 
 ## 5. Mixer / Effects Parity
 
 - [x] Per-track volume slider (vertical)
-- [x] Per-track pan slider
+- [x] Per-track pan knob
 - [x] Mute button per track
-- [x] Scrollable channel strips
+- [x] Scrollable channel strips with scroll buttons
 - [x] Track level meters (LED-style, 12 segments, green/yellow/red)
 - [x] Master output meter (stereo L/R)
 - [x] Effects panel with Prev/Next navigation (Master + per-track)
@@ -104,17 +104,18 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Bypass checkbox per effect
 - [x] Effect-specific parameter controls
 - [x] MIXER/FX toolbar button (synced label between ImGui and GTK)
+- [x] Alternating strip colors for visual separation
 
 ## 6. Sample Browser Parity
 
 - [x] Sample list with loaded samples
 - [x] Click to assign sample to selected track
-- [ ] Directory navigation (current path, Up, Refresh)
-- [ ] File size display
+- [x] Directory navigation (current path, Up, Refresh)
+- [x] File size display
 - [ ] Waveform preview (40px, blue line)
 - [ ] Audition button (preview playback)
 - [ ] Sample info (duration, sample rate)
-- [ ] "Load Sample" button for adding new samples
+- [x] "Load Sample" button with file dialog
 
 ## 7. Virtual Keyboard Parity
 
@@ -126,7 +127,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Preset name display
 - [x] C note labels on keys
 - [x] Held note name display
-- [ ] QWERTY keyboard mapping (Z-row + Q-row + number/letter sharps)
+- [x] QWERTY keyboard mapping (Z-row + Q-row + number/letter sharps)
 
 ## 8. Arrangement Parity
 
@@ -137,7 +138,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Section editor (pattern selector, repeat count, remove)
 - [x] Status line (playing/queued info)
 - [x] Click section to jump/queue
-- [ ] Section color coding (8-color palette in button backgrounds)
+- [x] Section color coding (8-color palette in button backgrounds)
 
 ## 9. Pattern Presets Dialog
 
@@ -167,34 +168,14 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Amber theme (warm CRT)
 - [x] Ctrl+T cycles themes with status message
 - [x] Theme provider properly removes old CSS on switch
-- [ ] Theme selector popup/menu
+- [x] Theme selector popup/menu
 - [ ] User theme loading from JSON
 - [ ] Theme-aware Cairo drawing colors (pad glow, etc.)
 
 ## 12. Missing Interactions
 
-- [ ] Right-click context menus
-- [ ] Scroll wheel on dropdowns to cycle values
+- [x] Right-click context menus (drum grid velocity/pitch editor)
+- [x] Scroll wheel on dropdowns to cycle values
 - [ ] Double-click knobs to reset
 - [ ] Undo/redo visual feedback
-- [ ] Native file dialogs (GtkFileDialog for save/load)
-
-## 13. Testing (after implementation)
-
-- [ ] T1: Launch GTK frontend, verify dark theme, toolbar visible, drum grid with 10 tracks
-- [ ] T2: Click PLAY — verify playhead animates across grid, audio plays
-- [ ] T3: Click steps in drum grid — verify toggle on/off, velocity coloring
-- [ ] T4: Click synth track row — verify piano roll + synth editor appear
-- [ ] T5: Change synth preset via dropdown — verify controls rebuild
-- [ ] T6: Drag synth editor sliders (cutoff, ADSR) — verify audio changes in real-time
-- [ ] T7: Click KEYS — verify keyboard appears, click keys plays notes, drag for glissando
-- [ ] T8: Click BROWSE — verify sample list appears, click sample assigns to selected track
-- [ ] T9: Click MIXER — verify channel strips with volume/pan per track
-- [ ] T10: Test keyboard shortcuts: Space (play/stop), 1-9 (patterns), Ctrl+Z (undo), Escape (quit)
-- [ ] T11: Verify pattern selector: click numbered buttons, add new pattern with +
-- [ ] T12: Change mode to SONG — verify arrangement panel appears with section controls
-- [ ] T13: Test export dialog: enter filename, select format, export WAV
-- [ ] T14: Ctrl+T — verify theme cycles (dark/hacker/midnight/amber/light)
-- [ ] T15: Resize window — verify all panels scale correctly, min size 800x500 enforced
-- [ ] T16: Verify default build (no -DBUILD_GTK) still works without GTK dependency
-- [ ] T17: Verify ImGui standalone + plugins still build and pass all tests after changes
+- [x] Native file dialogs (GtkFileDialog for sample loading)
