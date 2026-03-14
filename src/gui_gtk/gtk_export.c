@@ -57,6 +57,7 @@ static void on_export_clicked(GtkButton *btn, gpointer user_data)
     /* Bit depth / format */
     int bit_depth = 16;
     int mp3_bitrate = 0;
+    int flac_depth = 0;
     switch (format_idx) {
     case 0: bit_depth = 16; break;
     case 1: bit_depth = 24; break;
@@ -65,6 +66,8 @@ static void on_export_clicked(GtkButton *btn, gpointer user_data)
     case 4: mp3_bitrate = 192; break;
     case 5: mp3_bitrate = 256; break;
     case 6: mp3_bitrate = 320; break;
+    case 7: flac_depth = 16; break;
+    case 8: flac_depth = 24; break;
     }
     config.bit_depth = (uint32_t)bit_depth;
 
@@ -77,7 +80,9 @@ static void on_export_clicked(GtkButton *btn, gpointer user_data)
 
     /* Write to file */
     int write_ok;
-    if (mp3_bitrate > 0)
+    if (flac_depth > 0)
+        write_ok = sq_export_write_flac(path, &result, flac_depth);
+    else if (mp3_bitrate > 0)
         write_ok = sq_export_write_mp3(path, &result, mp3_bitrate);
     else
         write_ok = sq_export_write_wav(path, &result, bit_depth);
@@ -154,7 +159,8 @@ void gtk_export_show(GtkWidget *parent)
 
     const char *formats[] = {
         "WAV 16-bit", "WAV 24-bit", "WAV 32-float",
-        "MP3 128k", "MP3 192k", "MP3 256k", "MP3 320k", NULL
+        "MP3 128k", "MP3 192k", "MP3 256k", "MP3 320k",
+        "FLAC 16-bit", "FLAC 24-bit", NULL
     };
     GtkStringList *fmt_model = gtk_string_list_new(formats);
     s_format_dropdown = gtk_drop_down_new(G_LIST_MODEL(fmt_model), NULL);

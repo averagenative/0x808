@@ -59,6 +59,15 @@ int sq_export_write_wav(const char *filepath, const sq_export_result_t *result,
 int sq_export_write_mp3(const char *filepath, const sq_export_result_t *result,
                         int bitrate);
 
+/*
+ * Write a rendered result to a FLAC file.
+ * Uses a built-in minimal encoder (verbatim subframes, no compression).
+ * bit_depth: 16 or 24.
+ * Returns 0 on success, -1 on failure.
+ */
+int sq_export_write_flac(const char *filepath, const sq_export_result_t *result,
+                         int bit_depth);
+
 #ifdef __cplusplus
 }
 #endif

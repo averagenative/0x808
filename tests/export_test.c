@@ -138,6 +138,46 @@ int main(void)
         }
     }
 
+    /* Test 6: FLAC 16-bit export */
+    {
+        sq_export_config_t cfg = {.sample_rate = 44100, .num_bars = 2, .pattern_index = 0};
+        sq_export_result_t result = {0};
+
+        if (sq_export_render(&g_engine, &cfg, &result) == 0) {
+            if (sq_export_write_flac("test_export_16.flac", &result, 16) == 0) {
+                LOG_INFO("Test 6 OK: FLAC 16-bit export");
+            } else {
+                LOG_ERROR("Test 6 FAILED: FLAC write error");
+                free(result.data);
+                return 1;
+            }
+            free(result.data);
+        } else {
+            LOG_ERROR("Test 6 FAILED: render error");
+            return 1;
+        }
+    }
+
+    /* Test 7: FLAC 24-bit export */
+    {
+        sq_export_config_t cfg = {.sample_rate = 48000, .num_bars = 1, .pattern_index = 0};
+        sq_export_result_t result = {0};
+
+        if (sq_export_render(&g_engine, &cfg, &result) == 0) {
+            if (sq_export_write_flac("test_export_24.flac", &result, 24) == 0) {
+                LOG_INFO("Test 7 OK: FLAC 24-bit export at 48kHz");
+            } else {
+                LOG_ERROR("Test 7 FAILED: FLAC write error");
+                free(result.data);
+                return 1;
+            }
+            free(result.data);
+        } else {
+            LOG_ERROR("Test 7 FAILED: render error");
+            return 1;
+        }
+    }
+
     sq_engine_shutdown(&g_engine);
     LOG_INFO("All export tests passed!");
     return 0;

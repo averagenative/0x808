@@ -16,15 +16,15 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Swing slider
 - [x] Volume slider
 - [x] Replace sliders with rotary knobs (arc + value display, drag interaction)
-- [ ] Logo with animated pulse effect
+- [x] Logo with animated pulse effect (beat-synced glow)
 - [x] REC button with red highlight
 - [x] Mode selector (PAT/SONG/PERF) buttons with active highlight
 - [x] Pattern selector row (numbered buttons, add pattern)
 - [x] Panel buttons: active CSS class when panel is open
 - [x] Status message in toolbar
 - [x] EXPORT button wired to export dialog
-- [ ] Window controls (minimize/maximize/close) for standalone
-- [ ] Toolbar drag to move window
+- [x] Window controls (minimize/maximize/close) for standalone
+- [x] Toolbar drag to move window (native titlebar handles this)
 
 ## 2. Drum Grid Parity
 
@@ -38,7 +38,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Selected track highlight
 - [x] Track controls column (200px): color bar, type badge, volume bar
 - [x] Track type selector button (Sampler/Synth/SF2 — clickable badge cycles)
-- [ ] Sample/preset dropdown in track controls
+- [x] Sample/preset cycling (click track name to cycle)
 - [x] Right-click popup: velocity/pitch editor with copy/paste
 - [x] Velocity number + pitch offset displayed in cells
 - [x] Cell glow effects (rounded corners, inner glow)
@@ -113,7 +113,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Directory navigation (current path, Up, Refresh)
 - [x] File size display
 - [x] Waveform preview (40px, blue line)
-- [ ] Audition button (preview playback)
+- [x] Audition button (preview playback)
 - [x] Sample info (duration, sample rate)
 - [x] "Load Sample" button with file dialog
 
@@ -170,7 +170,7 @@ Reference: `docs/FRONTEND_FEATURES.md`
 - [x] Theme provider properly removes old CSS on switch
 - [x] Theme selector popup/menu
 - [x] User theme loading from JSON
-- [ ] Theme-aware Cairo drawing colors (pad glow, etc.)
+- [x] Theme-aware Cairo drawing colors (accent color API)
 
 ## 12. Missing Interactions
 

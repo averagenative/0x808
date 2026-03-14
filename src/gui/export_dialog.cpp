@@ -29,9 +29,10 @@ static int  s_export_done = 0;
 
 static const char *format_names[] = {
     "WAV 16-bit", "WAV 24-bit", "WAV 32-float",
-    "MP3 128k", "MP3 192k", "MP3 256k", "MP3 320k"
+    "MP3 128k", "MP3 192k", "MP3 256k", "MP3 320k",
+    "FLAC 16-bit", "FLAC 24-bit"
 };
-#define NUM_FORMATS 7
+#define NUM_FORMATS 9
 
 extern "C" void export_dialog_show(void)
 {
@@ -104,7 +105,12 @@ extern "C" void export_dialog_draw(sq_engine_t *engine)
         memset(&result, 0, sizeof(result));
         if (sq_export_render(engine, &config, &result) == 0) {
             int write_ok;
-            if (s_format >= 3) {
+            if (s_format >= 7) {
+                /* FLAC export */
+                static const int flac_depths[] = {16, 24};
+                write_ok = sq_export_write_flac(s_filename, &result,
+                                                 flac_depths[s_format - 7]);
+            } else if (s_format >= 3) {
                 /* MP3 export */
                 static const int mp3_bitrates[] = {128, 192, 256, 320};
                 int bitrate = mp3_bitrates[s_format - 3];
