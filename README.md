@@ -2,8 +2,9 @@
 
 **Drum machine & synth workstation — C engine, C++ GUI**
 
-[![0x808 demo](0x808_demo.png)](https://projects.dcmichael.com/0x808_demo.mp4)
-> **[Watch demo video](https://projects.dcmichael.com/0x808_demo.mp4)**
+![0x808 demo](0x808_demo.gif)
+
+> **[Watch full demo video](https://projects.dcmichael.com/0x808_demo.mp4)**
 
 A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV export. All dependencies vendored, zero external runtime dependencies.
 
