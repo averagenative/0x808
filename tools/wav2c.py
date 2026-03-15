@@ -3,19 +3,22 @@
 
 import os
 
+# Resolve paths relative to the project root (parent of tools/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 SAMPLES = [
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.BD.808.wav",  "sample_bd_808",  "808 Kick"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.SD5.808.wav", "sample_sd5_808", "808 Snare"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.CH.808.wav",  "sample_ch_808",  "808 HiHat"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.CP.808.wav",  "sample_cp_808",  "808 Clap"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.OH.808.wav",  "sample_oh_808",  "808 OpenHH"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.CB.808.wav",  "sample_cb_808",  "808 Cowbell"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.RS.808.wav",  "sample_rs_808",  "808 Rimshot"),
-    ("/home/dmichael/projects/sequencer_c/samples/808/01.HT.808.wav",  "sample_ht_808",  "808 HiTom"),
+    ("samples/808/01.BD.808.wav",  "sample_bd_808",  "808 Kick"),
+    ("samples/808/01.SD5.808.wav", "sample_sd5_808", "808 Snare"),
+    ("samples/808/01.CH.808.wav",  "sample_ch_808",  "808 HiHat"),
+    ("samples/808/01.CP.808.wav",  "sample_cp_808",  "808 Clap"),
+    ("samples/808/01.OH.808.wav",  "sample_oh_808",  "808 OpenHH"),
+    ("samples/808/01.CB.808.wav",  "sample_cb_808",  "808 Cowbell"),
+    ("samples/808/01.RS.808.wav",  "sample_rs_808",  "808 Rimshot"),
+    ("samples/808/01.HT.808.wav",  "sample_ht_808",  "808 HiTom"),
 ]
 
-OUT_C = "/home/dmichael/projects/sequencer_c/src/plugin/embedded_samples.c"
-OUT_H = "/home/dmichael/projects/sequencer_c/src/plugin/embedded_samples.h"
+OUT_C = os.path.join(PROJECT_ROOT, "src/plugin/embedded_samples.c")
+OUT_H = os.path.join(PROJECT_ROOT, "src/plugin/embedded_samples.h")
 
 def wav_to_c_array(filepath, varname):
     with open(filepath, "rb") as f:
@@ -41,7 +44,8 @@ def main():
     c_parts.append("")
 
     sizes = []
-    for filepath, varname, _name in SAMPLES:
+    for relpath, varname, _name in SAMPLES:
+        filepath = os.path.join(PROJECT_ROOT, relpath)
         array_str, size = wav_to_c_array(filepath, varname)
         c_parts.append(array_str)
         c_parts.append("")

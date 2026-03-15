@@ -69,6 +69,7 @@ static bool pick_folder(char *buf, size_t /* bufsize */)
 /* ─── Draw ────────────────────────────────────────────────────────────────── */
 
 void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
+                         sq_midi_t *midi,
                          float x, float y, float w, float h)
 {
     if (!engine || !app) return;
@@ -143,6 +144,58 @@ void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
                 LOG_INFO("Audio device changed to: %s",
                          acfg->device_name[0] ? acfg->device_name : "Default");
             }
+        }
+
+        ImGui::Unindent(8);
+    }
+
+    /* ── MIDI Input Section ───────────────────────────────────────────── */
+    if (midi && ImGui::CollapsingHeader("MIDI Input", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(8);
+
+        static int midi_port_count = 0;
+        static bool midi_refreshed = false;
+        if (!midi_refreshed) {
+            midi_port_count = sq_midi_get_port_count(midi);
+            midi_refreshed = true;
+        }
+
+        int open_port = sq_midi_get_open_port(midi);
+        const char *preview = (open_port >= 0)
+            ? sq_midi_get_port_name(midi, open_port) : "None";
+
+        if (ImGui::BeginCombo("MIDI Device", preview)) {
+            /* None option */
+            if (ImGui::Selectable("None", open_port < 0)) {
+                sq_midi_close_port(midi);
+                app->midi_port_index = -1;
+                app->midi_device_name[0] = '\0';
+            }
+            if (open_port < 0) ImGui::SetItemDefaultFocus();
+
+            for (int i = 0; i < midi_port_count; i++) {
+                const char *name = sq_midi_get_port_name(midi, i);
+                bool selected = (open_port == i);
+                if (ImGui::Selectable(name, selected)) {
+                    sq_midi_open_port(midi, i);
+                    app->midi_port_index = i;
+                    snprintf(app->midi_device_name, SQ_DEVICE_NAME_LEN, "%s", name);
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Refresh##midi")) {
+            midi_port_count = sq_midi_get_port_count(midi);
+        }
+
+        /* Status */
+        if (open_port >= 0) {
+            ImGui::TextColored(ImVec4(0.39f, 1.0f, 0.39f, 1.0f), "Connected");
+        } else {
+            ImGui::TextDisabled("No MIDI device");
         }
 
         ImGui::Unindent(8);

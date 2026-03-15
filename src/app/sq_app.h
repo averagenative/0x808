@@ -121,6 +121,10 @@ typedef struct {
     void (*audio_restart_fn)(void *userdata);
     void  *audio_restart_userdata;
 
+    /* MIDI config */
+    char  midi_device_name[SQ_DEVICE_NAME_LEN];
+    int   midi_port_index;  /* -1 = none */
+
 } sq_app_t;
 
 /* ─── Public API ──────────────────────────────────────────────────────────── */

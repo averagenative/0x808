@@ -5,6 +5,7 @@
  */
 
 #include "gtk_gui.h"
+#include "engine/sq_midi.h"
 #include <SDL2/SDL.h>
 #include <string.h>
 
@@ -142,6 +143,22 @@ static void on_browse_folder(GtkWidget *btn, gpointer user_data)
 
 /* ─── Constructor ────────────────────────────────────────────────────────── */
 
+static void on_midi_device_changed(GObject *obj, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec; (void)user_data;
+    sq_midi_t *m = (sq_midi_t *)g_gtk.midi;
+    if (!m) return;
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(obj));
+    if (sel == 0) {
+        sq_midi_close_port(m);
+        g_gtk.app.midi_port_index = -1;
+    } else {
+        int port = (int)(sel - 1);
+        sq_midi_open_port(m, port);
+        g_gtk.app.midi_port_index = port;
+    }
+}
+
 GtkWidget *gtk_settings_new(void)
 {
     refresh_devices();
@@ -196,6 +213,38 @@ GtkWidget *gtk_settings_new(void)
     gtk_box_append(GTK_BOX(box), s_sample_rate_label);
 
     gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+
+    /* ── MIDI Input ───────────────────────────────────────────────── */
+    sq_midi_t *midi = (sq_midi_t *)g_gtk.midi;
+    if (midi) {
+        GtkWidget *midi_label = gtk_label_new("MIDI Input");
+        gtk_widget_add_css_class(midi_label, "title-4");
+        gtk_widget_set_halign(midi_label, GTK_ALIGN_START);
+        gtk_box_append(GTK_BOX(box), midi_label);
+
+        /* Refresh MIDI port list */
+        int midi_ports = sq_midi_get_port_count(midi);
+        GtkStringList *midi_model = gtk_string_list_new(NULL);
+        gtk_string_list_append(midi_model, "None");
+        for (int i = 0; i < midi_ports; i++)
+            gtk_string_list_append(midi_model, sq_midi_get_port_name(midi, i));
+
+        static GtkWidget *s_midi_dropdown = NULL;
+        s_midi_dropdown = gtk_drop_down_new(G_LIST_MODEL(midi_model), NULL);
+        g_object_unref(midi_model);
+
+        /* Set current selection */
+        int open_port = sq_midi_get_open_port(midi);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(s_midi_dropdown),
+                                   (open_port >= 0) ? (guint)(open_port + 1) : 0);
+
+        g_signal_connect(s_midi_dropdown, "notify::selected",
+                         G_CALLBACK(on_midi_device_changed), NULL);
+
+        gtk_box_append(GTK_BOX(box), s_midi_dropdown);
+
+        gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+    }
 
     /* ── Recording ────────────────────────────────────────────────── */
     GtkWidget *rec_label = gtk_label_new("Recording");

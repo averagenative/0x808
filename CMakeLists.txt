@@ -39,6 +39,43 @@ endif()
 # Single-header libs live in deps/ — we just need the include path
 include_directories(${CMAKE_SOURCE_DIR}/deps)
 
+# ─── RtMidi (cross-platform MIDI I/O, MIT license) ───────────────────────────
+add_library(rtmidi STATIC
+    deps/rtmidi/RtMidi.cpp
+    deps/rtmidi/rtmidi_c.cpp
+)
+target_include_directories(rtmidi PUBLIC ${CMAKE_SOURCE_DIR}/deps/rtmidi)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(rtmidi PRIVATE -w)
+endif()
+set_target_properties(rtmidi PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Platform MIDI backends
+if(WIN32)
+    target_compile_definitions(rtmidi PRIVATE __WINDOWS_MM__)
+    target_link_libraries(rtmidi PRIVATE winmm)
+elseif(APPLE)
+    target_compile_definitions(rtmidi PRIVATE __MACOSX_CORE__)
+    find_library(COREMIDI_LIB CoreMIDI)
+    find_library(COREAUDIO_LIB CoreAudio)
+    find_library(COREFOUNDATION_LIB CoreFoundation)
+    target_link_libraries(rtmidi PRIVATE ${COREMIDI_LIB} ${COREAUDIO_LIB} ${COREFOUNDATION_LIB})
+else()
+    # Linux: try ALSA first, fall back to dummy
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(ALSA QUIET alsa)
+    endif()
+    if(ALSA_FOUND)
+        target_compile_definitions(rtmidi PRIVATE __LINUX_ALSA__)
+        target_link_libraries(rtmidi PRIVATE ${ALSA_LIBRARIES})
+        target_include_directories(rtmidi PRIVATE ${ALSA_INCLUDE_DIRS})
+    else()
+        target_compile_definitions(rtmidi PRIVATE __RTMIDI_DUMMY__)
+        message(STATUS "ALSA not found — MIDI input disabled (install libasound2-dev)")
+    endif()
+endif()
+
 # ─── Shine MP3 encoder library (LGPL-2, opt-in) ──────────────────────────────
 # MP3 export uses shine (LGPL-2). Disabled by default for MIT license purity.
 # Enable with: cmake .. -DENABLE_MP3=ON
@@ -140,6 +177,18 @@ target_include_directories(sq_app PUBLIC
 target_link_libraries(sq_app PUBLIC sq_engine)
 set_target_properties(sq_app PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# ─── MIDI input library (C++ wrapper, standalone only) ─────────────────────────
+
+add_library(sq_midi STATIC
+    src/engine/sq_midi.cpp
+)
+target_include_directories(sq_midi PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/deps/rtmidi
+)
+target_link_libraries(sq_midi PUBLIC sq_engine rtmidi)
+set_target_properties(sq_midi PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # ─── GUI executable (Phase 3+: requires SDL2 and OpenGL) ─────────────────────
 
 if(NOT SDL2_FOUND)
@@ -234,13 +283,13 @@ if(SDL2_FOUND AND OpenGL_FOUND)
     )
     if(MSVC)
         target_link_libraries(sequencer_gui PRIVATE
-            sq_gui
+            sq_gui sq_midi
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
         )
     elseif(MINGW)
         target_link_libraries(sequencer_gui PRIVATE
-            sq_gui
+            sq_gui sq_midi
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
             comdlg32
@@ -248,7 +297,7 @@ if(SDL2_FOUND AND OpenGL_FOUND)
         target_link_options(sequencer_gui PRIVATE -static -static-libgcc -static-libstdc++ -mwindows)
     else()
         target_link_libraries(sequencer_gui PRIVATE
-            sq_gui
+            sq_gui sq_midi
             ${SDL2_LIBRARIES}
             ${SQ_OPENGL_LIB}
             m
@@ -300,7 +349,7 @@ if(BUILD_GTK)
         )
         target_compile_options(sequencer_gtk PRIVATE ${GTK4_CFLAGS_OTHER})
         target_link_libraries(sequencer_gtk PRIVATE
-            sq_app
+            sq_app sq_midi
             ${GTK4_LIBRARIES}
             ${SDL2_LIBRARIES}
             m pthread ${CMAKE_DL_LIBS}
@@ -467,6 +516,18 @@ target_include_directories(recorder_test PRIVATE
 )
 target_link_libraries(recorder_test PRIVATE
     sq_engine
+    ${PLATFORM_LIBS}
+)
+
+add_executable(midi_test
+    tests/midi_test.c
+)
+target_include_directories(midi_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/deps
+)
+target_link_libraries(midi_test PRIVATE
+    sq_midi
     ${PLATFORM_LIBS}
 )
 

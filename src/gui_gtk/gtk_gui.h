@@ -44,6 +44,9 @@ typedef struct {
     void     *audio_thread;
     int       audio_running;
 
+    /* MIDI (standalone only, NULL in plugin) */
+    void *midi;  /* sq_midi_t* — opaque here to avoid C++ header dep */
+
     /* Redraw timer */
     guint redraw_timer_id;
 

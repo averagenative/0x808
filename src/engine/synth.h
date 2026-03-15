@@ -27,10 +27,10 @@ int synth_load_wt_bank(sq_engine_t *engine, const char *filepath, const char *na
 /* Create default synth presets */
 void synth_init_presets(sq_engine_t *engine);
 
-/* Trigger a new synth voice */
-void synth_trigger(sq_engine_t *engine, int preset_index,
-                   float velocity, int pitch_offset,
-                   float volume, float pan, uint8_t note);
+/* Trigger a new synth voice. Returns voice index (0-15), or -1 on failure. */
+int synth_trigger(sq_engine_t *engine, int preset_index,
+                  float velocity, int pitch_offset,
+                  float volume, float pan, uint8_t note);
 
 /* Release all active synth voices (enter release phase) */
 void synth_release_all(sq_engine_t *engine);

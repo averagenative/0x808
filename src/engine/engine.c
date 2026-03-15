@@ -17,11 +17,13 @@
 #include "engine/transport.h"
 #include "engine/sequencer.h"
 #include "engine/synth.h"
+#include "engine/envelope.h"
 #include "formats/sf2.h"
 #include "formats/sample_io.h"
 #include "formats/project.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -140,7 +142,27 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
         while (cmd_queue_pop(&engine->cmd_queue, &cmd)) {
             switch (cmd.type) {
             case CMD_PLAY:  engine->transport.playing = true; break;
-            case CMD_STOP:  engine->transport.playing = false; break;
+            case CMD_STOP:
+                engine->transport.playing = false;
+                /* Release all tracked notes */
+                for (int an = 0; an < SQ_MAX_ACTIVE_NOTES; an++) {
+                    if (engine->active_notes[an].remaining > 0) {
+                        int vi = engine->active_notes[an].voice_index;
+                        if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
+                            engine->synth_voices[vi].active) {
+                            int pi = engine->synth_voices[vi].preset_index;
+                            if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
+                                envelope_release(&engine->synth_voices[vi].amp_env,
+                                                 &engine->synth_presets[pi].amp_env,
+                                                 engine->sample_rate);
+                            }
+                        }
+                        engine->active_notes[an].remaining = 0;
+                        engine->active_notes[an].voice_index = -1;
+                    }
+                }
+                synth_release_all(engine);
+                break;
             case CMD_SET_BPM: engine->transport.bpm = cmd.f64_val; break;
             case CMD_SET_VOLUME: engine->master_volume = cmd.f32_val; break;
             case CMD_SET_SWING: engine->transport.swing = cmd.f32_val; break;
@@ -191,6 +213,30 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
                     sq_pattern_t *p = &engine->patterns[pi];
                     if (cmd.track_param.track < p->num_tracks)
                         p->tracks[cmd.track_param.track].solo = cmd.bool_val;
+                }
+                break;
+            }
+            case CMD_TRIGGER_NOTE: {
+                /* MIDI / virtual keyboard note-on */
+                synth_trigger(engine, cmd.note.preset,
+                              cmd.note.velocity, 0,
+                              cmd.note.volume, cmd.note.pan,
+                              cmd.note.midi_note);
+                break;
+            }
+            case CMD_RELEASE_NOTE: {
+                /* MIDI / virtual keyboard note-off — match by frequency */
+                float freq = 440.0f * powf(2.0f, ((float)cmd.note.midi_note - 69.0f) / 12.0f);
+                for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++) {
+                    sq_synth_voice_t *voice = &engine->synth_voices[v];
+                    if (voice->active && fabsf(voice->frequency - freq) < 0.5f) {
+                        int pi = voice->preset_index;
+                        if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
+                            envelope_release(&voice->amp_env,
+                                             &engine->synth_presets[pi].amp_env,
+                                             engine->sample_rate);
+                        }
+                    }
                 }
                 break;
             }
@@ -287,6 +333,33 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
      * and applies master volume.
      */
     mixer_process(engine, output, num_frames);
+
+    /*
+     * Step 3b: Process active note timers for sequencer note-off.
+     * Decrement remaining samples; release voice when expired.
+     */
+    for (int i = 0; i < SQ_MAX_ACTIVE_NOTES; i++) {
+        sq_active_note_t *an = &engine->active_notes[i];
+        if (an->remaining == 0) continue;
+
+        if (an->remaining <= num_frames) {
+            /* Note expired — release the voice */
+            an->remaining = 0;
+            int vi = an->voice_index;
+            if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
+                engine->synth_voices[vi].active) {
+                int pi = engine->synth_voices[vi].preset_index;
+                if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
+                    envelope_release(&engine->synth_voices[vi].amp_env,
+                                     &engine->synth_presets[pi].amp_env,
+                                     engine->sample_rate);
+                }
+            }
+            an->voice_index = -1;
+        } else {
+            an->remaining -= num_frames;
+        }
+    }
 
     /*
      * Step 4: Stream output to disk via the recorder.

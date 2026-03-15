@@ -1451,12 +1451,12 @@ static inline float smooth_param(float current, float target, float coeff)
 
 /* ─── Voice management ───────────────────────────────────────────────────── */
 
-void synth_trigger(sq_engine_t *engine, int preset_index,
-                   float velocity, int pitch_offset,
-                   float volume, float pan, uint8_t note)
+int synth_trigger(sq_engine_t *engine, int preset_index,
+                  float velocity, int pitch_offset,
+                  float volume, float pan, uint8_t note)
 {
     if (preset_index < 0 || (uint32_t)preset_index >= engine->num_synth_presets)
-        return;
+        return -1;
 
     /* Find a free voice, or steal the oldest */
     int vi = -1;
@@ -1534,6 +1534,8 @@ void synth_trigger(sq_engine_t *engine, int preset_index,
                              engine->sample_rate);
         }
     }
+
+    return vi;
 }
 
 /* ─── LFO BPM sync ──────────────────────────────────────────────────────── */

@@ -220,8 +220,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                          (double)file_bytes / (1024.0 * 1024.0));
         }
 
-        float rec_btn_w = is_rec ? ImGui::CalcTextSize(rec_label).x + 16.0f : 55.0f;
-        if (rec_btn_w < 55.0f) rec_btn_w = 55.0f;
+        float rec_btn_w = is_rec ? 150.0f : 55.0f; /* fixed width to avoid click issues */
 
         if (!is_plugin && is_rec) {
             ImVec2 rec_pos = ImGui::GetCursorScreenPos();
@@ -231,7 +230,10 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         if (is_rec)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.12f, 0.12f, 1.0f));
 
-        if (ImGui::Button(rec_label, ImVec2(rec_btn_w, btn_h))) {
+        /* Use stable ID so clicks always register (label changes every frame) */
+        char rec_btn_id[80];
+        snprintf(rec_btn_id, sizeof(rec_btn_id), "%s###rec_btn", rec_label);
+        if (ImGui::Button(rec_btn_id, ImVec2(rec_btn_w, btn_h))) {
             if (is_rec) {
                 /* Stop recording */
                 uint64_t frames = rec->frames_written;

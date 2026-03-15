@@ -56,10 +56,12 @@ typedef struct {
             uint8_t  velocity;
             int8_t   pitch;
         } step;
-        struct {              /* for note trigger */
-            int   preset;
-            float frequency;
-            float velocity;
+        struct {              /* for note trigger/release */
+            int     preset;
+            uint8_t midi_note;   /* MIDI note number (0-127) */
+            float   velocity;    /* 0.0-1.0 (note-on only) */
+            float   volume;      /* track volume */
+            float   pan;         /* track pan */
         } note;
         struct {              /* for track params */
             uint16_t track;

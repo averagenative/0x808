@@ -54,6 +54,10 @@ void gui_set_audio_restart(void (*fn)(void *), void *userdata);
 const char *gui_get_audio_device_name(void);
 int gui_get_audio_device_index(void);
 
+/* Set the MIDI handle so settings panel can use it. */
+struct sq_midi;
+void gui_set_midi(struct sq_midi *midi);
+
 #ifdef __cplusplus
 }
 #endif

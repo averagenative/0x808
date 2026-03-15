@@ -133,9 +133,28 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
                            vel, s->pitch_offset,
                            track->volume, track->pan);
         } else if (track->type == TRACK_SYNTH && track->synth_preset >= 0) {
-            synth_trigger(engine, track->synth_preset,
-                         vel, s->pitch_offset,
-                         track->volume, track->pan, s->note);
+            int vi = synth_trigger(engine, track->synth_preset,
+                                   vel, s->pitch_offset,
+                                   track->volume, track->pan, s->note);
+
+            /* Track note-off if step has a length > 0 */
+            if (vi >= 0 && s->length > 0.0f) {
+                /* Calculate duration in samples:
+                 * samples_per_step = 60 / BPM / steps_per_beat * sample_rate */
+                double sps = (60.0 / engine->transport.bpm / 4.0) *
+                             (double)engine->sample_rate;
+                uint32_t duration = (uint32_t)(s->length * sps);
+                if (duration > 0) {
+                    /* Find a free slot in active_notes */
+                    for (int an = 0; an < SQ_MAX_ACTIVE_NOTES; an++) {
+                        if (engine->active_notes[an].remaining == 0) {
+                            engine->active_notes[an].voice_index = vi;
+                            engine->active_notes[an].remaining = duration;
+                            break;
+                        }
+                    }
+                }
+            }
         } else if (track->type == TRACK_SF2 && track->sf2_preset >= 0) {
             int key = (s->note > 0) ? s->note : 60;
             key += s->pitch_offset;

@@ -239,6 +239,7 @@ static int sdl_to_sq_mod(int sdl_mod)
 static SDL_Window    *g_window = NULL;
 static SDL_GLContext  g_gl_ctx = NULL;
 static sq_app_t       g_app;
+static struct sq_midi *g_midi = NULL;
 static char g_project_path[512] = "";
 static bool g_project_path_init = false;
 
@@ -588,7 +589,7 @@ int gui_frame(sq_engine_t *engine)
         float settings_x = main_w - settings_w;
         if (g_app.panels[SQ_PANEL_BROWSER])
             settings_x -= browser_w;
-        settings_panel_draw(engine, &g_app, settings_x, grid_y, settings_w, total_h);
+        settings_panel_draw(engine, &g_app, g_midi, settings_x, grid_y, settings_w, total_h);
     }
 
     /* Virtual keyboard */
@@ -651,6 +652,11 @@ const char *gui_get_audio_device_name(void)
 int gui_get_audio_device_index(void)
 {
     return g_app.audio_config.device_index;
+}
+
+void gui_set_midi(struct sq_midi *midi)
+{
+    g_midi = midi;
 }
 
 void gui_shutdown(void)

@@ -27,6 +27,10 @@ void sq_app_init(sq_app_t *app)
     app->audio_config.device_name[0] = '\0'; /* empty = default */
     app->audio_config.sample_rate = 44100;
     app->audio_config.device_index = -1;
+
+    /* MIDI defaults */
+    app->midi_device_name[0] = '\0';
+    app->midi_port_index = -1;
 }
 
 void sq_app_init_rec_config(sq_rec_config_t *cfg)

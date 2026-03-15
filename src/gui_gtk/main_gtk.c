@@ -22,6 +22,7 @@
 #include <math.h>
 
 #include "engine/sampler.h"
+#include "engine/sq_midi.h"
 #include "formats/sample_io.h"
 
 #define LOG_TAG "gtk_main"
@@ -417,6 +418,19 @@ int main(int argc, char *argv[])
     g_gtk.app.audio_restart_fn = gtk_audio_restart_callback;
     g_gtk.app.audio_restart_userdata = NULL;
 
+    /* Initialize MIDI input */
+    {
+        sq_midi_t *midi = sq_midi_init(&g_engine.cmd_queue, 0);
+        if (midi) {
+            int ports = sq_midi_get_port_count(midi);
+            if (ports > 0) {
+                sq_midi_open_port(midi, 0);
+                LOG_WARN("MIDI: auto-opened port 0 (%s)", sq_midi_get_port_name(midi, 0));
+            }
+        }
+        g_gtk.midi = midi;
+    }
+
     /* Create GTK application */
     g_gtk.gtk_app = gtk_application_new("com.dcmichael.sequencer808",
                                         G_APPLICATION_DEFAULT_FLAGS);
@@ -427,6 +441,7 @@ int main(int argc, char *argv[])
 
     /* Cleanup */
     g_object_unref(g_gtk.gtk_app);
+    sq_midi_shutdown((sq_midi_t *)g_gtk.midi);
     audio_shutdown();
     sq_engine_shutdown(&g_engine);
 

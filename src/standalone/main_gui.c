@@ -19,6 +19,7 @@
 #include "formats/sample_io.h"
 #include "gui/gui.h"
 #include "gui/theme.h"
+#include "engine/sq_midi.h"
 
 #include <SDL.h>
 #include <stdio.h>
@@ -519,6 +520,18 @@ int main(int argc, char *argv[])
     /* Register audio restart callback for settings panel */
     gui_set_audio_restart(audio_restart_callback, NULL);
 
+    /* Initialize MIDI input */
+    sq_midi_t *midi = sq_midi_init(&g_engine.cmd_queue, 0);
+    if (midi) {
+        /* Auto-detect first available MIDI device */
+        int ports = sq_midi_get_port_count(midi);
+        if (ports > 0) {
+            sq_midi_open_port(midi, 0);
+            LOG_WARN("MIDI: auto-opened port 0 (%s)", sq_midi_get_port_name(midi, 0));
+        }
+        gui_set_midi(midi);
+    }
+
     /* ── Main loop ────────────────────────────────────────────────────── */
     LOG_INFO("Entering main loop");
     uint64_t last_diag_count = 0;
@@ -553,8 +566,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* Stop audio */
+    /* Stop audio and MIDI */
     audio_stop();
+    sq_midi_shutdown(midi);
 
     /* Clean up */
     gui_shutdown();

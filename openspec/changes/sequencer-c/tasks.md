@@ -1,4 +1,4 @@
-# Sequencer_C — Implementation Tasks
+# 0x808 — Implementation Tasks
 
 > Ordered by value delivered. Each phase produces working software you can demo.
 > Priority mapping from proposal: P0 → Phases 1-3, P1 → Phases 4-5, P2 → Phases 6-7, P3 → Phase 8

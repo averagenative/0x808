@@ -349,6 +349,15 @@ typedef struct {
     int             next_number;     /* next file number (0 = needs scan) */
 } sq_recorder_t;
 
+/* ─── Active note tracking (for sequencer note-off) ──────────────────────── */
+
+typedef struct {
+    int      voice_index;    /* which synth voice (-1 = inactive)          */
+    uint32_t remaining;      /* samples until note-off (0 = inactive)      */
+} sq_active_note_t;
+
+#define SQ_MAX_ACTIVE_NOTES 16
+
 /* ─── Engine: the top-level state container ───────────────────────────────── */
 
 typedef struct tsf tsf; /* forward declare */
@@ -394,6 +403,9 @@ typedef struct {
 
     /* Simple PRNG state for humanization (xorshift32) */
     uint32_t       rng_state;
+
+    /* Active note tracking for sequencer note-off */
+    sq_active_note_t active_notes[SQ_MAX_ACTIVE_NOTES];
 
     /* Streaming recorder (writes to disk in real-time) */
     sq_recorder_t  recorder;
