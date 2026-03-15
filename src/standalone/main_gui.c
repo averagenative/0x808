@@ -32,6 +32,9 @@
 #else
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 /* ─── Crash handler — logs signal and flushes before dying ─────────────────── */
 
@@ -391,8 +394,23 @@ int main(int argc, char *argv[])
                 }
             }
         }
+#elif defined(__APPLE__)
+        /* On macOS, use _NSGetExecutablePath to find the binary */
+        char exe_path[512];
+        uint32_t path_size = sizeof(exe_path);
+        if (_NSGetExecutablePath(exe_path, &path_size) == 0) {
+            /* Resolve symlinks */
+            char real_path[512];
+            if (realpath(exe_path, real_path))
+                strncpy(exe_path, real_path, sizeof(exe_path) - 1);
+            char *last_sep = strrchr(exe_path, '/');
+            if (last_sep) {
+                last_sep[1] = '\0';
+                snprintf(base_dir, sizeof(base_dir), "%s", exe_path);
+            }
+        }
 #else
-        /* On Unix, try /proc/self/exe or just use CWD */
+        /* On Linux, use /proc/self/exe */
         ssize_t rlen = readlink("/proc/self/exe", base_dir, sizeof(base_dir) - 1);
         if (rlen > 0) {
             base_dir[rlen] = '\0';
@@ -434,6 +452,18 @@ int main(int argc, char *argv[])
                 load_sample(full_path);
             }
         }
+#ifdef __APPLE__
+        /* macOS .app bundle: samples are in Contents/Resources/ */
+        if (g_engine.num_samples == 0 && base_dir[0]) {
+            LOG_INFO("Trying macOS .app bundle Resources directory...");
+            for (int i = 0; kit_808[i]; i++) {
+                char full_path[1024];
+                snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
+                         base_dir, kit_808[i]);
+                load_sample(full_path);
+            }
+        }
+#endif
     }
 
     if (g_engine.num_samples == 0) {
@@ -468,6 +498,11 @@ int main(int argc, char *argv[])
         char themes_dir[600];
         snprintf(themes_dir, sizeof(themes_dir), "%sthemes", base_dir);
         theme_scan_user_themes(themes_dir);
+#ifdef __APPLE__
+        /* Also check .app bundle Resources/themes/ */
+        snprintf(themes_dir, sizeof(themes_dir), "%s../Resources/themes", base_dir);
+        theme_scan_user_themes(themes_dir);
+#endif
     }
 
     /* Open SDL2 audio device */

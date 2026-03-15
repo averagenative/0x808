@@ -152,9 +152,23 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
         if (sample_io_load(kit->paths[i], &engine->samples[i]) == 0) {
             loaded++;
             LOG_INFO("  [%d] %s", i, engine->samples[i].name);
-        } else {
-            LOG_WARN("  [%d] FAILED: %s", i, kit->paths[i]);
+            continue;
         }
+
+#ifdef __APPLE__
+        /* macOS .app bundle: try Contents/Resources/ relative to exe dir */
+        if (base_dir && base_dir[0]) {
+            snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
+                     base_dir, kit->paths[i]);
+            if (sample_io_load(full_path, &engine->samples[i]) == 0) {
+                loaded++;
+                LOG_INFO("  [%d] %s (bundle)", i, engine->samples[i].name);
+                continue;
+            }
+        }
+#endif
+
+        LOG_WARN("  [%d] FAILED: %s", i, kit->paths[i]);
     }
 
     /* Ensure num_samples covers the kit slots */
