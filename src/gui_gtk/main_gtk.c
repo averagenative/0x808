@@ -172,9 +172,9 @@ static void setup_demo_pattern(void)
     }
     if (synth_pluck < p->num_tracks) {
         p->tracks[synth_pluck].type = TRACK_SYNTH;
-        p->tracks[synth_pluck].synth_preset = 3;
+        p->tracks[synth_pluck].synth_preset = 52;  /* Dark Pad — fits trap aesthetic */
         p->tracks[synth_pluck].length = 16;
-        p->tracks[synth_pluck].volume = 0.5f;
+        p->tracks[synth_pluck].volume = 0.4f;
     }
 
     /* Prefill with Trap 808 drum preset */
