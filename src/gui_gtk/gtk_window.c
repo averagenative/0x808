@@ -271,8 +271,12 @@ static void on_play_clicked(GtkWidget *btn, gpointer user_data)
     engine->transport.sample_position = 0;
     engine->transport.current_step = 0;
     g_gtk.app.visual_step = 0;
-    if (engine->transport.playing)
+    if (engine->transport.playing) {
         g_gtk.app.play_start_ticks = SDL_GetPerformanceCounter();
+    } else {
+        /* Release all synth voices so they fade out naturally */
+        synth_release_all(engine);
+    }
 }
 
 static void on_undo_clicked(GtkWidget *btn, gpointer user_data)

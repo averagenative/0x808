@@ -23,6 +23,7 @@ extern "C" {
 #include "gui/pattern_presets.h"
 #include "gui/theme.h"
 #include "engine/export.h"
+#include "engine/synth.h"
 #define LOG_TAG "toolbar"
 #include "core/log.h"
 }
@@ -184,8 +185,13 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         engine->transport.sample_position = 0;
         engine->transport.current_step = 0;
         g_visual_step = 0;
-        if (new_state && p->play_start_ticks)
-            *p->play_start_ticks = SDL_GetPerformanceCounter();
+        if (new_state) {
+            if (p->play_start_ticks)
+                *p->play_start_ticks = SDL_GetPerformanceCounter();
+        } else {
+            /* Release all synth voices so they fade out */
+            synth_release_all(engine);
+        }
     }
     if (!is_plugin && was_playing)
         ImGui::PopStyleColor(2);
