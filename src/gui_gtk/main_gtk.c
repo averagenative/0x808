@@ -177,37 +177,39 @@ static void setup_demo_pattern(void)
         p->tracks[synth_pluck].volume = 0.5f;
     }
 
-    /* Prefill with House drum preset */
+    /* Prefill with Trap 808 drum preset */
     {
-        static const uint8_t house[6][16] = {
-            {120,0,0,0,110,0,0,0,120,0,0,0,110,0,0,0},  /* kick */
-            {0,0,0,0,127,0,0,0,0,0,0,0,127,0,0,0},      /* snare */
-            {0,0,100,0,0,0,100,0,0,0,100,0,0,0,100,0},  /* hihat */
-            {0,0,0,0,100,0,0,0,0,0,0,0,100,0,0,0},      /* clap */
-            {0,0,0,0,0,0,0,80,0,0,0,0,0,0,0,80},        /* open hat */
-            {60,40,60,40,60,40,60,40,60,40,60,40,60,40,60,40} /* shaker */
+        static const uint8_t trap[6][16] = {
+            {127,0,0,0,0,0,0,0,0,0,0,0,110,0,0,0},       /* kick: sparse, heavy */
+            {0,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0},         /* snare: on 3 */
+            {100,60,80,60,100,60,80,100,100,60,80,60,100,80,100,80}, /* hihat: rolls */
+            {0,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0},         /* clap: on 3 */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,80},          /* open hat */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}            /* (empty) */
         };
         int applied = 0;
         for (uint32_t t = 0; t < p->num_tracks && applied < 6; t++) {
             if (p->tracks[t].type != TRACK_SAMPLER) continue;
             for (int s = 0; s < 16; s++)
-                p->tracks[t].steps[s].velocity = house[applied][s];
+                p->tracks[t].steps[s].velocity = trap[applied][s];
             applied++;
         }
     }
 
-    /* Prefill Octave Bass on first synth track */
+    /* Prefill Trap 808 bass on first synth track (preset 50) */
     if (synth_bass < p->num_tracks) {
-        const uint8_t notes[] = {36,48,0,48,36,48,0,48,36,48,0,48,36,48,0,48};
-        const uint8_t vels[]  = {110,80,0,70,110,80,0,70,110,80,0,70,110,80,0,70};
+        p->tracks[synth_bass].synth_preset = 50;  /* Trap 808 */
+        const uint8_t notes[] = {36,0,0,0,0,0,0,0,31,0,0,33,0,0,36,0};
+        const uint8_t vels[]  = {120,0,0,0,0,0,0,0,110,0,0,100,0,0,120,0};
+        const float   lens[]  = {2,0,0,0,0,0,0,0,2,0,0,1,0,0,2,0};
         for (int s = 0; s < 16; s++) {
             p->tracks[synth_bass].steps[s].note = notes[s];
             p->tracks[synth_bass].steps[s].velocity = vels[s];
-            p->tracks[synth_bass].steps[s].length = 1.0f;
+            p->tracks[synth_bass].steps[s].length = lens[s];
         }
     }
 
-    g_engine.transport.bpm = 124.0;
+    g_engine.transport.bpm = 145.0;
     snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern 1");
     g_engine.num_patterns = 5;
     g_engine.transport.current_pattern = 0;
