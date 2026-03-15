@@ -183,7 +183,7 @@ static bool s_last_playing = false;
 static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
 {
     sq_engine_t *engine = gui->engine;
-    if (!engine) return;
+    if (!engine || !gui->window || !gui->running.load()) return;
 
     /* Log transport state changes (debug play button issue) */
     if (engine->transport.playing != s_last_playing) {
@@ -224,7 +224,13 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
     g_visual_step = gui->app.visual_step;
     g_selected_track = gui->app.selected_track;
 
-    /* Poll SDL events */
+    /* Poll SDL events.
+     * On Windows, SDL_PollEvent pumps the Win32 message queue which can
+     * deadlock during shutdown (host UI thread waiting on us, we waiting
+     * on host). Check the running flag first so we bail out immediately
+     * when detach has been called. */
+    if (!gui->running.load()) return;
+
     SDL_Event evt;
     while (SDL_PollEvent(&evt)) {
 #ifdef _WIN32
@@ -514,6 +520,8 @@ static int render_thread_func(void *userdata)
     SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
 
     while (gui->running.load()) {
+        if (!gui->window) break;
+
         Uint32 start = SDL_GetTicks();
 
         plugin_gui_draw_frame(gui);
@@ -524,7 +532,8 @@ static int render_thread_func(void *userdata)
             SDL_Delay(target_ms - elapsed);
     }
 
-    SDL_GL_MakeCurrent(gui->window, NULL);
+    if (gui->window && gui->gl_ctx)
+        SDL_GL_MakeCurrent(gui->window, NULL);
 
     LOG_INFO("Plugin GUI render thread exiting");
     return 0;
@@ -655,7 +664,10 @@ extern "C" int plugin_gui_attach(sq_plugin_gui_t *gui, void *native_handle)
     }
     GLOG_INFO("GL context created OK");
 
-    SDL_GL_SetSwapInterval(1);
+    /* Disable vsync — we do our own frame timing with SDL_Delay.
+     * Vsync can cause SDL_GL_SwapWindow to block indefinitely when the
+     * host destroys the parent window during shutdown, hanging the DAW. */
+    SDL_GL_SetSwapInterval(0);
 
     /* Load GL3 extension functions */
     gl3_loader_init();
@@ -703,16 +715,64 @@ extern "C" void plugin_gui_detach(sq_plugin_gui_t *gui)
 {
     if (!gui) return;
 
-    /* Stop render thread */
+    /* Signal render thread to stop */
     if (gui->running.load()) {
         gui->running.store(0);
+
         if (gui->render_thread) {
+#ifdef _WIN32
+            /* On Windows, the render thread's SDL_PollEvent pumps Win32
+             * messages via PeekMessage/DispatchMessage. If the host UI
+             * thread (us) blocks on SDL_WaitThread, and the render thread
+             * is blocked waiting for a message response from the host,
+             * we get a deadlock. Solution:
+             *
+             * 1. Destroy the window FIRST — this invalidates the HWND and
+             *    unblocks any pending message operations in the render thread.
+             * 2. The render thread sees running==0 and window==NULL, exits.
+             * 3. Then we can safely join.
+             */
+
+            /* Restore WndProc before destroying */
+            if (s_orig_wndproc && gui->window) {
+                SDL_SysWMinfo wminfo;
+                SDL_VERSION(&wminfo.version);
+                if (SDL_GetWindowWMInfo(gui->window, &wminfo)) {
+                    SetWindowLongPtrW(wminfo.info.win.window,
+                                      GWLP_WNDPROC, (LONG_PTR)s_orig_wndproc);
+                }
+                s_orig_wndproc = nullptr;
+            }
+
+            /* Destroy window to unblock the render thread */
+            if (gui->window) {
+                SDL_DestroyWindow(gui->window);
+                gui->window = nullptr;
+            }
+
             SDL_WaitThread(gui->render_thread, NULL);
+            gui->render_thread = nullptr;
+
+            /* GL context was destroyed with the window */
+            gui->gl_ctx = nullptr;
+
+            /* Clean up ImGui (context only, no GL calls) */
+            if (gui->imgui_ctx) {
+                ImGui::SetCurrentContext(gui->imgui_ctx);
+                ImGui::DestroyContext(gui->imgui_ctx);
+                gui->imgui_ctx = nullptr;
+            }
+
+            GLOG_INFO("Plugin GUI detached from host window (Windows path)");
+            return;
+#else
+            SDL_WaitThread(gui->render_thread, NULL);
+#endif
             gui->render_thread = nullptr;
         }
     }
 
-    /* Clean up ImGui + GL */
+    /* Clean up ImGui + GL (non-Windows path, or if render thread wasn't running) */
     if (gui->imgui_ctx) {
         if (gui->window && gui->gl_ctx)
             SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
@@ -728,7 +788,6 @@ extern "C" void plugin_gui_detach(sq_plugin_gui_t *gui)
     }
     if (gui->window) {
 #ifdef _WIN32
-        /* Restore original WndProc before destroying window */
         if (s_orig_wndproc) {
             SDL_SysWMinfo wminfo;
             SDL_VERSION(&wminfo.version);

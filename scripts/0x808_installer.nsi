@@ -5,8 +5,8 @@
 
 !include "MUI2.nsh"
 
-!define VER "1.1.0"
-!define VERFULL "1.1.0.0"
+!define VER "1.2.1"
+!define VERFULL "1.2.1.0"
 
 ; --- General ---
 Name "0x808 v${VER}"
@@ -108,7 +108,7 @@ SectionEnd
 
 Section "VST3 Plugin" SecVST3
     SetOutPath "$COMMONFILES64\VST3\0x808.vst3\Contents\x86_64-win"
-    File "..\build_win\0x808.dll"
+    File "..\build_win\0x808.vst3\Contents\x86_64-win\0x808.vst3"
 SectionEnd
 
 Section "CLAP Plugin" SecCLAP
@@ -136,7 +136,7 @@ Section "Uninstall"
     RMDir "$INSTDIR"
 
     ; Plugins
-    Delete "$COMMONFILES64\VST3\0x808.vst3\Contents\x86_64-win\0x808.dll"
+    Delete "$COMMONFILES64\VST3\0x808.vst3\Contents\x86_64-win\0x808.vst3"
     RMDir "$COMMONFILES64\VST3\0x808.vst3\Contents\x86_64-win"
     RMDir "$COMMONFILES64\VST3\0x808.vst3\Contents"
     RMDir "$COMMONFILES64\VST3\0x808.vst3"

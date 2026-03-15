@@ -295,7 +295,7 @@ static void load_embedded_samples(sq_engine_t *engine)
     }
 }
 
-/* ─── Demo beat pattern (mirrors standalone setup) ────────────────────────── */
+/* ─── Demo beat pattern (mirrors standalone setup — Trap 808) ─────────────── */
 
 static void setup_plugin_demo_pattern(sq_engine_t *engine)
 {
@@ -315,82 +315,99 @@ static void setup_plugin_demo_pattern(sq_engine_t *engine)
         p->tracks[t].volume = 0.8f;
     }
 
-    /* Synth tracks at the end */
-    uint32_t synth_bass  = num_sample_tracks;
-    uint32_t synth_pluck = num_sample_tracks + 1;
+    /* Two synth tracks: 808 sub bass + dark pad for atmosphere */
+    uint32_t synth_bass = num_sample_tracks;
+    uint32_t synth_pad  = num_sample_tracks + 1;
     if (synth_bass < p->num_tracks) {
         p->tracks[synth_bass].type = TRACK_SYNTH;
-        p->tracks[synth_bass].synth_preset = 0; /* Bass */
+        p->tracks[synth_bass].synth_preset = 50;  /* Trap 808 sub */
         p->tracks[synth_bass].length = 16;
-        p->tracks[synth_bass].volume = 0.6f;
+        p->tracks[synth_bass].volume = 0.85f;
     }
-    if (synth_pluck < p->num_tracks) {
-        p->tracks[synth_pluck].type = TRACK_SYNTH;
-        p->tracks[synth_pluck].synth_preset = 3; /* Pluck */
-        p->tracks[synth_pluck].length = 16;
-        p->tracks[synth_pluck].volume = 0.5f;
-    }
-
-    /* Kick: four-on-the-floor */
-    p->tracks[0].steps[0].velocity  = 120;
-    p->tracks[0].steps[4].velocity  = 110;
-    p->tracks[0].steps[8].velocity  = 120;
-    p->tracks[0].steps[12].velocity = 110;
-
-    /* Snare: backbeat */
-    if (num_sample_tracks > 1) {
-        p->tracks[1].steps[4].velocity  = 127;
-        p->tracks[1].steps[12].velocity = 127;
+    if (synth_pad < p->num_tracks) {
+        p->tracks[synth_pad].type = TRACK_SYNTH;
+        p->tracks[synth_pad].synth_preset = 52;  /* Dark Pad */
+        p->tracks[synth_pad].length = 16;
+        p->tracks[synth_pad].volume = 0.35f;
     }
 
-    /* Closed hihat: 8th notes */
-    if (num_sample_tracks > 2) {
-        for (int s = 0; s < 16; s += 2)
-            p->tracks[2].steps[s].velocity = (s % 4 == 0) ? 100 : 70;
+    /* ── Trap 808 drums: sparse, heavy, hi-hat rolls with dynamics ── */
+    {
+        static const uint8_t trap[6][16] = {
+            {127,0,0,0,0,0,0,0,0,0,0,0,110,0,0,0},        /* kick: 1 and &-of-4 */
+            {0,0,0,0,0,0,0,0,127,0,0,0,0,0,0,0},          /* snare: beat 3 */
+            {100,50,70,50,100,50,70,90,100,50,70,50,100,70,90,100}, /* hats: velocity rolls */
+            {0,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0},          /* clap: doubles snare */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,70},           /* open hat: bar end */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}             /* (empty) */
+        };
+        int applied = 0;
+        for (uint32_t t = 0; t < p->num_tracks && applied < 6; t++) {
+            if (p->tracks[t].type != TRACK_SAMPLER) continue;
+            for (int s = 0; s < 16; s++)
+                p->tracks[t].steps[s].velocity = trap[applied][s];
+            applied++;
+        }
     }
 
-    /* Clap: offbeats */
-    if (num_sample_tracks > 3) {
-        p->tracks[3].steps[7].velocity  = 90;
-        p->tracks[3].steps[15].velocity = 80;
-    }
-
-    /* Open hihat: sparse hits */
-    if (num_sample_tracks > 4) {
-        p->tracks[4].steps[3].velocity  = 80;
-        p->tracks[4].steps[11].velocity = 80;
-        p->tracks[4].volume = 0.5f;
-    }
-
-    /* Cowbell: disco pattern */
-    if (num_sample_tracks > 5) {
-        for (int s = 0; s < 16; s += 2)
-            p->tracks[5].steps[s].velocity = 60;
-        p->tracks[5].volume = 0.35f;
-    }
-
-    /* Synth bass line */
+    /* ── 808 sub bass: ONE deep note sustaining the whole bar ── */
     if (synth_bass < p->num_tracks) {
-        p->tracks[synth_bass].steps[0].velocity = 100;
-        p->tracks[synth_bass].steps[0].note = 36;  /* C2 */
-        p->tracks[synth_bass].steps[4].velocity = 80;
-        p->tracks[synth_bass].steps[4].note = 36;
-        p->tracks[synth_bass].steps[8].velocity = 100;
-        p->tracks[synth_bass].steps[8].note = 39;  /* D#2 */
-        p->tracks[synth_bass].steps[12].velocity = 80;
-        p->tracks[synth_bass].steps[12].note = 43; /* G2 */
+        p->tracks[synth_bass].steps[0].note = 12;      /* C0 */
+        p->tracks[synth_bass].steps[0].velocity = 127;
+        p->tracks[synth_bass].steps[0].length = 14.0f;  /* sustains 14 steps */
+        /* Tape saturation for analog warmth */
+        p->tracks[synth_bass].effects[0].type = EFFECT_TAPE;
+        p->tracks[synth_bass].effects[0].tape.drive = 0.4f;
+        p->tracks[synth_bass].effects[0].tape.warmth = 0.7f;
+        p->tracks[synth_bass].effects[0].tape.mix = 0.4f;
     }
 
-    /* Synth pluck melody */
-    if (synth_pluck < p->num_tracks) {
-        p->tracks[synth_pluck].steps[2].velocity = 90;
-        p->tracks[synth_pluck].steps[2].note = 60;  /* C4 */
-        p->tracks[synth_pluck].steps[6].velocity = 70;
-        p->tracks[synth_pluck].steps[6].note = 63;  /* D#4 */
-        p->tracks[synth_pluck].steps[10].velocity = 90;
-        p->tracks[synth_pluck].steps[10].note = 67; /* G4 */
-        p->tracks[synth_pluck].steps[14].velocity = 70;
-        p->tracks[synth_pluck].steps[14].note = 65; /* F4 */
+    /* ── Dark pad: Eb2 hit for ominous atmosphere ── */
+    if (synth_pad < p->num_tracks) {
+        p->tracks[synth_pad].steps[0].note = 39;       /* Eb2 */
+        p->tracks[synth_pad].steps[0].velocity = 80;
+        p->tracks[synth_pad].steps[0].length = 0.0f;   /* ADSR handles duration */
+        /* Shimmer reverb for atmosphere */
+        p->tracks[synth_pad].effects[0].type = EFFECT_SHIMMER;
+        p->tracks[synth_pad].effects[0].shimmer.decay = 0.7f;
+        p->tracks[synth_pad].effects[0].shimmer.shimmer = 0.4f;
+        p->tracks[synth_pad].effects[0].shimmer.mix = 0.5f;
+        effect_init(&p->tracks[synth_pad].effects[0], EFFECT_SHIMMER,
+                    engine->sample_rate);
+    }
+
+    /* Master bus effects */
+    engine->master_effects[0].type = EFFECT_DELAY;
+    engine->master_effects[0].delay.time = 0.375f;  /* dotted 8th at 145 */
+    engine->master_effects[0].delay.feedback = 0.3f;
+    engine->master_effects[0].delay.wet = 0.15f;
+    engine->master_effects[0].delay.bpm_sync = true;
+    engine->master_effects[0].delay.sync_division = 2;  /* 1/4 note */
+    effect_init(&engine->master_effects[0], EFFECT_DELAY, engine->sample_rate);
+
+    engine->master_effects[1].type = EFFECT_COMPRESSOR;
+    engine->master_effects[1].compressor.threshold = 0.6f;
+    engine->master_effects[1].compressor.ratio = 3.0f;
+    engine->master_effects[1].compressor.attack = 0.01f;
+    engine->master_effects[1].compressor.release = 0.15f;
+    engine->master_effects[1].compressor.makeup = 1.2f;
+
+    engine->transport.bpm = 145.0;
+    snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern 1");
+    engine->num_patterns = 5;
+    engine->transport.current_pattern = 0;
+
+    /* Initialize patterns 2-5 with tracks but no steps */
+    for (int i = 1; i < 5; i++) {
+        sq_pattern_t *pp = &engine->patterns[i];
+        pp->num_tracks = p->num_tracks;
+        for (uint32_t t = 0; t < pp->num_tracks; t++) {
+            pp->tracks[t].type = p->tracks[t].type;
+            pp->tracks[t].sample_index = p->tracks[t].sample_index;
+            pp->tracks[t].synth_preset = p->tracks[t].synth_preset;
+            pp->tracks[t].length = 16;
+            pp->tracks[t].volume = p->tracks[t].volume;
+        }
     }
 }
 

@@ -42,6 +42,12 @@ cp build/0x808 "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 cp -r samples "${APP_DIR}/Contents/Resources/"
 cp -r themes  "${APP_DIR}/Contents/Resources/"
 
+# Icon
+if [ -f resources/0x808.icns ]; then
+    cp resources/0x808.icns "${APP_DIR}/Contents/Resources/"
+    echo "  -> App icon: 0x808.icns"
+fi
+
 # Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -53,6 +59,8 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>CFBundleIdentifier</key>
     <string>com.dcmichael.0x808</string>
     <key>CFBundleName</key>
+    <string>0x808</string>
+    <key>CFBundleIconFile</key>
     <string>0x808</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
@@ -93,10 +101,68 @@ hdiutil create -volname "0x808 v${VERSION}" \
 
 rm -rf "${DMG_STAGE}"
 
-# ── Also create a simple zip ──
+# ── Prepare plugins ──
+echo "--- Preparing plugins ---"
+PLUGIN_DIR="${RELEASE_DIR}/Plugins"
+mkdir -p "${PLUGIN_DIR}"
+
+# CLAP — single file
+if [ -f build/0x808.clap ]; then
+    cp build/0x808.clap "${PLUGIN_DIR}/"
+    echo "  -> CLAP: ${PLUGIN_DIR}/0x808.clap"
+fi
+
+# VST3 — needs macOS bundle structure
+if [ -f build/0x808.so ]; then
+    VST3_BUNDLE="${PLUGIN_DIR}/0x808.vst3"
+    mkdir -p "${VST3_BUNDLE}/Contents/MacOS"
+    cp build/0x808.so "${VST3_BUNDLE}/Contents/MacOS/0x808"
+    cat > "${VST3_BUNDLE}/Contents/Info.plist" << VST3PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>0x808</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.dcmichael.0x808.vst3</string>
+    <key>CFBundleName</key>
+    <string>0x808</string>
+    <key>CFBundleVersion</key>
+    <string>${VERSION}</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+</dict>
+</plist>
+VST3PLIST
+    echo "  -> VST3: ${VST3_BUNDLE}"
+fi
+
+# Plugin install readme
+cat > "${PLUGIN_DIR}/INSTALL_PLUGINS.txt" << 'PLUGINTXT'
+0x808 — Plugin Installation (macOS)
+====================================
+
+Copy the plugins to these locations so your DAW can find them:
+
+  VST3:  ~/Library/Audio/Plug-Ins/VST3/0x808.vst3
+  CLAP:  ~/Library/Audio/Plug-Ins/CLAP/0x808.clap
+
+Quick install (run in Terminal from this folder):
+
+  mkdir -p ~/Library/Audio/Plug-Ins/VST3
+  mkdir -p ~/Library/Audio/Plug-Ins/CLAP
+  cp -r 0x808.vst3 ~/Library/Audio/Plug-Ins/VST3/
+  cp 0x808.clap    ~/Library/Audio/Plug-Ins/CLAP/
+
+Then restart your DAW and rescan plugins.
+PLUGINTXT
+echo "  -> ${PLUGIN_DIR}/INSTALL_PLUGINS.txt"
+
+# ── Create zip (app + plugins) ──
 echo "--- Creating zip ---"
 cd "${RELEASE_DIR}"
-zip -r "0x808-${VERSION}-macos-x64.zip" "${APP_NAME}.app" -q 2>/dev/null || true
+zip -r "0x808-${VERSION}-macos-x64.zip" "${APP_NAME}.app" Plugins/ -q 2>/dev/null || true
 cd "$PROJECT_DIR"
 
 # ── Summary ──
