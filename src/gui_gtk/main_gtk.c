@@ -11,6 +11,7 @@
  */
 
 #include "gtk_gui.h"
+#include "engine/effects.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -196,18 +197,54 @@ static void setup_demo_pattern(void)
         }
     }
 
-    /* Prefill Trap 808 bass on first synth track (preset 50) */
+    /* Prefill Trap 808 bass — sparse, deep, long sustain
+     * Only 2 notes per bar: one on beat 1 (long), one on beat 3 (shorter)
+     * Low notes only (C1-E1 range) for maximum sub weight */
     if (synth_bass < p->num_tracks) {
         p->tracks[synth_bass].synth_preset = 50;  /* Trap 808 */
-        const uint8_t notes[] = {36,0,0,0,0,0,0,0,31,0,0,33,0,0,36,0};
-        const uint8_t vels[]  = {120,0,0,0,0,0,0,0,110,0,0,100,0,0,120,0};
-        const float   lens[]  = {2,0,0,0,0,0,0,0,2,0,0,1,0,0,2,0};
+        p->tracks[synth_bass].volume = 0.8f;      /* sub needs to be loud */
+        const uint8_t notes[] = {24,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0};  /* C1, E1 */
+        const uint8_t vels[]  = {127,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0};
+        const float   lens[]  = {6,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0};   /* long sustain */
         for (int s = 0; s < 16; s++) {
             p->tracks[synth_bass].steps[s].note = notes[s];
             p->tracks[synth_bass].steps[s].velocity = vels[s];
             p->tracks[synth_bass].steps[s].length = lens[s];
         }
+        /* Add tape saturation to the 808 for warmth */
+        p->tracks[synth_bass].effects[0].type = EFFECT_TAPE;
+        p->tracks[synth_bass].effects[0].tape.drive = 0.3f;
+        p->tracks[synth_bass].effects[0].tape.warmth = 0.6f;
+        p->tracks[synth_bass].effects[0].tape.mix = 0.5f;
     }
+
+    /* Add shimmer reverb to the Dark Pad track */
+    if (synth_pluck < p->num_tracks) {
+        p->tracks[synth_pluck].effects[0].type = EFFECT_SHIMMER;
+        p->tracks[synth_pluck].effects[0].shimmer.decay = 0.7f;
+        p->tracks[synth_pluck].effects[0].shimmer.shimmer = 0.4f;
+        p->tracks[synth_pluck].effects[0].shimmer.mix = 0.5f;
+        /* Initialize shimmer buffer */
+        effect_init(&p->tracks[synth_pluck].effects[0], EFFECT_SHIMMER,
+                    g_engine.sample_rate);
+    }
+
+    /* Add delay to master bus for atmosphere */
+    g_engine.master_effects[0].type = EFFECT_DELAY;
+    g_engine.master_effects[0].delay.time = 0.375f;  /* dotted 8th at 145 */
+    g_engine.master_effects[0].delay.feedback = 0.3f;
+    g_engine.master_effects[0].delay.wet = 0.15f;
+    g_engine.master_effects[0].delay.bpm_sync = true;
+    g_engine.master_effects[0].delay.sync_division = 2;  /* 1/4 note */
+    effect_init(&g_engine.master_effects[0], EFFECT_DELAY, g_engine.sample_rate);
+
+    /* Add compressor to master for glue */
+    g_engine.master_effects[1].type = EFFECT_COMPRESSOR;
+    g_engine.master_effects[1].compressor.threshold = 0.6f;
+    g_engine.master_effects[1].compressor.ratio = 3.0f;
+    g_engine.master_effects[1].compressor.attack = 0.01f;
+    g_engine.master_effects[1].compressor.release = 0.15f;
+    g_engine.master_effects[1].compressor.makeup = 1.2f;
 
     g_engine.transport.bpm = 145.0;
     snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern 1");
