@@ -163,30 +163,31 @@ static void setup_demo_pattern(void)
         p->tracks[t].volume = 0.8f;
     }
 
+    /* Two synth tracks: 808 sub bass + dark pad for atmosphere */
     uint32_t synth_bass = num_sample_tracks;
-    uint32_t synth_pluck = num_sample_tracks + 1;
+    uint32_t synth_pad = num_sample_tracks + 1;
     if (synth_bass < p->num_tracks) {
         p->tracks[synth_bass].type = TRACK_SYNTH;
-        p->tracks[synth_bass].synth_preset = 0;
+        p->tracks[synth_bass].synth_preset = 50;  /* Trap 808 sub */
         p->tracks[synth_bass].length = 16;
-        p->tracks[synth_bass].volume = 0.6f;
+        p->tracks[synth_bass].volume = 0.85f;
     }
-    if (synth_pluck < p->num_tracks) {
-        p->tracks[synth_pluck].type = TRACK_SYNTH;
-        p->tracks[synth_pluck].synth_preset = 52;  /* Dark Pad — fits trap aesthetic */
-        p->tracks[synth_pluck].length = 16;
-        p->tracks[synth_pluck].volume = 0.4f;
+    if (synth_pad < p->num_tracks) {
+        p->tracks[synth_pad].type = TRACK_SYNTH;
+        p->tracks[synth_pad].synth_preset = 52;  /* Dark Pad */
+        p->tracks[synth_pad].length = 16;
+        p->tracks[synth_pad].volume = 0.35f;
     }
 
-    /* Prefill with Trap 808 drum preset */
+    /* ── Trap 808 drums: sparse, heavy, hi-hat rolls with dynamics ── */
     {
         static const uint8_t trap[6][16] = {
-            {127,0,0,0,0,0,0,0,0,0,0,0,110,0,0,0},       /* kick: sparse, heavy */
-            {0,0,0,0,0,0,0,0,120,0,0,0,0,0,0,0},         /* snare: on 3 */
-            {100,60,80,60,100,60,80,100,100,60,80,60,100,80,100,80}, /* hihat: rolls */
-            {0,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0},         /* clap: on 3 */
-            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,80},          /* open hat */
-            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}            /* (empty) */
+            {127,0,0,0,0,0,0,0,0,0,0,0,110,0,0,0},        /* kick: 1 and &-of-4 */
+            {0,0,0,0,0,0,0,0,127,0,0,0,0,0,0,0},          /* snare: beat 3 */
+            {100,50,70,50,100,50,70,90,100,50,70,50,100,70,90,100}, /* hats: velocity rolls */
+            {0,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0},          /* clap: doubles snare */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,70},           /* open hat: bar end */
+            {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}             /* (empty) */
         };
         int applied = 0;
         for (uint32_t t = 0; t < p->num_tracks && applied < 6; t++) {
@@ -197,35 +198,43 @@ static void setup_demo_pattern(void)
         }
     }
 
-    /* Prefill Trap 808 bass — sparse, deep, long sustain
-     * Only 2 notes per bar: one on beat 1 (long), one on beat 3 (shorter)
-     * Low notes only (C1-E1 range) for maximum sub weight */
+    /* ── 808 sub bass: ONE long note per bar, deep as possible ──
+     * Single C0 (MIDI 12) sustaining the entire bar.
+     * This is what makes trap FEEL heavy — one massive sub note. */
     if (synth_bass < p->num_tracks) {
-        p->tracks[synth_bass].synth_preset = 50;  /* Trap 808 */
-        p->tracks[synth_bass].volume = 0.8f;      /* sub needs to be loud */
-        const uint8_t notes[] = {24,0,0,0,0,0,0,0,28,0,0,0,0,0,0,0};  /* C1, E1 */
-        const uint8_t vels[]  = {127,0,0,0,0,0,0,0,110,0,0,0,0,0,0,0};
-        const float   lens[]  = {6,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0};   /* long sustain */
+        const uint8_t notes[] = {12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* C0 only */
+        const uint8_t vels[]  = {127,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        const float   lens[]  = {14,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* sustains 14 steps */
         for (int s = 0; s < 16; s++) {
             p->tracks[synth_bass].steps[s].note = notes[s];
             p->tracks[synth_bass].steps[s].velocity = vels[s];
             p->tracks[synth_bass].steps[s].length = lens[s];
         }
-        /* Add tape saturation to the 808 for warmth */
+        /* Tape saturation for analog warmth */
         p->tracks[synth_bass].effects[0].type = EFFECT_TAPE;
-        p->tracks[synth_bass].effects[0].tape.drive = 0.3f;
-        p->tracks[synth_bass].effects[0].tape.warmth = 0.6f;
-        p->tracks[synth_bass].effects[0].tape.mix = 0.5f;
+        p->tracks[synth_bass].effects[0].tape.drive = 0.4f;
+        p->tracks[synth_bass].effects[0].tape.warmth = 0.7f;
+        p->tracks[synth_bass].effects[0].tape.mix = 0.4f;
     }
 
-    /* Add shimmer reverb to the Dark Pad track */
-    if (synth_pluck < p->num_tracks) {
-        p->tracks[synth_pluck].effects[0].type = EFFECT_SHIMMER;
-        p->tracks[synth_pluck].effects[0].shimmer.decay = 0.7f;
-        p->tracks[synth_pluck].effects[0].shimmer.shimmer = 0.4f;
-        p->tracks[synth_pluck].effects[0].shimmer.mix = 0.5f;
-        /* Initialize shimmer buffer */
-        effect_init(&p->tracks[synth_pluck].effects[0], EFFECT_SHIMMER,
+    /* ── Dark pad: single sustained minor chord tone for atmosphere ──
+     * One long Eb note (MIDI 39 = Eb2) — minor third over the C bass,
+     * creates dark/ominous mood. Sustains entire bar. */
+    if (synth_pad < p->num_tracks) {
+        const uint8_t notes[] = {39,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* Eb2 */
+        const uint8_t vels[]  = {80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        const float   lens[]  = {16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* entire bar */
+        for (int s = 0; s < 16; s++) {
+            p->tracks[synth_pad].steps[s].note = notes[s];
+            p->tracks[synth_pad].steps[s].velocity = vels[s];
+            p->tracks[synth_pad].steps[s].length = lens[s];
+        }
+        /* Shimmer reverb for atmosphere */
+        p->tracks[synth_pad].effects[0].type = EFFECT_SHIMMER;
+        p->tracks[synth_pad].effects[0].shimmer.decay = 0.7f;
+        p->tracks[synth_pad].effects[0].shimmer.shimmer = 0.4f;
+        p->tracks[synth_pad].effects[0].shimmer.mix = 0.5f;
+        effect_init(&p->tracks[synth_pad].effects[0], EFFECT_SHIMMER,
                     g_engine.sample_rate);
     }
 
