@@ -469,14 +469,6 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         *p->show_browser = !*p->show_browser;
     ImGui::SameLine();
 
-    /* Settings button (standalone only) */
-    if (!is_plugin && p->show_settings) {
-        if (ColoredButton(*p->show_settings ? "SET*" : "SET",
-                          *p->show_settings, ImVec4(0.45f, 0.45f, 0.48f, 1.0f), btn_sm))
-            *p->show_settings = !*p->show_settings;
-        ImGui::SameLine();
-    }
-
     /* THEME button with popup selector */
     {
         if (ImGui::Button(is_plugin ? "THM" : "THEME", btn_sm))
@@ -547,12 +539,61 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         }
     }
 
-    /* ── Window controls: _ [] X (standalone only) ─────────────────── */
+    /* ── Window controls: [gear] _ [] X (standalone only) ───────────── */
     if (!is_plugin && p->window) {
         ImGui::SameLine();
         ImVec2 wc_sz(35.0f, btn_h);
-        float controls_w = wc_sz.x * 3 + 2 * 2 + 8;
+        float gear_w = btn_h; /* square button */
+        float controls_w = gear_w + 4 + wc_sz.x * 3 + 2 * 2 + 8;
         ImGui::SameLine(ImGui::GetWindowWidth() - controls_w);
+
+        /* Settings gear icon */
+        if (p->show_settings) {
+            bool active = *p->show_settings;
+            if (active) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.35f, 0.40f, 1.0f));
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
+            }
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.40f, 0.40f, 0.45f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
+
+            ImVec2 gear_pos = ImGui::GetCursorScreenPos();
+            if (ImGui::Button("##gear", ImVec2(gear_w, btn_h)))
+                *p->show_settings = !*p->show_settings;
+
+            /* Draw gear icon on top of the button */
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            float cx = gear_pos.x + gear_w * 0.5f;
+            float cy = gear_pos.y + btn_h * 0.5f;
+            float r_outer = btn_h * 0.3f;
+            float r_inner = r_outer * 0.55f;
+            ImU32 gear_col = active ? IM_COL32(200, 200, 210, 255)
+                                    : IM_COL32(160, 160, 170, 255);
+
+            /* Gear teeth */
+            int teeth = 8;
+            for (int i = 0; i < teeth; i++) {
+                float a = (float)i / (float)teeth * 6.2832f;
+                float tooth_w = 0.35f; /* angular half-width */
+                float r_tip = r_outer + 2.5f;
+                ImVec2 p1(cx + cosf(a - tooth_w) * r_outer, cy + sinf(a - tooth_w) * r_outer);
+                ImVec2 p2(cx + cosf(a - tooth_w * 0.6f) * r_tip, cy + sinf(a - tooth_w * 0.6f) * r_tip);
+                ImVec2 p3(cx + cosf(a + tooth_w * 0.6f) * r_tip, cy + sinf(a + tooth_w * 0.6f) * r_tip);
+                ImVec2 p4(cx + cosf(a + tooth_w) * r_outer, cy + sinf(a + tooth_w) * r_outer);
+                dl->AddQuadFilled(p1, p2, p3, p4, gear_col);
+            }
+
+            /* Outer circle (body) */
+            dl->AddCircleFilled(ImVec2(cx, cy), r_outer, gear_col, 24);
+            /* Inner hole */
+            ImU32 bg_col = active ? IM_COL32(89, 89, 102, 255)
+                                  : IM_COL32(51, 51, 56, 255);
+            dl->AddCircleFilled(ImVec2(cx, cy), r_inner, bg_col, 16);
+
+            ImGui::PopStyleColor(3);
+            ImGui::SameLine(0, 4);
+        }
 
         /* Minimize */
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.20f, 0.22f, 1.0f));
