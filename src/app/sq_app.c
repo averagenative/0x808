@@ -10,6 +10,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #define STEPS_PER_BEAT 4
@@ -20,6 +21,36 @@ void sq_app_init(sq_app_t *app)
 {
     memset(app, 0, sizeof(*app));
     app->selected_track = -1;
+    sq_app_init_rec_config(&app->rec_config);
+
+    /* Audio defaults */
+    app->audio_config.device_name[0] = '\0'; /* empty = default */
+    app->audio_config.sample_rate = 44100;
+    app->audio_config.device_index = -1;
+}
+
+void sq_app_init_rec_config(sq_rec_config_t *cfg)
+{
+    if (!cfg) return;
+    memset(cfg, 0, sizeof(*cfg));
+
+    /* Platform-appropriate default directory */
+#ifdef _WIN32
+    const char *userprofile = getenv("USERPROFILE");
+    if (userprofile)
+        snprintf(cfg->output_dir, SQ_REC_DIR_LEN, "%s\\Music\\0x808", userprofile);
+    else
+        snprintf(cfg->output_dir, SQ_REC_DIR_LEN, ".");
+#else
+    const char *home = getenv("HOME");
+    if (home)
+        snprintf(cfg->output_dir, SQ_REC_DIR_LEN, "%s/Music/0x808", home);
+    else
+        snprintf(cfg->output_dir, SQ_REC_DIR_LEN, ".");
+#endif
+
+    snprintf(cfg->prefix, SQ_REC_PREFIX_LEN, "recording");
+    cfg->bit_depth = 16;
 }
 
 /* ─── Key handler ─────────────────────────────────────────────────────────── */

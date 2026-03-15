@@ -91,6 +91,14 @@ All GUI frontends share the `sq_app` controller library (C99) for keyboard short
 | **QWERTY keys** (when Piano panel is open) | Play notes — Z-M = lower octave, Q-P = upper octave |
 | **<< / >>** | Shift keyboard octave range |
 
+### Knobs
+
+| Action | Behavior |
+|--------|----------|
+| **Drag up/down** | Adjust value (full range ≈ 200 pixels) |
+| **Shift + drag** | Fine adjustment (10x precision) |
+| **Double-click** | Reset to default value |
+
 ### Toolbar Buttons
 
 | Action | Behavior |

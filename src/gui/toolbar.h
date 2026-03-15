@@ -10,6 +10,7 @@
 #define SQ_TOOLBAR_H
 
 #include "engine/engine.h"
+#include "app/sq_app.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -43,6 +44,12 @@ typedef struct {
 
     /* Play start ticks for wall-clock playhead (caller-owned) */
     uint64_t    *play_start_ticks;
+
+    /* Recording configuration (caller-owned) */
+    sq_rec_config_t *rec_config;
+
+    /* Settings panel toggle (caller-owned) */
+    bool        *show_settings;
 } sq_toolbar_params_t;
 
 /*

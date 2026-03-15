@@ -22,7 +22,8 @@ Each section describes what a compliant frontend MUST implement.
 
 ### 2.2 Transport Controls
 - [ ] PLAY/STOP toggle button (green glow when playing)
-- [ ] REC button with red highlight when active
+- [ ] REC button with red highlight when active, shows elapsed time + file size
+- [ ] Streaming recording to disk (auto-numbered files in ~/Music/0x808/ or %USERPROFILE%\Music\0x808\)
 - [ ] Visual separator lines between sections
 
 ### 2.3 Parameter Knobs

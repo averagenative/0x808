@@ -448,6 +448,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
         int track = (int)((y - g.grid_y + s_scroll_offset) / g.cell_h);
         if (track >= 0 && (uint32_t)track < pat->num_tracks) {
             g_gtk.app.selected_track = track;
+            gtk_mixer_set_fx_track(track);
 
             /* Check mute/solo button hit */
             double ty = g.grid_y + track * g.cell_h - s_scroll_offset;
@@ -536,6 +537,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
         s_drag_step = step;
 
         g_gtk.app.selected_track = track;
+        gtk_mixer_set_fx_track(track);
         gtk_widget_queue_draw(g_gtk.drum_grid_area);
     }
 }
@@ -900,6 +902,7 @@ static void on_right_click(GtkGestureClick *gesture, int n_press,
     }
 
     g_gtk.app.selected_track = track;
+    gtk_mixer_set_fx_track(track);
     show_step_popover(track, step, x, y);
 }
 
@@ -929,6 +932,7 @@ static void on_add_sampler_track(GtkWidget *btn, gpointer user_data)
     pat->num_tracks++;
 
     g_gtk.app.selected_track = (int)(pat->num_tracks - 1);
+    gtk_mixer_set_fx_track(g_gtk.app.selected_track);
     sq_app_set_status(&g_gtk.app, "+ Sampler track", 90);
     gtk_widget_queue_draw(g_gtk.drum_grid_area);
 }
@@ -957,6 +961,7 @@ static void on_add_synth_track(GtkWidget *btn, gpointer user_data)
     pat->num_tracks++;
 
     g_gtk.app.selected_track = (int)(pat->num_tracks - 1);
+    gtk_mixer_set_fx_track(g_gtk.app.selected_track);
     sq_app_set_status(&g_gtk.app, "+ Synth track", 90);
     gtk_widget_queue_draw(g_gtk.drum_grid_area);
 }

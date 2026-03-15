@@ -200,44 +200,85 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
 
     /* ── REC button ────────────────────────────────────────────────── */
     {
-        bool was_rec = engine->recording;
-        if (!is_plugin && was_rec) {
-            ImVec2 rec_pos = ImGui::GetCursorScreenPos();
-            DrawGlow(rec_pos, ImVec2(rec_pos.x + 55, rec_pos.y + btn_h),
-                     ImVec4(0.9f, 0.15f, 0.15f, 1.0f), 4.0f, 55);
+        sq_recorder_t *rec = &engine->recorder;
+        bool is_rec = (rec->state == SQ_REC_ACTIVE);
+
+        /* Build label with elapsed time when recording */
+        char rec_label[64] = "REC";
+        if (is_rec) {
+            uint64_t secs = rec->sample_rate > 0
+                ? rec->frames_written / rec->sample_rate : 0;
+            uint64_t file_bytes = rec->frames_written * 2 * (rec->bit_depth / 8);
+            if (secs >= 3600)
+                snprintf(rec_label, sizeof(rec_label), "REC %u:%02u:%02u %.1fMB",
+                         (unsigned)(secs / 3600), (unsigned)((secs % 3600) / 60),
+                         (unsigned)(secs % 60),
+                         (double)file_bytes / (1024.0 * 1024.0));
+            else
+                snprintf(rec_label, sizeof(rec_label), "REC %u:%02u %.1fMB",
+                         (unsigned)(secs / 60), (unsigned)(secs % 60),
+                         (double)file_bytes / (1024.0 * 1024.0));
         }
-        if (was_rec)
+
+        float rec_btn_w = is_rec ? ImGui::CalcTextSize(rec_label).x + 16.0f : 55.0f;
+        if (rec_btn_w < 55.0f) rec_btn_w = 55.0f;
+
+        if (!is_plugin && is_rec) {
+            ImVec2 rec_pos = ImGui::GetCursorScreenPos();
+            DrawGlow(rec_pos, ImVec2(rec_pos.x + rec_btn_w, rec_pos.y + btn_h),
+                     ImVec4(0.9f, 0.15f, 0.15f, 1.0f), 4.0f, rec_btn_w);
+        }
+        if (is_rec)
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.12f, 0.12f, 1.0f));
-        if (ImGui::Button(was_rec ? "REC *" : "REC", ImVec2(55, btn_h))) {
-            if (engine->recording) {
-                engine->recording = false;
-                if (engine->rec_frames > 0) {
-                    char rec_path[600];
-                    const char *bd = engine->base_dir[0] ? engine->base_dir : "";
-                    size_t bdlen = strlen(bd);
-                    const char *sep = (bdlen > 0 && bd[bdlen-1] != '/' &&
-                                       bd[bdlen-1] != '\\') ? "/" : "";
-                    snprintf(rec_path, sizeof(rec_path), "%s%srecording.wav", bd, sep);
-                    sq_export_result_t rec_result = {};
-                    rec_result.data = engine->rec_buffer;
-                    rec_result.num_frames = engine->rec_frames;
-                    rec_result.sample_rate = engine->sample_rate;
-                    sq_export_write_wav(rec_path, &rec_result, 16);
-                    LOG_INFO("Saved recording: %u frames -> %s", engine->rec_frames, rec_path);
-                    snprintf(p->save_status, (size_t)p->save_status_size, "Saved: %.120s", rec_path);
+
+        if (ImGui::Button(rec_label, ImVec2(rec_btn_w, btn_h))) {
+            if (is_rec) {
+                /* Stop recording */
+                uint64_t frames = rec->frames_written;
+                sq_recorder_stop(rec);
+                if (frames > 0) {
+                    snprintf(p->save_status, (size_t)p->save_status_size,
+                             "Saved: %.120s", rec->filepath);
                     *p->status_timer = 300;
                 }
-                engine->rec_frames = 0;
             } else {
-                sq_engine_start_recording(engine);
-                char rec_path[600];
-                snprintf(rec_path, sizeof(rec_path), "%srecording.wav",
-                         engine->base_dir[0] ? engine->base_dir : "");
-                snprintf(p->save_status, (size_t)p->save_status_size, "REC -> %.120s", rec_path);
-                *p->status_timer = 0;
+                /* Start recording with auto-incremented filename */
+                sq_rec_config_t *cfg = p->rec_config;
+                if (cfg) {
+                    char rec_path[512];
+                    int num = sq_recorder_next_filename(
+                        cfg->output_dir, cfg->prefix,
+                        rec->next_number, rec_path, sizeof(rec_path));
+                    rec->next_number = num;
+                    if (sq_recorder_start(rec, rec_path,
+                                          engine->sample_rate, cfg->bit_depth) == 0) {
+                        snprintf(p->save_status, (size_t)p->save_status_size,
+                                 "REC -> %.120s", rec_path);
+                        *p->status_timer = 0;
+                    } else {
+                        snprintf(p->save_status, (size_t)p->save_status_size,
+                                 "REC failed — check output dir");
+                        *p->status_timer = 300;
+                    }
+                }
             }
         }
-        if (was_rec) ImGui::PopStyleColor();
+        if (is_rec) ImGui::PopStyleColor();
+
+        /* Handle error state (disk full) */
+        if (rec->state == SQ_REC_ERROR) {
+            snprintf(p->save_status, (size_t)p->save_status_size,
+                     "Recording stopped: disk full or I/O error");
+            *p->status_timer = 300;
+            rec->state = SQ_REC_IDLE;
+        }
+
+        /* Disk space warning */
+        if (rec->disk_low && is_rec) {
+            snprintf(p->save_status, (size_t)p->save_status_size,
+                     "WARNING: Low disk space (<500 MB)");
+            *p->status_timer = 0;
+        }
     }
 
     /* Separator after transport (standalone only — plugin has tighter spacing) */
@@ -428,6 +469,14 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         *p->show_browser = !*p->show_browser;
     ImGui::SameLine();
 
+    /* Settings button (standalone only) */
+    if (!is_plugin && p->show_settings) {
+        if (ColoredButton(*p->show_settings ? "SET*" : "SET",
+                          *p->show_settings, ImVec4(0.45f, 0.45f, 0.48f, 1.0f), btn_sm))
+            *p->show_settings = !*p->show_settings;
+        ImGui::SameLine();
+    }
+
     /* THEME button with popup selector */
     {
         if (ImGui::Button(is_plugin ? "THM" : "THEME", btn_sm))
@@ -469,6 +518,10 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             ImGui::Text("Ctrl+O         Open project");
             ImGui::Text("Escape         Quit");
 
+            ImGui::Text("Ctrl+C         Copy pattern");
+            ImGui::Text("Ctrl+V         Paste pattern");
+            ImGui::Text("+/=            New pattern");
+
             ImGui::Spacing();
             ImGui::Text("QWERTY Piano (when KEYS panel open)");
             ImGui::Separator();
@@ -478,13 +531,18 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             ImGui::Spacing();
             ImGui::Text("Mouse Controls");
             ImGui::Separator();
-            ImGui::Text("Left-click       Toggle step / Place note");
-            ImGui::Text("Left-drag        Paint steps / Extend note length");
-            ImGui::Text("Right-click      Velocity/pitch editor (drum grid)");
-            ImGui::Text("Right-drag       Erase notes (piano roll)");
-            ImGui::Text("Scroll wheel     Scroll / Cycle dropdown values");
-            ImGui::Text("Double-click knob  Reset to default");
-            ImGui::Text("Drag knob        Adjust value (Shift = fine)");
+            ImGui::Text("Left-click         Toggle step / Place note");
+            ImGui::Text("Left-drag          Paint steps / Extend note length");
+            ImGui::Text("Right-click        Velocity/pitch editor (drum grid)");
+            ImGui::Text("Right-drag         Erase notes (piano roll)");
+            ImGui::Text("Scroll wheel       Scroll / Cycle dropdown values");
+
+            ImGui::Spacing();
+            ImGui::Text("Knobs");
+            ImGui::Separator();
+            ImGui::Text("Drag up/down       Adjust value");
+            ImGui::Text("Shift + drag       Fine adjustment (10x precision)");
+            ImGui::Text("Double-click       Reset to default");
             ImGui::EndPopup();
         }
     }
@@ -648,7 +706,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
 
         /* Status message */
         ImGui::SameLine(0, is_plugin ? 10.0f : 20.0f);
-        if (engine->recording) {
+        if (engine->recorder.state == SQ_REC_ACTIVE) {
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", p->save_status);
         } else if (*p->status_timer > 0) {
             ImGui::TextColored(ImVec4(0.39f, 1.0f, 0.39f, 1.0f), "%s", p->save_status);

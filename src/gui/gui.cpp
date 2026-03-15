@@ -28,6 +28,7 @@ extern "C" {
 #include "gui/synth_editor.h"
 #include "gui/sample_browser.h"
 #include "gui/export_dialog.h"
+#include "gui/settings_panel.h"
 #include "gui/piano_roll.h"
 #include "gui/arrangement.h"
 #include "gui/mixer_view.h"
@@ -476,6 +477,8 @@ int gui_frame(sq_engine_t *engine)
         tp.save_status_size = SQ_STATUS_LEN;
         tp.status_timer = &g_app.status_timer;
         tp.play_start_ticks = &play_ticks;
+        tp.rec_config = &g_app.rec_config;
+        tp.show_settings = &g_app.panels[SQ_PANEL_SETTINGS];
         toolbar_draw(&tp);
         g_app.play_start_ticks = play_ticks;
     }
@@ -579,6 +582,15 @@ int gui_frame(sq_engine_t *engine)
             g_app.panels[SQ_PANEL_BROWSER] = false;
     }
 
+    /* Settings panel */
+    if (g_app.panels[SQ_PANEL_SETTINGS]) {
+        float settings_w = 350.0f;
+        float settings_x = main_w - settings_w;
+        if (g_app.panels[SQ_PANEL_BROWSER])
+            settings_x -= browser_w;
+        settings_panel_draw(engine, &g_app, settings_x, grid_y, settings_w, total_h);
+    }
+
     /* Virtual keyboard */
     if (g_app.panels[SQ_PANEL_KEYBOARD]) {
         float kb_h = 120.0f;
@@ -623,6 +635,22 @@ int gui_frame(sq_engine_t *engine)
     g_app.selected_track = g_selected_track;
 
     return quit;
+}
+
+void gui_set_audio_restart(void (*fn)(void *), void *userdata)
+{
+    g_app.audio_restart_fn = fn;
+    g_app.audio_restart_userdata = userdata;
+}
+
+const char *gui_get_audio_device_name(void)
+{
+    return g_app.audio_config.device_name;
+}
+
+int gui_get_audio_device_index(void)
+{
+    return g_app.audio_config.device_index;
 }
 
 void gui_shutdown(void)

@@ -324,6 +324,31 @@ typedef struct {
     int   preset_number;
 } sq_sf2_preset_t;
 
+/* ─── Streaming recorder ─────────────────────────────────────────────────── */
+
+typedef enum {
+    SQ_REC_IDLE = 0,        /* not recording                              */
+    SQ_REC_ACTIVE,          /* streaming to disk                          */
+    SQ_REC_ERROR             /* write failed (disk full, I/O error)       */
+} sq_rec_state_t;
+
+typedef struct {
+    void           *wav;             /* open dr_wav streaming handle (drwav*) */
+    sq_rec_state_t  state;           /* current recording state            */
+    uint32_t        bit_depth;       /* 16, 24, or 32                     */
+    uint32_t        sample_rate;     /* sample rate at recording start    */
+    uint64_t        frames_written;  /* total frames written to disk      */
+    char            filepath[512];   /* path to current recording file    */
+
+    /* Disk space monitoring (updated periodically, not every callback) */
+    uint64_t        disk_free_bytes; /* last-checked available bytes       */
+    bool            disk_low;        /* true when < 500 MB free            */
+    uint32_t        disk_check_countdown; /* frames until next disk check */
+
+    /* Auto-increment state */
+    int             next_number;     /* next file number (0 = needs scan) */
+} sq_recorder_t;
+
 /* ─── Engine: the top-level state container ───────────────────────────────── */
 
 typedef struct tsf tsf; /* forward declare */
@@ -370,11 +395,8 @@ typedef struct {
     /* Simple PRNG state for humanization (xorshift32) */
     uint32_t       rng_state;
 
-    /* Real-time recording: capture master output during playback */
-    float         *rec_buffer;      /* pre-allocated buffer (10 min max)     */
-    uint32_t       rec_frames;      /* frames written so far                 */
-    uint32_t       rec_capacity;    /* allocated capacity in frames          */
-    bool           recording;       /* true while capturing audio            */
+    /* Streaming recorder (writes to disk in real-time) */
+    sq_recorder_t  recorder;
 
     /* Peak level metering (computed by mixer, read by GUI) */
     float          track_peaks[SQ_MAX_TRACKS]; /* per-track peak (0.0 - 1.0+) */
@@ -413,16 +435,46 @@ void sq_engine_shutdown(sq_engine_t *engine);
  */
 void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames);
 
-/*
- * Pre-allocate recording buffer for ~10 minutes and start recording.
- * Call from the GUI thread (no realloc in the audio path).
- */
-void sq_engine_start_recording(sq_engine_t *engine);
+/* ─── Streaming recorder API ──────────────────────────────────────────────── */
 
 /*
- * Stop recording (audio thread will stop writing to rec_buffer).
+ * Start streaming recording to a WAV file on disk.
+ * filepath: full path to the output .wav file.
+ * bit_depth: 16, 24, or 32.
+ * Call from the GUI thread before playback or during playback.
+ * Returns 0 on success, -1 on failure.
  */
-void sq_engine_stop_recording(sq_engine_t *engine);
+int sq_recorder_start(sq_recorder_t *rec, const char *filepath,
+                      uint32_t sample_rate, uint32_t bit_depth);
+
+/*
+ * Write audio frames to the open recording file.
+ * Called from the audio callback — must be fast.
+ * output: interleaved stereo float buffer.
+ * num_frames: number of stereo frames.
+ */
+void sq_recorder_write(sq_recorder_t *rec, const float *output,
+                       uint32_t num_frames);
+
+/*
+ * Stop recording and finalize the WAV file.
+ * Safe to call even if not recording (no-op).
+ */
+void sq_recorder_stop(sq_recorder_t *rec);
+
+/*
+ * Scan output_dir for files matching "{prefix}_NNN.wav" and return
+ * the next available filename in out_path (must be at least 512 bytes).
+ * Returns the number used (e.g., 7 for prefix_007.wav).
+ */
+int sq_recorder_next_filename(const char *output_dir, const char *prefix,
+                              int last_known, char *out_path, size_t out_path_size);
+
+/*
+ * Get available disk space in bytes for the given path.
+ * Returns 0 on error.
+ */
+uint64_t sq_recorder_disk_free(const char *path);
 
 /*
  * Safe project load — stops playback and recording before modifying engine state.

@@ -75,6 +75,13 @@ static sq_engine_t g_engine;
 
 static atomic_int g_audio_running = 0;
 static atomic_uint_fast64_t g_audio_push_count = 0;
+static SDL_AudioDeviceID g_audio_dev = 0;
+static SDL_Thread *g_audio_thread = NULL;
+
+/* Forward declarations for audio restart */
+static void audio_stop(void);
+static int  audio_start(const char *device_name);
+static void audio_restart_callback(void *userdata);
 
 static int audio_push_thread(void *userdata)
 {
@@ -108,6 +115,100 @@ static int audio_push_thread(void *userdata)
 
     LOG_INFO("Audio push thread exiting");
     return 0;
+}
+
+/* ─── Audio device management ────────────────────────────────────────────── */
+
+static void audio_stop(void)
+{
+    if (g_audio_thread) {
+        atomic_store(&g_audio_running, 0);
+        SDL_WaitThread(g_audio_thread, NULL);
+        g_audio_thread = NULL;
+    }
+    if (g_audio_dev) {
+        SDL_CloseAudioDevice(g_audio_dev);
+        g_audio_dev = 0;
+    }
+}
+
+static int audio_start(const char *device_name)
+{
+    SDL_AudioSpec want, have;
+    SDL_zero(want);
+    want.freq     = 44100;
+    want.format   = AUDIO_F32SYS;
+    want.channels = 2;
+    want.samples  = 1024;
+    want.callback = NULL;
+
+    /* NULL or empty string = default device */
+    const char *dev = (device_name && device_name[0]) ? device_name : NULL;
+
+    g_audio_dev = SDL_OpenAudioDevice(
+        dev, 0, &want, &have, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
+    if (g_audio_dev == 0) {
+        LOG_ERROR("SDL_OpenAudioDevice failed: %s", SDL_GetError());
+        return -1;
+    }
+
+    LOG_INFO("SDL2 Audio: device=%s, freq=%d, channels=%d, samples=%d",
+             dev ? dev : "(default)", have.freq, have.channels, have.samples);
+
+    /* Update engine sample rate if device reports different */
+    if ((uint32_t)have.freq != g_engine.sample_rate) {
+        LOG_INFO("Updating engine sample rate: %u -> %d",
+                 g_engine.sample_rate, have.freq);
+        g_engine.sample_rate = (uint32_t)have.freq;
+    }
+
+    SDL_PauseAudioDevice(g_audio_dev, 0);
+
+    /* Pre-fill queue */
+    float prebuf[AUDIO_CHUNK_FRAMES * 2];
+    for (int i = 0; i < 8; i++) {
+        sq_engine_process(&g_engine, prebuf, AUDIO_CHUNK_FRAMES);
+        SDL_QueueAudio(g_audio_dev, prebuf, sizeof(prebuf));
+    }
+
+    /* Start push thread */
+    atomic_store(&g_audio_running, 1);
+    g_audio_thread = SDL_CreateThread(
+        audio_push_thread, "audio_push", &g_audio_dev);
+    if (!g_audio_thread) {
+        LOG_ERROR("Failed to create audio thread: %s", SDL_GetError());
+        return -1;
+    }
+
+    return 0;
+}
+
+static void audio_restart_callback(void *userdata)
+{
+    (void)userdata;
+    LOG_INFO("Audio restart requested");
+    audio_stop();
+
+    /* Read device name from g_app via gui — but we don't have direct access.
+     * The sq_app audio_config is set by the settings panel before calling this.
+     * We need to get it. Use a simple extern or pass it through userdata. */
+
+    /* We'll use the extern g_engine — the settings panel stores config in sq_app
+     * which is in gui.cpp. We can access it via a gui function. For simplicity,
+     * check SDL device list for the device_index. */
+
+    /* For now, use the device name stored in the callback userdata
+     * (which is a pointer to the app's audio_config) */
+
+    /* Actually, let's just enumerate and pick by index */
+    extern int gui_get_audio_device_index(void);
+    extern const char *gui_get_audio_device_name(void);
+
+    const char *name = gui_get_audio_device_name();
+    if (audio_start(name) != 0) {
+        LOG_ERROR("Failed to restart audio, trying default");
+        audio_start(NULL);
+    }
 }
 
 /* ─── Audio test: trigger kick sample to verify output works ─────────────── */
@@ -216,14 +317,33 @@ static void setup_demo_pattern(void)
         p->tracks[synth_bass].steps[0].length = 14.0f;  /* sustains 14 steps */
     }
 
-    /* ── Dark pad: single Eb2 for ominous atmosphere ── */
+    /* ── Dark pad: Eb2 hit for ominous atmosphere ── */
     if (synth_pad < p->num_tracks) {
         p->tracks[synth_pad].steps[0].note = 39;       /* Eb2 */
         p->tracks[synth_pad].steps[0].velocity = 80;
-        p->tracks[synth_pad].steps[0].length = 16.0f;  /* entire bar */
+        p->tracks[synth_pad].steps[0].length = 0.0f;   /* ADSR handles duration — no note-off system yet */
     }
 
     g_engine.transport.bpm = 145.0;
+
+    /* Debug: log what we set up (use LOG_WARN so it shows on Windows where default level is ERROR) */
+    LOG_WARN("Demo pattern: %u tracks, BPM=%.0f", p->num_tracks, g_engine.transport.bpm);
+    for (uint32_t t = 0; t < p->num_tracks; t++) {
+        sq_track_t *trk = &p->tracks[t];
+        if (trk->type == TRACK_SYNTH) {
+            const char *pname = (trk->synth_preset >= 0 &&
+                (uint32_t)trk->synth_preset < g_engine.num_synth_presets)
+                ? g_engine.synth_presets[trk->synth_preset].name : "?";
+            for (int s = 0; s < 16; s++) {
+                if (trk->steps[s].velocity > 0) {
+                    LOG_WARN("  Track %u: Synth preset=%d (%s), step[%d] note=%d vel=%d len=%.1f",
+                             t, trk->synth_preset, pname, s,
+                             trk->steps[s].note, trk->steps[s].velocity,
+                             trk->steps[s].length);
+                }
+            }
+        }
+    }
 }
 
 /* ─── Main ────────────────────────────────────────────────────────────────── */
@@ -350,52 +470,19 @@ int main(int argc, char *argv[])
         theme_scan_user_themes(themes_dir);
     }
 
-    /* Open SDL2 audio device in queue mode (no callback) */
-    LOG_INFO("Opening SDL2 audio device (push mode)...");
-    SDL_AudioSpec want, have;
-    SDL_zero(want);
-    want.freq     = 44100;
-    want.format   = AUDIO_F32SYS;
-    want.channels = 2;
-    want.samples  = 1024;
-    want.callback = NULL;  /* NULL = queue/push mode */
-
-    SDL_AudioDeviceID audio_dev = SDL_OpenAudioDevice(
-        NULL, 0, &want, &have, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
-    if (audio_dev == 0) {
-        LOG_ERROR("SDL_OpenAudioDevice failed: %s", SDL_GetError());
+    /* Open SDL2 audio device */
+    if (audio_start(NULL) != 0) {
+        LOG_ERROR("Failed to initialize audio");
         gui_shutdown();
         sq_engine_shutdown(&g_engine);
         return 1;
     }
 
-    LOG_INFO("SDL2 Audio: freq=%d, channels=%d, samples=%d, format=0x%04X",
-             have.freq, have.channels, have.samples, have.format);
-
-    /* Unpause audio (SDL2 starts paused) */
-    SDL_PauseAudioDevice(audio_dev, 0);
-
-    /* Pre-fill the audio queue to avoid initial silence */
-    {
-        float prebuf[AUDIO_CHUNK_FRAMES * 2];
-        for (int i = 0; i < 8; i++) {
-            sq_engine_process(&g_engine, prebuf, AUDIO_CHUNK_FRAMES);
-            SDL_QueueAudio(audio_dev, prebuf, sizeof(prebuf));
-        }
-        LOG_INFO("Pre-filled audio queue with %d frames",
-                 AUDIO_CHUNK_FRAMES * 8);
-    }
-
     /* Trigger test beep */
     audio_test_beep();
 
-    /* Start audio push thread */
-    atomic_store(&g_audio_running, 1);
-    SDL_Thread *audio_thread = SDL_CreateThread(
-        audio_push_thread, "audio_push", &audio_dev);
-    if (!audio_thread) {
-        LOG_ERROR("Failed to create audio thread: %s", SDL_GetError());
-    }
+    /* Register audio restart callback for settings panel */
+    gui_set_audio_restart(audio_restart_callback, NULL);
 
     /* ── Main loop ────────────────────────────────────────────────────── */
     LOG_INFO("Entering main loop");
@@ -408,7 +495,7 @@ int main(int argc, char *argv[])
         if (now_ms - last_diag_ms > 3000.0) {
             uint64_t count = atomic_load(&g_audio_push_count);
             uint64_t delta = count - last_diag_count;
-            Uint32 queued = SDL_GetQueuedAudioSize(audio_dev);
+            Uint32 queued = SDL_GetQueuedAudioSize(g_audio_dev);
             Uint32 queued_frames = queued / (2 * sizeof(float));
 
             int active_voices = 0;
@@ -431,14 +518,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* Stop audio thread */
-    atomic_store(&g_audio_running, 0);
-    if (audio_thread) {
-        SDL_WaitThread(audio_thread, NULL);
-    }
+    /* Stop audio */
+    audio_stop();
 
     /* Clean up */
-    SDL_CloseAudioDevice(audio_dev);
     gui_shutdown();
     sq_engine_shutdown(&g_engine);
 

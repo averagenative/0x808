@@ -14,9 +14,13 @@ extern "C" {
 }
 
 extern "C" {
+#include "gui/mixer_view.h"
 #define LOG_TAG "mixer"
 #include "core/log.h"
 }
+
+/* FX panel tab: 0 = Master, 1+ = track index + 1 */
+static int s_fx_tab = 0;
 
 #include <cstdio>
 #include <cstring>
@@ -385,7 +389,7 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
 
     if (ImGui::BeginChild("EffectsPanel", ImVec2(0, top_h),
                           ImGuiChildFlags_Borders)) {
-        static int fx_tab = 0; /* 0 = Master, 1+ = track index+1 */
+        int &fx_tab = s_fx_tab;
 
         int pat_idx2 = engine->transport.current_pattern;
         uint32_t nt = 0;
@@ -429,8 +433,6 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
         /* Browse bar: [<] [label clipped] [>] — fixed layout using a table */
         {
             float btn_w = 30.0f;
-            bool can_prev = (fx_tab > 0);
-            bool can_next = (fx_tab < (int)nt);
 
             if (ImGui::BeginTable("FXBrowse", 3, ImGuiTableFlags_SizingFixedFit)) {
                 ImGui::TableSetupColumn("prev", ImGuiTableColumnFlags_WidthFixed, btn_w);
@@ -438,10 +440,12 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
                 ImGui::TableSetupColumn("next", ImGuiTableColumnFlags_WidthFixed, btn_w);
 
                 ImGui::TableNextColumn();
-                if (!can_prev) ImGui::BeginDisabled();
-                if (ImGui::Button("<##fx_prev", ImVec2(btn_w, 0)))
-                    fx_tab--;
-                if (!can_prev) ImGui::EndDisabled();
+                if (ImGui::Button("<##fx_prev", ImVec2(btn_w, 0))) {
+                    if (fx_tab > 0)
+                        fx_tab--;
+                    else
+                        fx_tab = (int)nt; /* wrap: master → last track */
+                }
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(fx_label);
@@ -449,10 +453,12 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
                     ImGui::SetTooltip("%s", fx_label);
 
                 ImGui::TableNextColumn();
-                if (!can_next) ImGui::BeginDisabled();
-                if (ImGui::Button(">##fx_next", ImVec2(btn_w, 0)))
-                    fx_tab++;
-                if (!can_next) ImGui::EndDisabled();
+                if (ImGui::Button(">##fx_next", ImVec2(btn_w, 0))) {
+                    if (fx_tab < (int)nt)
+                        fx_tab++;
+                    else
+                        fx_tab = 0; /* wrap: last track → master */
+                }
 
                 ImGui::EndTable();
             }
@@ -674,4 +680,10 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
     }
 
     ImGui::End();
+}
+
+void mixer_view_set_fx_track(int track_index)
+{
+    /* -1 = master bus (fx_tab 0), 0+ = track (fx_tab = track_index + 1) */
+    s_fx_tab = (track_index >= 0) ? track_index + 1 : 0;
 }

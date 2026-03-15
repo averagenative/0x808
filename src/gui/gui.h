@@ -44,6 +44,16 @@ extern int g_selected_track;
 /* Pattern selector scroll offset (shared between standalone and plugin) */
 extern int g_pat_scroll;
 
+/*
+ * Register an audio restart callback. Called by main_gui.c to allow
+ * the settings panel to restart the audio device.
+ */
+void gui_set_audio_restart(void (*fn)(void *), void *userdata);
+
+/* Get audio device config from g_app (for restart callback). */
+const char *gui_get_audio_device_name(void);
+int gui_get_audio_device_index(void);
+
 #ifdef __cplusplus
 }
 #endif

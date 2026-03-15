@@ -59,6 +59,14 @@ static void sync_panel_visibility(void)
                                g_gtk.app.panels[SQ_PANEL_BROWSER]);
     }
 
+    /* Settings panel */
+    if (g_gtk.settings_box && GTK_IS_WIDGET(g_gtk.settings_box)) {
+        gtk_widget_set_visible(g_gtk.settings_box,
+                               g_gtk.app.panels[SQ_PANEL_SETTINGS]);
+        if (g_gtk.app.panels[SQ_PANEL_SETTINGS])
+            gtk_settings_update();
+    }
+
     /* Bottom panel area (piano roll + synth editor + mixer) */
     bool show_bottom = g_gtk.app.panels[SQ_PANEL_PIANO_ROLL] ||
                        g_gtk.app.panels[SQ_PANEL_MIXER];
@@ -172,11 +180,39 @@ static gboolean on_redraw_tick(gpointer user_data)
                            engine->transport.playing ? "STOP" : "PLAY");
     }
 
-    /* Update REC button state */
+    /* Update REC button state + elapsed time display */
     if (s_rec_btn && GTK_IS_LABEL(s_rec_btn)) {
-        if (engine->recording) {
-            gtk_label_set_text(GTK_LABEL(s_rec_btn), "REC *");
+        sq_recorder_t *rec = &engine->recorder;
+        if (rec->state == SQ_REC_ACTIVE) {
+            /* Show elapsed time and file size */
+            uint64_t secs = 0;
+            if (rec->sample_rate > 0)
+                secs = rec->frames_written / rec->sample_rate;
+            uint64_t file_bytes = rec->frames_written * 2 *
+                                  (rec->bit_depth / 8);
+            char label[64];
+            if (secs >= 3600)
+                snprintf(label, sizeof(label), "REC * %u:%02u:%02u %.1fMB",
+                         (unsigned)(secs / 3600),
+                         (unsigned)((secs % 3600) / 60),
+                         (unsigned)(secs % 60),
+                         (double)file_bytes / (1024.0 * 1024.0));
+            else
+                snprintf(label, sizeof(label), "REC * %u:%02u %.1fMB",
+                         (unsigned)(secs / 60), (unsigned)(secs % 60),
+                         (double)file_bytes / (1024.0 * 1024.0));
+            gtk_label_set_text(GTK_LABEL(s_rec_btn), label);
             gtk_widget_add_css_class(s_rec_btn, "recording");
+
+            /* Disk space warning */
+            if (rec->disk_low) {
+                sq_app_set_status(&g_gtk.app, "WARNING: Low disk space (<500 MB)", 0);
+            }
+        } else if (rec->state == SQ_REC_ERROR) {
+            gtk_label_set_text(GTK_LABEL(s_rec_btn), "REC ERR");
+            gtk_widget_remove_css_class(s_rec_btn, "recording");
+            sq_app_set_status(&g_gtk.app, "Recording stopped: disk full or I/O error", 300);
+            rec->state = SQ_REC_IDLE; /* clear after displaying */
         } else {
             gtk_label_set_text(GTK_LABEL(s_rec_btn), "REC");
             gtk_widget_remove_css_class(s_rec_btn, "recording");
@@ -297,31 +333,34 @@ static void on_rec_clicked(GtkWidget *btn, gpointer user_data)
 {
     (void)btn; (void)user_data;
     sq_engine_t *engine = g_gtk.engine;
+    sq_recorder_t *rec = &engine->recorder;
+    sq_rec_config_t *cfg = &g_gtk.app.rec_config;
 
-    char rec_path[600];
-    snprintf(rec_path, sizeof(rec_path), "%srecording.wav",
-             engine->base_dir[0] ? engine->base_dir : "");
-
-    if (engine->recording) {
-        engine->recording = false;
-        if (engine->rec_frames > 0) {
-            sq_export_result_t rec_result;
-            memset(&rec_result, 0, sizeof(rec_result));
-            rec_result.data = engine->rec_buffer;
-            rec_result.num_frames = engine->rec_frames;
-            rec_result.sample_rate = engine->sample_rate;
-            sq_export_write_wav(rec_path, &rec_result, 16);
-            LOG_INFO("Saved recording: %u frames -> %s", engine->rec_frames, rec_path);
+    if (rec->state == SQ_REC_ACTIVE) {
+        /* Stop recording */
+        uint64_t frames = rec->frames_written;
+        sq_recorder_stop(rec);
+        if (frames > 0) {
             char msg[256];
-            snprintf(msg, sizeof(msg), "Saved: %s", rec_path);
+            snprintf(msg, sizeof(msg), "Saved: %s", rec->filepath);
             sq_app_set_status(&g_gtk.app, msg, 300);
         }
-        engine->rec_frames = 0;
     } else {
-        sq_engine_start_recording(engine);
-        char msg[256];
-        snprintf(msg, sizeof(msg), "REC -> %s", rec_path);
-        sq_app_set_status(&g_gtk.app, msg, 0);
+        /* Start recording — generate auto-incremented filename */
+        char rec_path[512];
+        int num = sq_recorder_next_filename(
+            cfg->output_dir, cfg->prefix,
+            rec->next_number, rec_path, sizeof(rec_path));
+        rec->next_number = num;
+
+        if (sq_recorder_start(rec, rec_path,
+                              engine->sample_rate, cfg->bit_depth) == 0) {
+            char msg[256];
+            snprintf(msg, sizeof(msg), "REC -> %s", rec_path);
+            sq_app_set_status(&g_gtk.app, msg, 0);
+        } else {
+            sq_app_set_status(&g_gtk.app, "REC failed — check output dir", 300);
+        }
     }
 }
 
@@ -1023,11 +1062,11 @@ static GtkWidget *build_toolbar(void)
             gtk_widget_add_css_class(s_mode_btns[i], "active");
     }
 
-    /* MIXER/FX + BROWSE panel buttons */
+    /* MIXER/FX + BROWSE + SET panel buttons */
     {
-        const int last_panels[] = { SQ_PANEL_MIXER, SQ_PANEL_BROWSER };
-        const char *last_names[] = { "MIXER/FX", "BROWSE" };
-        for (int i = 0; i < 2; i++) {
+        const int last_panels[] = { SQ_PANEL_MIXER, SQ_PANEL_BROWSER, SQ_PANEL_SETTINGS };
+        const char *last_names[] = { "MIXER/FX", "BROWSE", "SET" };
+        for (int i = 0; i < 3; i++) {
             int pi = last_panels[i];
             s_panel_btns[pi] = sq_flat_button_new(last_names[i],
                 G_CALLBACK(on_panel_toggled), GINT_TO_POINTER(pi));
@@ -1275,6 +1314,12 @@ void gtk_window_setup(GtkApplication *app, gpointer user_data)
         g_gtk.mixer_box = mixer_scroll;
         gtk_box_append(GTK_BOX(bottom_box), g_gtk.mixer_box);
     }
+
+    /* ── Settings (right side panel) ──────────────────────────────────── */
+    g_gtk.settings_box = gtk_settings_new();
+    gtk_widget_set_size_request(g_gtk.settings_box, 320, -1);
+    gtk_widget_set_visible(g_gtk.settings_box, FALSE);
+    gtk_box_append(GTK_BOX(content_box), g_gtk.settings_box);
 
     /* ── Browser (right side panel) ───────────────────────────────────── */
     g_gtk.browser_box = gtk_browser_new();

@@ -26,6 +26,7 @@ extern "C" {
 #include "gui/knobs.h"
 #include "gui/undo.h"
 #include "gui/theme.h"
+#include "gui/mixer_view.h"
 #include "engine/sampler.h"
 #include "engine/kits.h"
 }
@@ -256,6 +257,7 @@ void drum_grid_draw(sq_engine_t *engine,
 
                 if (ImGui::Button(track_name, name_btn_size)) {
                     g_selected_track = (g_selected_track == (int)t) ? -1 : (int)t;
+                    mixer_view_set_fx_track(g_selected_track);
                     LOG_DEBUG("Selected track %d", g_selected_track);
                 }
 

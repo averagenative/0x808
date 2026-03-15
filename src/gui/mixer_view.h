@@ -15,6 +15,10 @@ extern "C" {
 void mixer_view_draw(sq_engine_t *engine,
                      float x, float y, float w, float h);
 
+/* Set the FX tab to show a specific track's effects.
+ * track_index: 0-based track index, or -1 for master bus. */
+void mixer_view_set_fx_track(int track_index);
+
 #ifdef __cplusplus
 }
 #endif

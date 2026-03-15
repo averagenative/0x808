@@ -62,8 +62,30 @@ typedef enum {
     SQ_PANEL_MIXER,
     SQ_PANEL_PIANO_ROLL,
     SQ_PANEL_KEYBOARD,
+    SQ_PANEL_SETTINGS,
     SQ_PANEL_COUNT
 } sq_panel_t;
+
+/* ─── Audio device configuration ─────────────────────────────────────────── */
+
+#define SQ_DEVICE_NAME_LEN 128
+
+typedef struct {
+    char     device_name[SQ_DEVICE_NAME_LEN]; /* empty = "Default"          */
+    uint32_t sample_rate;                      /* current sample rate        */
+    int      device_index;                     /* SDL device index, -1=default */
+} sq_audio_config_t;
+
+/* ─── Recording configuration ────────────────────────────────────────────── */
+
+#define SQ_REC_DIR_LEN  256
+#define SQ_REC_PREFIX_LEN 64
+
+typedef struct {
+    char     output_dir[SQ_REC_DIR_LEN];   /* where recordings are saved     */
+    char     prefix[SQ_REC_PREFIX_LEN];    /* filename prefix (default: "recording") */
+    uint32_t bit_depth;                     /* 16, 24, or 32                  */
+} sq_rec_config_t;
 
 /* ─── App state struct ────────────────────────────────────────────────────── */
 
@@ -88,6 +110,16 @@ typedef struct {
     /* Playhead tracking */
     uint64_t play_start_ticks;
     bool     was_playing;
+
+    /* Recording configuration */
+    sq_rec_config_t rec_config;
+
+    /* Audio device configuration */
+    sq_audio_config_t audio_config;
+
+    /* Audio restart callback (frontend-specific) */
+    void (*audio_restart_fn)(void *userdata);
+    void  *audio_restart_userdata;
 
 } sq_app_t;
 
@@ -144,6 +176,11 @@ int sq_app_get_keyboard_preset(const sq_app_t *app, const sq_engine_t *engine);
  * Initialize a new pattern by copying track layout from pattern 0.
  */
 void sq_app_init_new_pattern(sq_engine_t *engine, int idx);
+
+/*
+ * Initialize recording config with platform-appropriate defaults.
+ */
+void sq_app_init_rec_config(sq_rec_config_t *cfg);
 
 #ifdef __cplusplus
 }

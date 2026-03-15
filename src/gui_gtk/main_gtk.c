@@ -39,6 +39,30 @@ static sq_engine_t g_engine;
 
 static atomic_int g_audio_running = 0;
 
+/* Forward declarations */
+static int  audio_open_device(const char *device_name);
+static void audio_shutdown(void);
+
+static void gtk_audio_restart_callback(void *userdata)
+{
+    (void)userdata;
+    LOG_INFO("GTK audio restart requested");
+
+    /* Stop recording if active */
+    if (g_engine.recorder.state == SQ_REC_ACTIVE) {
+        sq_recorder_stop(&g_engine.recorder);
+    }
+    g_engine.transport.playing = false;
+
+    audio_shutdown();
+
+    const char *name = g_gtk.app.audio_config.device_name;
+    if (audio_open_device(name) != 0) {
+        LOG_ERROR("Failed to restart audio, trying default");
+        audio_open_device(NULL);
+    }
+}
+
 static int audio_push_thread(void *userdata)
 {
     SDL_AudioDeviceID dev = *(uint32_t *)userdata;
@@ -68,14 +92,20 @@ static int audio_init(void)
         LOG_ERROR("SDL_Init(AUDIO) failed: %s", SDL_GetError());
         return -1;
     }
+    return audio_open_device(NULL);
+}
 
+static int audio_open_device(const char *device_name)
+{
     SDL_AudioSpec want = {0}, have;
     want.freq = 44100;
     want.format = AUDIO_F32SYS;
     want.channels = 2;
     want.samples = AUDIO_CHUNK_FRAMES;
 
-    g_gtk.audio_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    const char *dev = (device_name && device_name[0]) ? device_name : NULL;
+
+    g_gtk.audio_dev = SDL_OpenAudioDevice(dev, 0, &want, &have, 0);
     if (g_gtk.audio_dev == 0) {
         LOG_ERROR("SDL_OpenAudioDevice failed: %s", SDL_GetError());
         return -1;
@@ -84,10 +114,18 @@ static int audio_init(void)
     g_engine.sample_rate = have.freq;
     SDL_PauseAudioDevice(g_gtk.audio_dev, 0);
 
+    /* Pre-fill queue */
+    float prebuf[AUDIO_CHUNK_FRAMES * 2];
+    for (int i = 0; i < 8; i++) {
+        sq_engine_process(&g_engine, prebuf, AUDIO_CHUNK_FRAMES);
+        SDL_QueueAudio(g_gtk.audio_dev, prebuf, sizeof(prebuf));
+    }
+
     atomic_store(&g_audio_running, 1);
     g_gtk.audio_thread = (void *)SDL_CreateThread(audio_push_thread, "sq_audio",
                                                    &g_gtk.audio_dev);
-    LOG_INFO("Audio initialized: %d Hz, %d ch", have.freq, have.channels);
+    LOG_INFO("Audio initialized: device=%s, %d Hz, %d ch",
+             dev ? dev : "(default)", have.freq, have.channels);
     return 0;
 }
 
@@ -219,11 +257,11 @@ static void setup_demo_pattern(void)
 
     /* ── Dark pad: single sustained minor chord tone for atmosphere ──
      * One long Eb note (MIDI 39 = Eb2) — minor third over the C bass,
-     * creates dark/ominous mood. Sustains entire bar. */
+     * creates dark/ominous mood. Length 12 steps — leaves 4 steps for release. */
     if (synth_pad < p->num_tracks) {
         const uint8_t notes[] = {39,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* Eb2 */
         const uint8_t vels[]  = {80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-        const float   lens[]  = {16,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* entire bar */
+        const float   lens[]  = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};   /* ADSR handles duration — no note-off system yet */
         for (int s = 0; s < 16; s++) {
             p->tracks[synth_pad].steps[s].note = notes[s];
             p->tracks[synth_pad].steps[s].velocity = vels[s];
@@ -259,6 +297,25 @@ static void setup_demo_pattern(void)
     snprintf(p->name, SQ_PATTERN_NAME_LEN, "Pattern 1");
     g_engine.num_patterns = 5;
     g_engine.transport.current_pattern = 0;
+
+    /* Debug: log demo pattern setup */
+    LOG_WARN("Demo pattern: %u tracks, BPM=%.0f", p->num_tracks, g_engine.transport.bpm);
+    for (uint32_t t = 0; t < p->num_tracks; t++) {
+        sq_track_t *trk = &p->tracks[t];
+        if (trk->type == TRACK_SYNTH) {
+            const char *pname = (trk->synth_preset >= 0 &&
+                (uint32_t)trk->synth_preset < g_engine.num_synth_presets)
+                ? g_engine.synth_presets[trk->synth_preset].name : "?";
+            for (int s = 0; s < 16; s++) {
+                if (trk->steps[s].velocity > 0) {
+                    LOG_WARN("  Track %u: Synth preset=%d (%s), step[%d] note=%d vel=%d len=%.1f",
+                             t, trk->synth_preset, pname, s,
+                             trk->steps[s].note, trk->steps[s].velocity,
+                             trk->steps[s].length);
+                }
+            }
+        }
+    }
 
     /* Initialize patterns 2-5 with tracks but no steps */
     for (int i = 1; i < 5; i++) {
@@ -355,6 +412,10 @@ int main(int argc, char *argv[])
     if (audio_init() != 0) {
         LOG_ERROR("Audio init failed — continuing without audio");
     }
+
+    /* Register audio restart callback for settings panel */
+    g_gtk.app.audio_restart_fn = gtk_audio_restart_callback;
+    g_gtk.app.audio_restart_userdata = NULL;
 
     /* Create GTK application */
     g_gtk.gtk_app = gtk_application_new("com.dcmichael.sequencer808",

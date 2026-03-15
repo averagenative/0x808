@@ -88,7 +88,7 @@ void sq_engine_init(sq_engine_t *engine, uint32_t sample_rate)
         p->tracks[4].volume = 0.6f;
 
         p->tracks[5].type = TRACK_SYNTH;
-        p->tracks[5].synth_preset = 3; /* Pluck preset */
+        p->tracks[5].synth_preset = 52; /* Dark Pad */
         p->tracks[5].volume = 0.5f;
     }
 }
@@ -116,14 +116,8 @@ void sq_engine_shutdown(sq_engine_t *engine)
         }
     }
 
-    /* Free recording buffer */
-    if (engine->rec_buffer) {
-        free(engine->rec_buffer);
-        engine->rec_buffer = NULL;
-    }
-    engine->rec_frames = 0;
-    engine->rec_capacity = 0;
-    engine->recording = false;
+    /* Stop any active recording */
+    sq_recorder_stop(&engine->recorder);
 
     /* Free SoundFont */
     sf2_unload(engine);
@@ -295,52 +289,22 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
     mixer_process(engine, output, num_frames);
 
     /*
-     * Step 4: Capture output to pre-allocated recording buffer.
-     * No realloc in the audio path — buffer is pre-allocated by
-     * sq_engine_start_recording() before playback begins.
+     * Step 4: Stream output to disk via the recorder.
+     * Small writes (~1-2 KB) hit the OS page cache and return immediately.
      */
-    if (engine->recording && output) {
-        if (engine->rec_frames + num_frames <= engine->rec_capacity) {
-            memcpy(engine->rec_buffer + engine->rec_frames * 2,
-                   output, num_frames * 2 * sizeof(float));
-            engine->rec_frames += num_frames;
-        } else {
-            engine->recording = false; /* buffer full, stop */
-        }
+    if (engine->recorder.state == SQ_REC_ACTIVE && output) {
+        sq_recorder_write(&engine->recorder, output, num_frames);
     }
 }
 
-void sq_engine_start_recording(sq_engine_t *engine)
-{
-    /* Pre-allocate for 10 minutes at current sample rate */
-    uint32_t max_frames = engine->sample_rate * 600;
-    size_t alloc_bytes = (size_t)max_frames * 2 * sizeof(float);
-    if (alloc_bytes > 500ULL * 1024 * 1024) {
-        LOG_ERROR("Recording buffer too large: %zu bytes, capping", alloc_bytes);
-        max_frames = (uint32_t)(500ULL * 1024 * 1024 / (2 * sizeof(float)));
-        alloc_bytes = (size_t)max_frames * 2 * sizeof(float);
-    }
-    if (engine->rec_buffer) free(engine->rec_buffer);
-    engine->rec_buffer = calloc((size_t)max_frames * 2, sizeof(float));
-    engine->rec_capacity = engine->rec_buffer ? max_frames : 0;
-    engine->rec_frames = 0;
-    engine->recording = true;
-    LOG_INFO("Recording started (pre-allocated %u frames, %.1f MB)",
-             engine->rec_capacity,
-             (double)engine->rec_capacity * 2 * sizeof(float) / (1024.0 * 1024.0));
-}
-
-void sq_engine_stop_recording(sq_engine_t *engine)
-{
-    engine->recording = false;
-    LOG_INFO("Recording stopped (%u frames captured)", engine->rec_frames);
-}
+/* Old sq_engine_start_recording / sq_engine_stop_recording removed.
+ * Use sq_recorder_start() / sq_recorder_stop() via engine->recorder. */
 
 int sq_engine_safe_load(sq_engine_t *engine, const char *filepath)
 {
     /* Stop playback and recording before modifying engine state */
     engine->transport.playing = false;
-    engine->recording = false;
+    sq_recorder_stop(&engine->recorder);
 
     /*
      * The audio callback checks engine->transport.playing at the start of

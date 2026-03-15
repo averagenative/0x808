@@ -81,6 +81,7 @@ add_library(sq_engine STATIC
     src/engine/envelope.c
     src/engine/synth.c
     src/engine/export.c
+    src/engine/recorder.c
     src/engine/effects.c
     src/engine/kits.c
     src/formats/sample_io.c
@@ -193,6 +194,7 @@ if(SDL2_FOUND AND OpenGL_FOUND)
         src/gui/synth_editor.cpp
         src/gui/sample_browser.cpp
         src/gui/export_dialog.cpp
+        src/gui/settings_panel.cpp
         src/gui/piano_roll.cpp
         src/gui/arrangement.cpp
         src/gui/mixer_view.cpp
@@ -267,6 +269,9 @@ endif()
 option(BUILD_GTK "Build GTK 4.0 frontend" OFF)
 
 if(BUILD_GTK)
+    if(NOT PkgConfig_FOUND)
+        find_package(PkgConfig QUIET)
+    endif()
     if(PkgConfig_FOUND)
         pkg_check_modules(GTK4 QUIET gtk4)
     endif()
@@ -286,6 +291,7 @@ if(BUILD_GTK)
             src/gui_gtk/gtk_arrangement.c
             src/gui_gtk/gtk_presets.c
             src/gui_gtk/gtk_export.c
+            src/gui_gtk/gtk_settings.c
         )
         target_include_directories(sequencer_gtk PRIVATE
             ${CMAKE_SOURCE_DIR}/src
@@ -448,6 +454,18 @@ target_include_directories(export_test PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(export_test PRIVATE
+    sq_engine
+    ${PLATFORM_LIBS}
+)
+
+add_executable(recorder_test
+    tests/recorder_test.c
+)
+target_include_directories(recorder_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/deps
+)
+target_link_libraries(recorder_test PRIVATE
     sq_engine
     ${PLATFORM_LIBS}
 )

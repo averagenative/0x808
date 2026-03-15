@@ -31,6 +31,7 @@ typedef struct {
     GtkWidget *synth_editor_box;
     GtkWidget *mixer_box;
     GtkWidget *browser_box;
+    GtkWidget *settings_box;
     GtkWidget *keyboard_area;
     GtkWidget *arrangement_area;
 
@@ -102,6 +103,11 @@ void       gtk_synth_editor_update(void);
 GtkWidget *gtk_mixer_new(void);
 void       gtk_mixer_rebuild_fx(void);
 void       gtk_mixer_queue_redraw(void);
+void       gtk_mixer_set_fx_track(int track_index);
+
+/* gtk_settings.c */
+GtkWidget *gtk_settings_new(void);
+void       gtk_settings_update(void);
 
 /* gtk_browser.c */
 GtkWidget *gtk_browser_new(void);

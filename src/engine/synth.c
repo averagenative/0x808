@@ -103,8 +103,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1200.0f;  /* moderate: lets it cut without being harsh */
         p->filter_resonance = 2.0f;  /* presence, not shriek */
         p->filter_env_depth = 2500.0f;  /* attack bite from envelope */
-        p->amp_env = (sq_adsr_params_t){0.008f, 0.15f, 0.8f, 0.35f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.25f, 0.4f, 0.2f};
+        p->amp_env = (sq_adsr_params_t){0.008f, 1.2f, 0.0f, 0.35f};  /* Lead: was S=0.8 (hung forever) */
+        p->filter_env = (sq_adsr_params_t){0.005f, 1.1f, 0.0f, 0.2f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.06f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -126,8 +126,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 900.0f;  /* dark and warm, beauty is in detuning */
         p->filter_resonance = 0.8f;  /* no resonance: pure Juno warmth */
         p->filter_env_depth = 400.0f;  /* subtle brightness swell */
-        p->amp_env = (sq_adsr_params_t){1.5f, 0.5f, 0.9f, 2.0f};
-        p->filter_env = (sq_adsr_params_t){1.0f, 0.8f, 0.6f, 1.5f};
+        p->amp_env = (sq_adsr_params_t){1.5f, 3.0f, 0.0f, 2.0f};  /* Pad: was S=0.9 */
+        p->filter_env = (sq_adsr_params_t){1.0f, 2.5f, 0.0f, 1.5f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.2f, 0.15f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -170,8 +170,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1800.0f;  /* warm but present, not harsh */
         p->filter_resonance = 0.8f;  /* no resonance, pure width */
         p->filter_env_depth = 1500.0f;  /* subtle brightness on attack */
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.8f, 0.6f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.5f, 0.4f, 0.4f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 1.5f, 0.0f, 0.6f};  /* SuperSaw: was S=0.8 */
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.3f, 0.0f, 0.4f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.08f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -210,7 +210,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "FM EPiano");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 2; /* two pairs: 3->2, 1->0 */
-        p->amp_env = (sq_adsr_params_t){0.001f, 1.5f, 0.25f, 0.8f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 2.5f, 0.0f, 0.8f};  /* FM EPiano: was S=0.25 */
         /* Op 0 (carrier): warm fundamental body */
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.001f, 1.5f, 0.25f, 0.8f}};
@@ -274,7 +274,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "FM Pad");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 6; /* all carriers (additive) */
-        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.85f, 2.0f};
+        p->amp_env = (sq_adsr_params_t){1.0f, 3.0f, 0.0f, 2.0f};  /* FM Pad: was S=0.85 */
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.8f, 0.5f, 0.85f, 2.0f}};
         p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.4f, 0.0f,
@@ -299,8 +299,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.0f;
         p->wt_env_depth = 0.6f;
         p->wt_lfo_depth = 0.1f;  /* subtle movement */
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.4f, 0.7f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.4f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 1.8f, 0.0f, 0.5f};  /* was S=0.7 */
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.4f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -316,8 +316,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.3f;
         p->wt_env_depth = 0.15f;  /* subtle env sweep too */
         p->wt_lfo_depth = 0.35f;
-        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.5f, 0.5f, 0.5f, 0.8f};
+        p->amp_env = (sq_adsr_params_t){0.8f, 3.0f, 0.0f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.5f, 1.5f, 0.0f, 0.8f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.3f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -333,8 +333,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.2f;  /* start slightly off-center */
         p->wt_env_depth = 0.0f;
         p->wt_lfo_depth = 0.5f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.8f, 0.4f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.5f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.6f, 0.0f, 0.4f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.4f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.8f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -350,8 +350,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.0f;
         p->wt_env_depth = 0.6f;
         p->wt_lfo_depth = 0.15f;  /* subtle vowel drift */
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.0f};
-        p->filter_env = (sq_adsr_params_t){0.3f, 0.8f, 0.4f, 0.6f};
+        p->amp_env = (sq_adsr_params_t){0.5f, 2.9f, 0.0f, 1.0f};
+        p->filter_env = (sq_adsr_params_t){0.3f, 1.6f, 0.0f, 0.6f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.2f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -419,8 +419,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1000.0f;  /* warm, not bright */
         p->filter_resonance = 0.7f;  /* NO resonance: pure Juno warmth */
         p->filter_env_depth = 400.0f;  /* barely any env: static warmth */
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.3f, 0.9f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.4f, 0.5f, 0.7f, 1.0f};
+        p->amp_env = (sq_adsr_params_t){0.5f, 3.0f, 0.0f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.4f, 1.9f, 0.0f, 1.0f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -442,8 +442,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 2000.0f;  /* warm string tone, not bright */
         p->filter_resonance = 0.8f;  /* smooth, no edge */
         p->filter_env_depth = 600.0f;  /* gentle brightness swell */
-        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.85f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.8f, 0.8f, 0.5f, 1.0f};
+        p->amp_env = (sq_adsr_params_t){1.0f, 3.0f, 0.0f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.8f, 1.8f, 0.0f, 1.0f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 4.5f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -465,8 +465,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 600.0f;  /* dark baseline */
         p->filter_resonance = 1.8f;  /* slight edge, not harsh */
         p->filter_env_depth = 4000.0f;  /* big sweep for brass bite */
-        p->amp_env = (sq_adsr_params_t){0.008f, 0.2f, 0.7f, 0.25f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.2f, 0.35f, 0.15f};
+        p->amp_env = (sq_adsr_params_t){0.008f, 2.3f, 0.0f, 0.25f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.9f, 0.0f, 0.15f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
@@ -487,8 +487,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1000.0f;  /* moderate, env gives attack bite */
         p->filter_resonance = 2.5f;  /* presence, not pain */
         p->filter_env_depth = 3000.0f;  /* attack bite from envelope */
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.15f, 0.8f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.12f, 0.4f, 0.1f};
+        p->amp_env = (sq_adsr_params_t){0.005f, 2.6f, 0.0f, 0.15f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.9f, 0.0f, 0.1f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.06f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -534,8 +534,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 300.0f;  /* dark: 200-400Hz range */
         p->filter_resonance = 2.0f;  /* moderate resonance for edge */
         p->filter_env_depth = 800.0f;  /* subtle attack brightness */
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.5f, 0.7f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.3f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.6f, 0.0f, 0.3f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.2f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.25f, 0.2f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -548,7 +548,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "DX Piano");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 2; /* two pairs */
-        p->amp_env = (sq_adsr_params_t){0.001f, 2.0f, 0.15f, 1.0f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 2.5f, 0.0f, 1.0f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.001f, 2.0f, 0.15f, 1.0f}};
         p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.5f, 0.0f,
@@ -595,8 +595,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1200.0f;  /* darker baseline */
         p->filter_resonance = 1.8f;  /* less harsh */
         p->filter_env_depth = 3000.0f;  /* moderate sweep */
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.4f, 0.7f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.35f, 0.4f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.5f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.3f, 0.0f, 0.4f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 2.5f, 0.15f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -643,8 +643,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 800.0f;  /* darker, filter env opens it */
         p->filter_resonance = 1.5f;  /* smooth, not edgy */
         p->filter_env_depth = 3500.0f;  /* moderate brass sweep */
-        p->amp_env = (sq_adsr_params_t){0.03f, 0.25f, 0.7f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.02f, 0.35f, 0.4f, 0.35f};
+        p->amp_env = (sq_adsr_params_t){0.03f, 2.3f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.02f, 1.1f, 0.0f, 0.35f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.05f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -665,8 +665,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 200.0f;
         p->filter_resonance = 12.0f;  /* MS-20 HP character, aggressive */
         p->filter_env_depth = 2500.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.4f, 0.6f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.002f, 0.25f, 0.15f, 0.12f};
+        p->amp_env = (sq_adsr_params_t){0.005f, 2.2f, 0.0f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.6f, 0.0f, 0.12f};
         p->lfo = (sq_lfo_t){WAVE_SQUARE, 6.0f, 0.04f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -687,8 +687,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1800.0f;  /* warm, not bright */
         p->filter_resonance = 1.5f;  /* gentle */
         p->filter_env_depth = 1000.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.5f, 0.55f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.4f, 0.3f, 0.35f};
+        p->amp_env = (sq_adsr_params_t){0.005f, 2.2f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 1.0f, 0.0f, 0.35f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.25f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -710,8 +710,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 900.0f;  /* warm, beauty is in the chorus */
         p->filter_resonance = 0.8f;  /* no resonance, pure warmth */
         p->filter_env_depth = 500.0f;  /* subtle brightness swell */
-        p->amp_env = (sq_adsr_params_t){1.5f, 0.5f, 0.9f, 2.5f};
-        p->filter_env = (sq_adsr_params_t){1.2f, 1.0f, 0.5f, 2.0f};
+        p->amp_env = (sq_adsr_params_t){1.5f, 3.2f, 0.0f, 2.5f};
+        p->filter_env = (sq_adsr_params_t){1.2f, 2.0f, 0.0f, 2.0f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.12f, 0.15f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -732,8 +732,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 800.0f;  /* darker baseline */
         p->filter_resonance = 2.5f;  /* reduced from 3.5 */
         p->filter_env_depth = 3000.0f;  /* moderate attack bite */
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.25f, 0.75f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.2f, 0.35f, 0.15f};
+        p->amp_env = (sq_adsr_params_t){0.003f, 2.5f, 0.0f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.9f, 0.0f, 0.15f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 5.0f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -746,7 +746,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "DX Organ");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 6;  /* all carriers (additive) */
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.01f, 1.0f, 0.05f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 3.0f, 0.0f, 0.05f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.001f, 0.01f, 1.0f, 0.05f}};
         p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.7f, 0.0f,
@@ -800,7 +800,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "DX Strings");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 5;  /* 3→2, 1, 0 */
-        p->amp_env = (sq_adsr_params_t){0.6f, 0.4f, 0.85f, 1.0f};
+        p->amp_env = (sq_adsr_params_t){0.6f, 2.9f, 0.0f, 1.0f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.6f, 0.4f, 0.85f, 1.0f}};
         p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.6f, 0.0f,
@@ -836,7 +836,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "DX Flute");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 3;  /* 3→2→1, 0 */
-        p->amp_env = (sq_adsr_params_t){0.05f, 0.1f, 0.8f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.05f, 2.5f, 0.0f, 0.3f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.05f, 0.1f, 0.8f, 0.3f}};
         p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.15f, 0.0f,
@@ -854,7 +854,7 @@ void synth_init_presets(sq_engine_t *engine)
         snprintf(p->name, sizeof(p->name), "%s", "DX Harm");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 4;  /* 3,2,1→0 */
-        p->amp_env = (sq_adsr_params_t){0.02f, 0.15f, 0.75f, 0.2f};
+        p->amp_env = (sq_adsr_params_t){0.02f, 2.4f, 0.0f, 0.2f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
             {0.02f, 0.15f, 0.75f, 0.2f}};
         p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.4f, 0.0f,
@@ -896,8 +896,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.2f;
         p->wt_env_depth = 0.0f;
         p->wt_lfo_depth = 0.7f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.8f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.3f, 0.5f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.7f, 0.0f, 0.3f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.3f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 2.0f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -920,8 +920,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1200.0f;  /* moderate, env adds brightness */
         p->filter_resonance = 2.5f;  /* present but not harsh */
         p->filter_env_depth = 3500.0f;  /* reduced sweep */
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.2f, 0.75f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.15f, 0.3f, 0.12f};
+        p->amp_env = (sq_adsr_params_t){0.003f, 2.5f, 0.0f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.8f, 0.0f, 0.12f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -941,8 +941,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 8000.0f;  /* open but not harsh */
         p->filter_resonance = 0.7f;
         p->filter_env_depth = 0.0f;
-        p->amp_env = (sq_adsr_params_t){0.08f, 0.1f, 0.9f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.01f, 1.0f, 0.01f};
+        p->amp_env = (sq_adsr_params_t){0.08f, 2.8f, 0.0f, 0.3f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 2.0f, 0.0f, 0.01f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.08f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -964,8 +964,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1500.0f;  /* muffled tape character */
         p->filter_resonance = 0.7f;  /* no resonance, tape is smooth */
         p->filter_env_depth = 300.0f;  /* barely any movement */
-        p->amp_env = (sq_adsr_params_t){0.6f, 0.3f, 0.75f, 1.0f};
-        p->filter_env = (sq_adsr_params_t){0.4f, 0.4f, 0.5f, 0.6f};
+        p->amp_env = (sq_adsr_params_t){0.6f, 2.5f, 0.0f, 1.0f};
+        p->filter_env = (sq_adsr_params_t){0.4f, 1.4f, 0.0f, 0.6f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 3.5f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -987,8 +987,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 2000.0f;  /* warm, not harsh */
         p->filter_resonance = 0.7f;  /* no resonance, pure width */
         p->filter_env_depth = 1000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.25f, 0.85f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.5f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.8f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.4f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.06f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1033,8 +1033,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 2500.0f;  /* warm but still defined */
         p->filter_resonance = 0.8f;
         p->filter_env_depth = 800.0f;
-        p->amp_env = (sq_adsr_params_t){0.008f, 0.6f, 0.45f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.4f, 0.25f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.008f, 2.0f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.9f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 4.0f, 0.03f, LFO_DEST_AMP, 0.0};
     }
 
@@ -1079,8 +1079,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 200.0f;
         p->filter_resonance = 5.0f;  /* dramatic but not painful */
         p->filter_env_depth = 4000.0f;  /* wide sweep range */
-        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){3.0f, 1.0f, 0.3f, 2.0f};
+        p->amp_env = (sq_adsr_params_t){0.8f, 3.0f, 0.0f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){3.0f, 1.6f, 0.0f, 2.0f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.08f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1114,8 +1114,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_position = 0.2f;
         p->wt_env_depth = 0.1f;  /* subtle env sweep */
         p->wt_lfo_depth = 0.35f;
-        p->amp_env = (sq_adsr_params_t){1.2f, 0.5f, 0.85f, 2.0f};
-        p->filter_env = (sq_adsr_params_t){0.8f, 0.5f, 0.5f, 1.0f};
+        p->amp_env = (sq_adsr_params_t){1.2f, 3.0f, 0.0f, 2.0f};
+        p->filter_env = (sq_adsr_params_t){0.8f, 1.5f, 0.0f, 1.0f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.15f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1159,15 +1159,14 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 500.0f;  /* dark and menacing */
         p->filter_resonance = 1.8f;
         p->filter_env_depth = 2000.0f;
-        p->amp_env = (sq_adsr_params_t){0.015f, 0.4f, 0.75f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.8f, 0.3f, 0.4f};
+        p->amp_env = (sq_adsr_params_t){0.015f, 2.6f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 1.4f, 0.0f, 0.4f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
     /* Preset 52: "Dark Pad" — Stranger Things-style ominous atmosphere
      * Square+saw for hollow darkness, cutoff under 500Hz,
-     * max unison for massive width, slow LFO = ominous movement,
-     * very slow attack (2s) and release (3.5s) for cinematic swells */
+     * max unison for massive width, slow LFO = ominous movement */
     {
         sq_synth_preset_t *p = &engine->synth_presets[52];
         memset(p, 0, sizeof(*p));
@@ -1183,8 +1182,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 450.0f;  /* very dark, ominous */
         p->filter_resonance = 1.0f;
         p->filter_env_depth = 400.0f;  /* barely opens */
-        p->amp_env = (sq_adsr_params_t){2.0f, 0.8f, 0.85f, 3.5f};
-        p->filter_env = (sq_adsr_params_t){2.5f, 1.0f, 0.4f, 3.0f};
+        p->amp_env = (sq_adsr_params_t){0.8f, 2.5f, 0.0f, 1.0f};
+        p->filter_env = (sq_adsr_params_t){1.0f, 2.0f, 0.0f, 0.8f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.12f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1229,8 +1228,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 300.0f;  /* dark, in 200-600Hz bass range */
         p->filter_resonance = 2.0f;  /* slight edge */
         p->filter_env_depth = 1200.0f;  /* moderate attack punch */
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.5f, 0.6f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.002f, 0.25f, 0.2f, 0.12f};
+        p->amp_env = (sq_adsr_params_t){0.003f, 2.3f, 0.0f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.7f, 0.0f, 0.12f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.3f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1252,8 +1251,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1000.0f;  /* warm, not bright */
         p->filter_resonance = 0.7f;  /* no resonance */
         p->filter_env_depth = 400.0f;  /* barely opens */
-        p->amp_env = (sq_adsr_params_t){1.2f, 0.5f, 0.9f, 2.5f};
-        p->filter_env = (sq_adsr_params_t){1.5f, 0.8f, 0.7f, 2.0f};
+        p->amp_env = (sq_adsr_params_t){1.2f, 3.2f, 0.0f, 2.5f};
+        p->filter_env = (sq_adsr_params_t){1.5f, 2.2f, 0.0f, 2.0f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.12f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
@@ -1275,8 +1274,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 1400.0f;  /* moderate, cuts through mix */
         p->filter_resonance = 1.5f;
         p->filter_env_depth = 1800.0f;  /* attack bite */
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.8f, 0.4f};
-        p->filter_env = (sq_adsr_params_t){0.008f, 0.4f, 0.45f, 0.3f};
+        p->amp_env = (sq_adsr_params_t){0.01f, 2.6f, 0.0f, 0.4f};
+        p->filter_env = (sq_adsr_params_t){0.008f, 1.3f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.05f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -1298,8 +1297,8 @@ void synth_init_presets(sq_engine_t *engine)
         p->filter_cutoff = 350.0f;  /* dark and warm */
         p->filter_resonance = 1.8f;
         p->filter_env_depth = 1500.0f;  /* attack punch */
-        p->amp_env = (sq_adsr_params_t){0.002f, 0.5f, 0.45f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.2f, 0.12f, 0.1f};
+        p->amp_env = (sq_adsr_params_t){0.002f, 1.9f, 0.0f, 0.15f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.4f, 0.0f, 0.1f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 

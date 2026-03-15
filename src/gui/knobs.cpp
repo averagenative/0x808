@@ -138,8 +138,12 @@ static int knob_core(const char *id_str,
     if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         float dy = io.MouseDelta.y;
         if (dy != 0.0f) {
-            /* Drag up (negative dy) = increase value */
-            *value -= dy * actual_step * 0.5f;
+            /* Drag up (negative dy) = increase value
+             * Scale by range so full knob sweep ≈ 200 pixels regardless of step size */
+            float range = max - min;
+            float speed = (range > 0.0f) ? range / 200.0f : actual_step;
+            if (io.KeyShift) speed *= 0.1f;
+            *value -= dy * speed;
             if (*value < min) *value = min;
             if (*value > max) *value = max;
         }

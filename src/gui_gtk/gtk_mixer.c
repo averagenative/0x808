@@ -326,9 +326,9 @@ static void update_fx_label(void)
 
     gtk_label_set_text(GTK_LABEL(s_fx_label), buf);
 
-    /* Enable/disable prev/next */
-    gtk_widget_set_sensitive(s_fx_prev_btn, s_fx_tab > 0);
-    gtk_widget_set_sensitive(s_fx_next_btn, s_fx_tab < (int)nt);
+    /* Always allow cycling (wraps around) */
+    gtk_widget_set_sensitive(s_fx_prev_btn, TRUE);
+    gtk_widget_set_sensitive(s_fx_next_btn, TRUE);
 }
 
 /* ─── Effect slot widget builders ────────────────────────────────────────── */
@@ -760,8 +760,12 @@ static void on_fx_prev_clicked(GtkWidget *btn, gpointer user_data)
     (void)btn; (void)user_data;
     if (s_fx_tab > 0) {
         s_fx_tab--;
-        gtk_mixer_rebuild_fx();
+    } else {
+        /* Wrap: master → last track */
+        uint32_t nt = get_num_tracks();
+        s_fx_tab = (int)nt;
     }
+    gtk_mixer_rebuild_fx();
 }
 
 static void on_fx_next_clicked(GtkWidget *btn, gpointer user_data)
@@ -770,8 +774,18 @@ static void on_fx_next_clicked(GtkWidget *btn, gpointer user_data)
     uint32_t nt = get_num_tracks();
     if (s_fx_tab < (int)nt) {
         s_fx_tab++;
-        gtk_mixer_rebuild_fx();
+    } else {
+        /* Wrap: last track → master */
+        s_fx_tab = 0;
     }
+    gtk_mixer_rebuild_fx();
+}
+
+void gtk_mixer_set_fx_track(int track_index)
+{
+    /* -1 = master bus (s_fx_tab 0), 0+ = track (s_fx_tab = track_index + 1) */
+    s_fx_tab = (track_index >= 0) ? track_index + 1 : 0;
+    gtk_mixer_rebuild_fx();
 }
 
 /* ─── Public API ─────────────────────────────────────────────────────────── */

@@ -370,6 +370,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
         tp.save_status_size = SQ_STATUS_LEN;
         tp.status_timer = &gui->app.status_timer;
         tp.play_start_ticks = &play_ticks;
+        tp.rec_config = &gui->app.rec_config;
         toolbar_draw(&tp);
         gui->app.play_start_ticks = play_ticks;
     }
