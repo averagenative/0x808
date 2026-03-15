@@ -1,21 +1,26 @@
 ; 0x808 NSIS Installer Script
 ; Builds a Windows installer from Linux via makensis
+;
+; Usage: update VER below, then run: makensis 0x808_installer.nsi
 
 !include "MUI2.nsh"
 
+!define VER "1.1.0"
+!define VERFULL "1.1.0.0"
+
 ; --- General ---
-Name "0x808"
-OutFile "../release/0x808-1.0.0-windows-x64-setup.exe"
+Name "0x808 v${VER}"
+OutFile "../release/0x808-${VER}-windows-x64-setup.exe"
 InstallDir "$PROGRAMFILES64\0x808"
 InstallDirRegKey HKLM "Software\0x808" "InstallDir"
 RequestExecutionLevel admin
 
 ; --- Version info ---
-VIProductVersion "1.0.0.0"
+VIProductVersion "${VERFULL}"
 VIAddVersionKey "ProductName" "0x808"
 VIAddVersionKey "CompanyName" "Dan Michael"
 VIAddVersionKey "FileDescription" "0x808 Drum Machine & Synth Workstation"
-VIAddVersionKey "FileVersion" "1.0.0"
+VIAddVersionKey "FileVersion" "${VER}"
 VIAddVersionKey "LegalCopyright" "MIT License"
 
 ; --- Interface ---
@@ -34,6 +39,25 @@ VIAddVersionKey "LegalCopyright" "MIT License"
 !insertmacro MUI_UNPAGE_INSTFILES
 
 !insertmacro MUI_LANGUAGE "English"
+
+; --- Upgrade detection: uninstall previous version silently ---
+
+Function .onInit
+    ReadRegStr $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" "UninstallString"
+    StrCmp $0 "" done
+
+    MessageBox MB_OKCANCEL|MB_ICONINFORMATION \
+        "0x808 is already installed.$\n$\nClick OK to uninstall the previous version and continue, or Cancel to abort." \
+        IDOK uninst
+    Abort
+
+uninst:
+    ; Run the existing uninstaller silently
+    ExecWait '"$0" /S _?=$INSTDIR'
+    Delete "$INSTDIR\uninstall.exe"
+
+done:
+FunctionEnd
 
 ; --- Sections ---
 
@@ -68,7 +92,7 @@ Section "0x808 Standalone (required)" SecMain
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
         "UninstallString" '"$INSTDIR\uninstall.exe"'
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
-        "DisplayVersion" "1.0.0"
+        "DisplayVersion" "${VER}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
         "Publisher" "Dan Michael"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\0x808" \
