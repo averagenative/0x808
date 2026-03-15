@@ -514,6 +514,8 @@ static int render_thread_func(void *userdata)
     SDL_GL_MakeCurrent(gui->window, gui->gl_ctx);
 
     while (gui->running.load()) {
+        if (!gui->window) break;
+
         Uint32 start = SDL_GetTicks();
 
         plugin_gui_draw_frame(gui);
@@ -524,7 +526,8 @@ static int render_thread_func(void *userdata)
             SDL_Delay(target_ms - elapsed);
     }
 
-    SDL_GL_MakeCurrent(gui->window, NULL);
+    if (gui->window && gui->gl_ctx)
+        SDL_GL_MakeCurrent(gui->window, NULL);
 
     LOG_INFO("Plugin GUI render thread exiting");
     return 0;
@@ -655,7 +658,10 @@ extern "C" int plugin_gui_attach(sq_plugin_gui_t *gui, void *native_handle)
     }
     GLOG_INFO("GL context created OK");
 
-    SDL_GL_SetSwapInterval(1);
+    /* Disable vsync — we do our own frame timing with SDL_Delay.
+     * Vsync can cause SDL_GL_SwapWindow to block indefinitely when the
+     * host destroys the parent window during shutdown, hanging the DAW. */
+    SDL_GL_SetSwapInterval(0);
 
     /* Load GL3 extension functions */
     gl3_loader_init();
@@ -703,7 +709,7 @@ extern "C" void plugin_gui_detach(sq_plugin_gui_t *gui)
 {
     if (!gui) return;
 
-    /* Stop render thread */
+    /* Signal render thread to stop */
     if (gui->running.load()) {
         gui->running.store(0);
         if (gui->render_thread) {
