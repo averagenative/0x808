@@ -47,6 +47,19 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 
 All GUI frontends share the `sq_app` controller library (C99) for keyboard shortcuts, panel state, playhead, and undo coordination. See `docs/FRONTEND_FEATURES.md` for the full feature parity specification.
 
+## Plugin Install Locations
+
+Copy the built plugin files to the appropriate directory for your DAW to find them:
+
+| Format | Linux | macOS | Windows |
+|--------|-------|-------|---------|
+| **VST3** | `~/.vst3/` | `~/Library/Audio/Plug-Ins/VST3/` | `C:\Program Files\Common Files\VST3\` |
+| **CLAP** | `~/.clap/` | `~/Library/Audio/Plug-Ins/CLAP/` | `C:\Program Files\Common Files\CLAP\` |
+
+The VST3 must keep its bundle structure: copy the entire `0x808.vst3/` directory, not just the inner file.
+
+The Windows installer handles this automatically.
+
 ## Keyboard Shortcuts
 
 | Key | Action |
