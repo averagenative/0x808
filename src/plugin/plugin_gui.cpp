@@ -712,6 +712,20 @@ extern "C" void plugin_gui_detach(sq_plugin_gui_t *gui)
     /* Signal render thread to stop */
     if (gui->running.load()) {
         gui->running.store(0);
+
+#ifdef _WIN32
+        /* Post WM_NULL to the SDL window to wake the render thread if it's
+         * stuck inside PeekMessage/DispatchMessage. Without this, we get a
+         * deadlock: the host UI thread (here) waits on SDL_WaitThread while
+         * the render thread waits for a message response from the host. */
+        if (gui->window) {
+            SDL_SysWMinfo wminfo;
+            SDL_VERSION(&wminfo.version);
+            if (SDL_GetWindowWMInfo(gui->window, &wminfo))
+                PostMessageW(wminfo.info.win.window, WM_NULL, 0, 0);
+        }
+#endif
+
         if (gui->render_thread) {
             SDL_WaitThread(gui->render_thread, NULL);
             gui->render_thread = nullptr;
