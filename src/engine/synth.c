@@ -64,84 +64,98 @@ void synth_init_wavetables(sq_wavetables_t *wt)
 
 void synth_init_presets(sq_engine_t *engine)
 {
-    /* Preset 0: "Bass" — saw + lowpass, short decay */
+    /* Preset 0: "Bass" — punchy saw bass, dark and weighty
+     * Low cutoff keeps it warm, moderate env depth for attack punch,
+     * longer decay (0.5s) gives body instead of a click */
     {
         sq_synth_preset_t *p = &engine->synth_presets[0];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Bass");
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.0f;  /* osc1 only */
-        p->osc2_detune = 0.0f;
+        p->osc_mix = 0.3f;  /* blend both saws for thickness */
+        p->osc2_detune = -0.08f;  /* slight detune down for fatness */
         p->unison_voices = 1;
         p->unison_detune = 0.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 800.0f;
-        p->filter_resonance = 2.0f;
-        p->filter_env_depth = 2000.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.3f, 0.0f, 0.05f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.2f, 0.0f, 0.05f};
+        p->filter_cutoff = 400.0f;  /* dark: warmth comes from being dark */
+        p->filter_resonance = 1.5f;  /* gentle resonance, no shriek */
+        p->filter_env_depth = 1200.0f;  /* moderate punch on attack */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.5f, 0.0f, 0.08f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.25f, 0.0f, 0.06f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 1: "Lead" — square + saw, filter sweep */
+    /* Preset 1: "Lead" — classic saw+square lead that cuts through a mix
+     * Moderate filter (not too bright), high sustain (0.8) so notes hold,
+     * gentle vibrato for expression, resonance at 2.0 for presence not shriek */
     {
         sq_synth_preset_t *p = &engine->synth_presets[1];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Lead");
-        p->osc1_wave = WAVE_SQUARE;
-        p->osc2_wave = WAVE_SAW;
+        p->osc1_wave = WAVE_SAW;
+        p->osc2_wave = WAVE_SQUARE;
         p->osc_mix = 0.4f;
         p->osc2_detune = 0.1f;  /* slight detune for thickness */
-        p->unison_voices = 1;
+        p->unison_voices = 2;  /* stereo width without excess */
+        p->unison_detune = 8.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2000.0f;
-        p->filter_resonance = 3.0f;
-        p->filter_env_depth = 4000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.1f, 0.7f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.3f, 0.3f, 0.2f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.1f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 1200.0f;  /* moderate: lets it cut without being harsh */
+        p->filter_resonance = 2.0f;  /* presence, not shriek */
+        p->filter_env_depth = 2500.0f;  /* attack bite from envelope */
+        p->amp_env = (sq_adsr_params_t){0.008f, 0.15f, 0.8f, 0.35f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.25f, 0.4f, 0.2f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.06f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 2: "Pad" — triangle + sine, slow attack, long release, unison */
+    /* Preset 2: "Pad" — cinematic warm pad, Blade Runner-inspired
+     * Saw+saw detuned for chorus width (not triangle+sine which is thin),
+     * 5 unison voices at 20 cents for lush spread, cutoff under 1000Hz
+     * for warmth, slow LFO on filter for gentle movement */
     {
         sq_synth_preset_t *p = &engine->synth_presets[2];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Pad");
-        p->osc1_wave = WAVE_TRIANGLE;
-        p->osc2_wave = WAVE_SINE;
+        p->osc1_wave = WAVE_SAW;
+        p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.05f;
-        p->unison_voices = 3;
-        p->unison_detune = 15.0f;  /* 15 cents spread */
+        p->osc2_detune = 0.08f;  /* detune for chorus character */
+        p->unison_voices = 5;  /* wide stereo image */
+        p->unison_detune = 20.0f;  /* 20 cents: lush but not washy */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 3000.0f;
-        p->filter_resonance = 1.0f;
-        p->filter_env_depth = 1000.0f;
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.0f};
-        p->filter_env = (sq_adsr_params_t){0.3f, 0.5f, 0.5f, 0.8f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.3f, 0.2f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 900.0f;  /* dark and warm, beauty is in detuning */
+        p->filter_resonance = 0.8f;  /* no resonance: pure Juno warmth */
+        p->filter_env_depth = 400.0f;  /* subtle brightness swell */
+        p->amp_env = (sq_adsr_params_t){1.5f, 0.5f, 0.9f, 2.0f};
+        p->filter_env = (sq_adsr_params_t){1.0f, 0.8f, 0.6f, 1.5f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.2f, 0.15f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 3: "Pluck" — saw, fast attack, no sustain */
+    /* Preset 3: "Pluck" — full-bodied pluck, not a bleep
+     * KEY: decay 0.4s (not 0.15s = bleep), resonance under 2.0,
+     * moderate env depth (1500, not 6000 = ice pick), 2 unison for body */
     {
         sq_synth_preset_t *p = &engine->synth_presets[3];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Pluck");
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.2f;
-        p->unison_voices = 1;
+        p->osc_mix = 0.3f;
+        p->osc2_detune = 0.05f;  /* subtle detune for width */
+        p->unison_voices = 2;  /* stereo body */
+        p->unison_detune = 8.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1000.0f;
-        p->filter_resonance = 4.0f;
-        p->filter_env_depth = 6000.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.15f, 0.0f, 0.01f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.01f};
+        p->filter_cutoff = 600.0f;  /* start dark, env opens it */
+        p->filter_resonance = 1.5f;  /* under 2.0: body not bleep */
+        p->filter_env_depth = 1500.0f;  /* moderate sweep, not extreme */
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.4f, 0.0f, 0.15f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.3f, 0.0f, 0.1f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 4: "SuperSaw" — wide unison saw for testing */
+    /* Preset 4: "SuperSaw" — massive JP-8000-style supersaw
+     * 7 unison voices at 25 cents for that wall-of-sound trance feel,
+     * cutoff 1800 (not 4000 = harsh), osc2 at unison (not 5th = chord) */
     {
         sq_synth_preset_t *p = &engine->synth_presets[4];
         memset(p, 0, sizeof(*p));
@@ -149,121 +163,133 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 7.0f;  /* 7 semitones = fifth */
-        p->unison_voices = 5;
-        p->unison_detune = 20.0f;  /* 20 cents */
+        p->osc2_detune = 0.12f;  /* subtle detune, not a fifth */
+        p->unison_voices = 7;  /* maximum width */
+        p->unison_detune = 25.0f;  /* 25 cents: wide but coherent */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 4000.0f;
-        p->filter_resonance = 1.5f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.6f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.3f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_cutoff = 1800.0f;  /* warm but present, not harsh */
+        p->filter_resonance = 0.8f;  /* no resonance, pure width */
+        p->filter_env_depth = 1500.0f;  /* subtle brightness on attack */
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.8f, 0.6f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.5f, 0.4f, 0.4f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.08f, LFO_DEST_FILTER, 0.0};
     }
 
     /* ── FM Presets ─────────────────────────────────────────────────────── */
 
-    /* Preset 5: "FM Bell" — classic DX7 bell sound */
+    /* Preset 5: "FM Bell" — classic DX7 bell, long shimmering decay
+     * High inharmonic ratios (3.5, 7.0) create metallic bell character,
+     * long decay (3s) and release (2s) for natural bell sustain */
     {
         sq_synth_preset_t *p = &engine->synth_presets[5];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "FM Bell");
         p->synth_mode = SYNTH_FM;
-        p->fm_algorithm = 0; /* serial: 3→2→1→0 */
-        p->amp_env = (sq_adsr_params_t){0.001f, 2.0f, 0.0f, 1.0f};
-        /* Op 0 (carrier): fundamental */
+        p->fm_algorithm = 0; /* serial: 3->2->1->0 */
+        p->amp_env = (sq_adsr_params_t){0.001f, 3.0f, 0.0f, 2.0f};
+        /* Op 0 (carrier): fundamental, long ring */
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
+            {0.001f, 3.0f, 0.0f, 2.0f}};
+        /* Op 1 (modulator): inharmonic ratio for bell character */
+        p->fm_ops[1] = (sq_fm_operator_t){3.5f, 0.6f, 0.0f,
             {0.001f, 2.0f, 0.0f, 1.0f}};
-        /* Op 1 (modulator): inharmonic ratio for bell timbre */
-        p->fm_ops[1] = (sq_fm_operator_t){3.5f, 0.8f, 0.0f,
-            {0.001f, 1.5f, 0.0f, 0.5f}};
-        /* Op 2: adds brightness */
-        p->fm_ops[2] = (sq_fm_operator_t){7.0f, 0.4f, 0.0f,
-            {0.001f, 0.8f, 0.0f, 0.3f}};
-        /* Op 3: high harmonic shimmer */
-        p->fm_ops[3] = (sq_fm_operator_t){11.0f, 0.2f, 0.0f,
-            {0.001f, 0.5f, 0.0f, 0.2f}};
+        /* Op 2: upper partials, decay faster than fundamental */
+        p->fm_ops[2] = (sq_fm_operator_t){7.0f, 0.3f, 0.0f,
+            {0.001f, 1.0f, 0.0f, 0.5f}};
+        /* Op 3: shimmer, decays quickest */
+        p->fm_ops[3] = (sq_fm_operator_t){11.0f, 0.15f, 0.0f,
+            {0.001f, 0.6f, 0.0f, 0.3f}};
     }
 
-    /* Preset 6: "FM EPiano" — Rhodes-like electric piano */
+    /* Preset 6: "FM EPiano" — DX7 Rhodes: warm body + gentle tine attack
+     * Low mod index (0.35) for smoothness, 1:1 ratio keeps it pure,
+     * tine op decays fast leaving warm fundamental body */
     {
         sq_synth_preset_t *p = &engine->synth_presets[6];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "FM EPiano");
         p->synth_mode = SYNTH_FM;
-        p->fm_algorithm = 2; /* two pairs: 3→2, 1→0 */
-        p->amp_env = (sq_adsr_params_t){0.001f, 1.0f, 0.3f, 0.5f};
-        /* Op 0 (carrier): fundamental */
+        p->fm_algorithm = 2; /* two pairs: 3->2, 1->0 */
+        p->amp_env = (sq_adsr_params_t){0.001f, 1.5f, 0.25f, 0.8f};
+        /* Op 0 (carrier): warm fundamental body */
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
-            {0.001f, 1.0f, 0.3f, 0.5f}};
-        /* Op 1 (modulator): harmonic */
-        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.5f, 0.0f,
-            {0.001f, 0.8f, 0.1f, 0.3f}};
-        /* Op 2 (carrier): octave up for brightness */
-        p->fm_ops[2] = (sq_fm_operator_t){2.0f, 0.6f, 0.0f,
-            {0.001f, 0.7f, 0.0f, 0.4f}};
-        /* Op 3 (modulator): adds tine sound */
-        p->fm_ops[3] = (sq_fm_operator_t){14.0f, 0.3f, 0.0f,
-            {0.001f, 0.3f, 0.0f, 0.1f}};
+            {0.001f, 1.5f, 0.25f, 0.8f}};
+        /* Op 1 (modulator): gentle 1:1 for warmth, low level */
+        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.35f, 0.0f,
+            {0.001f, 0.6f, 0.05f, 0.3f}};
+        /* Op 2 (carrier): octave tine, lower level for subtlety */
+        p->fm_ops[2] = (sq_fm_operator_t){2.0f, 0.4f, 0.0f,
+            {0.001f, 0.5f, 0.0f, 0.3f}};
+        /* Op 3 (modulator): tine attack brightness, decays fast */
+        p->fm_ops[3] = (sq_fm_operator_t){14.0f, 0.2f, 0.0f,
+            {0.001f, 0.15f, 0.0f, 0.08f}};
     }
 
-    /* Preset 7: "FM Metal" — metallic percussion hit */
+    /* Preset 7: "FM Metal" — metallic percussion, industrial character
+     * Inharmonic ratios (1.41, 2.82 = sqrt2 series) for metallic timbre,
+     * feedback on op3 adds grit, longer decay (0.5s) for body */
     {
         sq_synth_preset_t *p = &engine->synth_presets[7];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "FM Metal");
         p->synth_mode = SYNTH_FM;
-        p->fm_algorithm = 1; /* 2→1→0, 3→0 */
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.3f, 0.0f, 0.1f};
+        p->fm_algorithm = 1; /* 2->1->0, 3->0 */
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.5f, 0.0f, 0.2f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
+            {0.001f, 0.5f, 0.0f, 0.2f}};
+        p->fm_ops[1] = (sq_fm_operator_t){1.41f, 0.8f, 0.0f,
             {0.001f, 0.3f, 0.0f, 0.1f}};
-        p->fm_ops[1] = (sq_fm_operator_t){1.41f, 0.9f, 0.0f,
-            {0.001f, 0.2f, 0.0f, 0.05f}};
-        p->fm_ops[2] = (sq_fm_operator_t){2.82f, 0.6f, 0.0f,
-            {0.001f, 0.15f, 0.0f, 0.05f}};
-        p->fm_ops[3] = (sq_fm_operator_t){5.0f, 0.7f, 0.1f,
-            {0.001f, 0.1f, 0.0f, 0.05f}};
+        p->fm_ops[2] = (sq_fm_operator_t){2.82f, 0.5f, 0.0f,
+            {0.001f, 0.2f, 0.0f, 0.08f}};
+        p->fm_ops[3] = (sq_fm_operator_t){5.0f, 0.6f, 0.15f,
+            {0.001f, 0.15f, 0.0f, 0.06f}};
     }
 
-    /* Preset 8: "FM Bass" — deep FM bass */
+    /* Preset 8: "FM Bass" — deep punchy FM bass with harmonic click
+     * 1:1 ratio on mod for warmth, higher ops decay fast giving attack
+     * transient that fades to pure fundamental — heavy and musical */
     {
         sq_synth_preset_t *p = &engine->synth_presets[8];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "FM Bass");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 0; /* serial */
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.4f, 0.0f, 0.05f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.6f, 0.0f, 0.1f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
-            {0.001f, 0.4f, 0.0f, 0.05f}};
-        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.8f, 0.0f,
-            {0.001f, 0.15f, 0.0f, 0.02f}};
-        p->fm_ops[2] = (sq_fm_operator_t){2.0f, 0.3f, 0.0f,
-            {0.001f, 0.1f, 0.0f, 0.01f}};
-        p->fm_ops[3] = (sq_fm_operator_t){3.0f, 0.2f, 0.0f,
-            {0.001f, 0.05f, 0.0f, 0.01f}};
+            {0.001f, 0.6f, 0.0f, 0.1f}};
+        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.6f, 0.0f,
+            {0.001f, 0.12f, 0.0f, 0.03f}};
+        p->fm_ops[2] = (sq_fm_operator_t){2.0f, 0.25f, 0.0f,
+            {0.001f, 0.08f, 0.0f, 0.02f}};
+        p->fm_ops[3] = (sq_fm_operator_t){3.0f, 0.15f, 0.0f,
+            {0.001f, 0.04f, 0.0f, 0.01f}};
     }
 
-    /* Preset 9: "FM Pad" — evolving FM pad */
+    /* Preset 9: "FM Pad" — additive FM pad, cinematic slow evolve
+     * All carriers (additive), each harmonic has different attack time
+     * creating spectral evolution — slow attack, high sustain, long release */
     {
         sq_synth_preset_t *p = &engine->synth_presets[9];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "FM Pad");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 6; /* all carriers (additive) */
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.5f};
+        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.85f, 2.0f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
-            {0.5f, 0.5f, 0.8f, 1.5f}};
-        p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.5f, 0.0f,
-            {0.8f, 0.5f, 0.6f, 1.0f}};
-        p->fm_ops[2] = (sq_fm_operator_t){3.0f, 0.3f, 0.0f,
-            {1.0f, 0.5f, 0.4f, 0.8f}};
-        p->fm_ops[3] = (sq_fm_operator_t){5.0f, 0.15f, 0.05f,
-            {0.3f, 1.0f, 0.2f, 2.0f}};
+            {0.8f, 0.5f, 0.85f, 2.0f}};
+        p->fm_ops[1] = (sq_fm_operator_t){2.0f, 0.4f, 0.0f,
+            {1.2f, 0.5f, 0.6f, 1.5f}};
+        p->fm_ops[2] = (sq_fm_operator_t){3.0f, 0.2f, 0.0f,
+            {1.5f, 0.5f, 0.35f, 1.0f}};
+        p->fm_ops[3] = (sq_fm_operator_t){5.0f, 0.1f, 0.05f,
+            {0.5f, 1.5f, 0.15f, 2.5f}};
     }
 
     /* ── Wavetable Presets ────────────────────────────────────────────── */
 
-    /* Preset 10: "WT Sweep" — analog bank with position sweep */
+    /* Preset 10: "WT Sweep" — analog bank with slow wavetable sweep
+     * Position envelope sweeps through timbres on each note,
+     * moderate sustain for musical playing, not just a blip */
     {
         sq_synth_preset_t *p = &engine->synth_presets[10];
         memset(p, 0, sizeof(*p));
@@ -271,14 +297,16 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 0; /* Analog */
         p->wt_position = 0.0f;
-        p->wt_env_depth = 0.5f;
-        p->wt_lfo_depth = 0.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.6f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.5f, 0.3f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->wt_env_depth = 0.6f;
+        p->wt_lfo_depth = 0.1f;  /* subtle movement */
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.4f, 0.7f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.4f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 11: "WT Harmonic" — harmonics bank with LFO */
+    /* Preset 11: "WT Harmonic" — evolving harmonic pad with slow LFO
+     * Harmonics bank gives organ-like timbres, LFO on wavetable position
+     * creates spectral movement — slow attack for pad use */
     {
         sq_synth_preset_t *p = &engine->synth_presets[11];
         memset(p, 0, sizeof(*p));
@@ -286,29 +314,33 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 1; /* Harmonics */
         p->wt_position = 0.3f;
-        p->wt_env_depth = 0.0f;
-        p->wt_lfo_depth = 0.3f;
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.0f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.5f, 0.5f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.5f, 1.0f, LFO_DEST_FILTER, 0.0};
+        p->wt_env_depth = 0.15f;  /* subtle env sweep too */
+        p->wt_lfo_depth = 0.35f;
+        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.5f, 0.5f, 0.5f, 0.8f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.3f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 12: "WT PWM" — PWM bank */
+    /* Preset 12: "WT PWM" — pulse width modulation for hollow/reedy tone
+     * LFO sweeps pulse width for classic analog character,
+     * slower LFO rate (0.8Hz) for musical sweep, good sustain for leads */
     {
         sq_synth_preset_t *p = &engine->synth_presets[12];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "WT PWM");
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 2; /* PWM */
-        p->wt_position = 0.0f;
+        p->wt_position = 0.2f;  /* start slightly off-center */
         p->wt_env_depth = 0.0f;
         p->wt_lfo_depth = 0.5f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.7f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.5f, 0.5f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 2.0f, 1.0f, LFO_DEST_FILTER, 0.0};
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.8f, 0.4f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.5f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.8f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 13: "WT Vocal" — formant bank */
+    /* Preset 13: "WT Vocal" — formant vowel sweep, choir-like
+     * Envelope sweeps through vowel formants on attack,
+     * slow LFO adds subtle movement, high sustain for pads */
     {
         sq_synth_preset_t *p = &engine->synth_presets[13];
         memset(p, 0, sizeof(*p));
@@ -316,16 +348,18 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 3; /* Formant */
         p->wt_position = 0.0f;
-        p->wt_env_depth = 0.8f;
-        p->wt_lfo_depth = 0.0f;
-        p->amp_env = (sq_adsr_params_t){0.3f, 0.5f, 0.7f, 0.8f};
-        p->filter_env = (sq_adsr_params_t){0.2f, 1.0f, 0.3f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->wt_env_depth = 0.6f;
+        p->wt_lfo_depth = 0.15f;  /* subtle vowel drift */
+        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.0f};
+        p->filter_env = (sq_adsr_params_t){0.3f, 0.8f, 0.4f, 0.6f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.2f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
     /* ── Classic / Historic Synth Presets ────────────────────────────── */
 
-    /* Preset 14: "Moog Bass" — Minimoog-style thick bass */
+    /* Preset 14: "Moog Bass" — Minimoog-style thick warm bass
+     * Warmth comes from being DARK (cutoff 500Hz), not from resonance.
+     * Saw + square sub octave, slight env depth for pluck, longer decay */
     {
         sq_synth_preset_t *p = &engine->synth_presets[14];
         memset(p, 0, sizeof(*p));
@@ -333,19 +367,22 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.3f;
-        p->osc2_detune = -12.0f; /* one octave down */
+        p->osc_mix = 0.35f;
+        p->osc2_detune = -12.0f; /* one octave down for sub weight */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 400.0f;
-        p->filter_resonance = 4.0f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.002f, 0.15f, 0.0f, 0.05f};
-        p->filter_env = (sq_adsr_params_t){0.002f, 0.12f, 0.0f, 0.04f};
+        p->filter_cutoff = 500.0f;  /* dark and warm, Moog ladder character */
+        p->filter_resonance = 2.0f;  /* gentle, not screaming */
+        p->filter_env_depth = 1500.0f;  /* moderate punch, not screechy */
+        p->amp_env = (sq_adsr_params_t){0.002f, 0.4f, 0.0f, 0.08f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.2f, 0.0f, 0.06f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 15: "303 Acid" — TB-303-style acid squelch */
+    /* Preset 15: "303 Acid" — TB-303 acid squelch
+     * Single saw, HIGH resonance (10) is correct for 303 character,
+     * fast filter env decay (0.1s) creates the signature "squelch",
+     * cutoff 250Hz baseline, env depth 5000 for range. Amp decay 0.3s. */
     {
         sq_synth_preset_t *p = &engine->synth_presets[15];
         memset(p, 0, sizeof(*p));
@@ -353,39 +390,43 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.0f; /* single osc */
+        p->osc_mix = 0.0f; /* single osc: 303 has one oscillator */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 300.0f;
-        p->filter_resonance = 12.0f; /* high reso for squelch */
-        p->filter_env_depth = 8000.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.2f, 0.0f, 0.02f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.08f, 0.0f, 0.02f};
+        p->filter_cutoff = 250.0f;  /* low baseline, env opens it */
+        p->filter_resonance = 10.0f; /* high reso IS the 303 character */
+        p->filter_env_depth = 5000.0f;  /* wide sweep for squelch */
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.3f, 0.0f, 0.05f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.03f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 16: "Juno Pad" — Roland Juno-style warm chorus pad */
+    /* Preset 16: "Juno Pad" — Roland Juno-106 warm chorus pad
+     * Saw only (Juno character), NO resonance (pure warmth),
+     * cutoff 800-1200Hz range, unison detune IS the chorus effect */
     {
         sq_synth_preset_t *p = &engine->synth_presets[16];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Juno Pad");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
-        p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.4f;
-        p->osc2_detune = 0.08f; /* subtle detune */
+        p->osc2_wave = WAVE_SAW;  /* Juno: saw through chorus */
+        p->osc_mix = 0.5f;
+        p->osc2_detune = 0.07f;
         p->unison_voices = 5;
-        p->unison_detune = 12.0f; /* chorus-like spread */
+        p->unison_detune = 15.0f; /* chorus spread */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2500.0f;
-        p->filter_resonance = 1.5f;
-        p->filter_env_depth = 500.0f;
-        p->amp_env = (sq_adsr_params_t){0.3f, 0.3f, 0.9f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.4f, 0.5f, 0.6f, 1.0f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.2f, 0.15f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 1000.0f;  /* warm, not bright */
+        p->filter_resonance = 0.7f;  /* NO resonance: pure Juno warmth */
+        p->filter_env_depth = 400.0f;  /* barely any env: static warmth */
+        p->amp_env = (sq_adsr_params_t){0.5f, 0.3f, 0.9f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.4f, 0.5f, 0.7f, 1.0f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 17: "OB Strings" — Oberheim OB-X style string ensemble */
+    /* Preset 17: "OB Strings" — Oberheim OB-X string ensemble
+     * Max unison (7) for massive width, moderate cutoff for warmth,
+     * slow attack simulates bowed strings, vibrato for expression */
     {
         sq_synth_preset_t *p = &engine->synth_presets[17];
         memset(p, 0, sizeof(*p));
@@ -394,19 +435,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.12f;
+        p->osc2_detune = 0.1f;
         p->unison_voices = 7; /* maximum lush */
-        p->unison_detune = 18.0f;
+        p->unison_detune = 20.0f;  /* wider spread */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 3500.0f;
-        p->filter_resonance = 1.0f;
-        p->filter_env_depth = 800.0f;
-        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.2f};
-        p->filter_env = (sq_adsr_params_t){0.5f, 0.8f, 0.5f, 1.0f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 4.5f, 0.05f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 2000.0f;  /* warm string tone, not bright */
+        p->filter_resonance = 0.8f;  /* smooth, no edge */
+        p->filter_env_depth = 600.0f;  /* gentle brightness swell */
+        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.85f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.8f, 0.8f, 0.5f, 1.0f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 4.5f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 18: "Prophet Brass" — Sequential Circuits-style brass stab */
+    /* Preset 18: "Prophet Brass" — Prophet-5 brass stab, punchy and wide
+     * Fast filter env gives brass attack bite, moderate sustain holds notes,
+     * 3 unison voices for width without muddiness */
     {
         sq_synth_preset_t *p = &engine->synth_presets[18];
         memset(p, 0, sizeof(*p));
@@ -415,19 +458,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.15f;
+        p->osc2_detune = 0.12f;
         p->unison_voices = 3;
-        p->unison_detune = 8.0f;
+        p->unison_detune = 10.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 800.0f;
-        p->filter_resonance = 2.0f;
-        p->filter_env_depth = 6000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.15f, 0.7f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.25f, 0.4f, 0.15f};
+        p->filter_cutoff = 600.0f;  /* dark baseline */
+        p->filter_resonance = 1.8f;  /* slight edge, not harsh */
+        p->filter_env_depth = 4000.0f;  /* big sweep for brass bite */
+        p->amp_env = (sq_adsr_params_t){0.008f, 0.2f, 0.7f, 0.25f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.2f, 0.35f, 0.15f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 19: "ARP Lead" — ARP 2600-style piercing lead */
+    /* Preset 19: "ARP Lead" — ARP 2600-style aggressive lead
+     * Square+saw for harmonically rich tone, resonance at 2.5 (not 5.0),
+     * osc2 at 7 semitones (fifth) for power chord character */
     {
         sq_synth_preset_t *p = &engine->synth_presets[19];
         memset(p, 0, sizeof(*p));
@@ -436,39 +481,44 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SQUARE;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 7.0f; /* fifth */
+        p->osc2_detune = 7.0f; /* fifth for power */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1500.0f;
-        p->filter_resonance = 5.0f;
-        p->filter_env_depth = 5000.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.1f, 0.8f, 0.1f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.15f, 0.5f, 0.1f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 6.0f, 0.08f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 1000.0f;  /* moderate, env gives attack bite */
+        p->filter_resonance = 2.5f;  /* presence, not pain */
+        p->filter_env_depth = 3000.0f;  /* attack bite from envelope */
+        p->amp_env = (sq_adsr_params_t){0.005f, 0.15f, 0.8f, 0.15f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.12f, 0.4f, 0.1f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.06f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 20: "SH Noise" — SH-101-style noise percussion */
+    /* Preset 20: "SH Noise" — SH-101 noise percussion / hi-hat
+     * Heavy detune (40 cents) on 3 voices creates noise-like texture,
+     * HP filter sweeps down on attack for snare/hat character,
+     * longer decay (0.15s) for body */
     {
         sq_synth_preset_t *p = &engine->synth_presets[20];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "SH Noise");
         p->synth_mode = SYNTH_SUBTRACTIVE;
-        p->osc1_wave = WAVE_SAW; /* will sound noisy with high-res filter */
+        p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.5f; /* slightly detuned for texture */
+        p->osc2_detune = 0.5f;
         p->unison_voices = 3;
         p->unison_detune = 40.0f; /* heavy detune = noise-like */
         p->filter_type = FILTER_HIGHPASS;
         p->filter_cutoff = 2000.0f;
-        p->filter_resonance = 6.0f;
+        p->filter_resonance = 4.0f;  /* less extreme than 6.0 */
         p->filter_env_depth = -1500.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.02f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.08f, 0.0f, 0.02f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.15f, 0.0f, 0.04f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.03f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 21: "Reese Bass" — DnB-style detuned reese bass */
+    /* Preset 21: "Reese Bass" — DnB reese: two detuned saws, dark and moving
+     * LOW cutoff (300Hz), moderate resonance (2.0), slow LFO on filter
+     * for the signature reese movement. Higher sustain for held notes. */
     {
         sq_synth_preset_t *p = &engine->synth_presets[21];
         memset(p, 0, sizeof(*p));
@@ -476,35 +526,37 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.5f;
-        p->osc2_detune = 0.1f;
-        p->unison_voices = 3;
-        p->unison_detune = 10.0f;
+        p->osc_mix = 0.5f;  /* equal mix of both saws */
+        p->osc2_detune = 0.12f;  /* detune creates the movement */
+        p->unison_voices = 2;  /* keep it tight for bass */
+        p->unison_detune = 6.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 600.0f;
-        p->filter_resonance = 3.0f;
-        p->filter_env_depth = 2000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.5f, 0.6f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.8f, 0.2f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.3f, 0.15f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 300.0f;  /* dark: 200-400Hz range */
+        p->filter_resonance = 2.0f;  /* moderate resonance for edge */
+        p->filter_env_depth = 800.0f;  /* subtle attack brightness */
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.5f, 0.7f, 0.3f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.3f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.25f, 0.2f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 22: "DX Piano" — FM electric piano (brighter than EPiano) */
+    /* Preset 22: "DX Piano" — FM acoustic piano, brighter attack than EPiano
+     * Two-pair algo: warm body + bright hammer attack that decays fast,
+     * longer overall decay (2s) for natural piano ring */
     {
         sq_synth_preset_t *p = &engine->synth_presets[22];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "DX Piano");
         p->synth_mode = SYNTH_FM;
         p->fm_algorithm = 2; /* two pairs */
-        p->amp_env = (sq_adsr_params_t){0.001f, 1.5f, 0.2f, 0.8f};
+        p->amp_env = (sq_adsr_params_t){0.001f, 2.0f, 0.15f, 1.0f};
         p->fm_ops[0] = (sq_fm_operator_t){1.0f, 1.0f, 0.0f,
-            {0.001f, 1.5f, 0.2f, 0.8f}};
-        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.7f, 0.0f,
-            {0.001f, 0.5f, 0.0f, 0.2f}};
-        p->fm_ops[2] = (sq_fm_operator_t){3.0f, 0.5f, 0.0f,
-            {0.001f, 0.8f, 0.0f, 0.3f}};
-        p->fm_ops[3] = (sq_fm_operator_t){7.0f, 0.25f, 0.0f,
-            {0.001f, 0.2f, 0.0f, 0.1f}};
+            {0.001f, 2.0f, 0.15f, 1.0f}};
+        p->fm_ops[1] = (sq_fm_operator_t){1.0f, 0.5f, 0.0f,
+            {0.001f, 0.3f, 0.0f, 0.15f}};
+        p->fm_ops[2] = (sq_fm_operator_t){3.0f, 0.4f, 0.0f,
+            {0.001f, 0.6f, 0.0f, 0.25f}};
+        p->fm_ops[3] = (sq_fm_operator_t){7.0f, 0.2f, 0.0f,
+            {0.001f, 0.12f, 0.0f, 0.06f}};
     }
 
     /* Preset 23: "DX Vibes" — FM vibraphone */
@@ -525,7 +577,9 @@ void synth_init_presets(sq_engine_t *engine)
             {0.001f, 0.5f, 0.0f, 0.3f}};
     }
 
-    /* Preset 24: "Hoover" — classic rave hoover sound */
+    /* Preset 24: "Hoover" — classic rave hoover, menacing and wide
+     * Detuned saw stack (5 voices), pitch LFO gives the swooping character,
+     * moderate cutoff, filter env for attack punch */
     {
         sq_synth_preset_t *p = &engine->synth_presets[24];
         memset(p, 0, sizeof(*p));
@@ -534,19 +588,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 5.0f; /* major third up */
+        p->osc2_detune = 5.0f; /* major third up for chord character */
         p->unison_voices = 5;
         p->unison_detune = 25.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2000.0f;
-        p->filter_resonance = 2.5f;
-        p->filter_env_depth = 4000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.7f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.5f, 0.4f, 0.4f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 3.0f, 0.2f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 1200.0f;  /* darker baseline */
+        p->filter_resonance = 1.8f;  /* less harsh */
+        p->filter_env_depth = 3000.0f;  /* moderate sweep */
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.4f, 0.7f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.6f, 0.35f, 0.4f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 2.5f, 0.15f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 25: "Stab" — classic house/techno chord stab */
+    /* Preset 25: "Stab" — house/techno chord stab with body
+     * Bandpass for honky character, decay 0.15s (not 0.08 = click),
+     * resonance 3.0 (not 5.0), moderate env depth for punch */
     {
         sq_synth_preset_t *p = &engine->synth_presets[25];
         memset(p, 0, sizeof(*p));
@@ -555,42 +611,46 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
         p->osc_mix = 0.4f;
-        p->osc2_detune = 0.0f;
+        p->osc2_detune = 0.05f;
         p->unison_voices = 3;
-        p->unison_detune = 6.0f;
+        p->unison_detune = 8.0f;
         p->filter_type = FILTER_BANDPASS;
-        p->filter_cutoff = 1200.0f;
-        p->filter_resonance = 5.0f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.08f, 0.0f, 0.03f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.06f, 0.0f, 0.02f};
+        p->filter_cutoff = 1000.0f;
+        p->filter_resonance = 3.0f;  /* honky but not harsh */
+        p->filter_env_depth = 2000.0f;
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.15f, 0.0f, 0.06f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.04f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
     /* ── More Classic Synths ─────────────────────────────────────────── */
 
-    /* Preset 26: "CS-80 Brass" — Yamaha CS-80 polysynth brass (Blade Runner) */
+    /* Preset 26: "CS-80 Brass" — Blade Runner brass, cinematic and lush
+     * Slow attack (0.03s) for brass swell, filter env opens warmly,
+     * 5 unison for width, vibrato for expression */
     {
         sq_synth_preset_t *p = &engine->synth_presets[26];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "CS-80 Brass");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
-        p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.45f;
-        p->osc2_detune = 0.06f;
+        p->osc2_wave = WAVE_SAW;  /* both saws for Blade Runner character */
+        p->osc_mix = 0.5f;
+        p->osc2_detune = 0.08f;
         p->unison_voices = 5;
-        p->unison_detune = 14.0f;
+        p->unison_detune = 18.0f;  /* wider for cinematic feel */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1200.0f;
-        p->filter_resonance = 2.5f;
-        p->filter_env_depth = 5000.0f;
-        p->amp_env = (sq_adsr_params_t){0.02f, 0.2f, 0.65f, 0.4f};
-        p->filter_env = (sq_adsr_params_t){0.015f, 0.3f, 0.35f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.06f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 800.0f;  /* darker, filter env opens it */
+        p->filter_resonance = 1.5f;  /* smooth, not edgy */
+        p->filter_env_depth = 3500.0f;  /* moderate brass sweep */
+        p->amp_env = (sq_adsr_params_t){0.03f, 0.25f, 0.7f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.02f, 0.35f, 0.4f, 0.35f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.05f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 27: "MS-20 Growl" — Korg MS-20 aggressive bass/lead */
+    /* Preset 27: "MS-20 Growl" — Korg MS-20 aggressive growl
+     * HP filter with high resonance IS the MS-20 character,
+     * resonance 12 (not 15 = unstable), filter env creates the growl */
     {
         sq_synth_preset_t *p = &engine->synth_presets[27];
         memset(p, 0, sizeof(*p));
@@ -603,14 +663,16 @@ void synth_init_presets(sq_engine_t *engine)
         p->unison_voices = 1;
         p->filter_type = FILTER_HIGHPASS;
         p->filter_cutoff = 200.0f;
-        p->filter_resonance = 15.0f;  /* near self-oscillation */
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.3f, 0.6f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.002f, 0.2f, 0.1f, 0.1f};
-        p->lfo = (sq_lfo_t){WAVE_SQUARE, 8.0f, 0.05f, LFO_DEST_FILTER, 0.0};
+        p->filter_resonance = 12.0f;  /* MS-20 HP character, aggressive */
+        p->filter_env_depth = 2500.0f;
+        p->amp_env = (sq_adsr_params_t){0.005f, 0.4f, 0.6f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.25f, 0.15f, 0.12f};
+        p->lfo = (sq_lfo_t){WAVE_SQUARE, 6.0f, 0.04f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 28: "Poly-6 Keys" — Korg Polysix classic poly keys */
+    /* Preset 28: "Poly-6 Keys" — Korg Polysix keys, warm and intimate
+     * Single saw through chorus (3 unison), lower cutoff for warmth,
+     * moderate decay, sustain for held chords */
     {
         sq_synth_preset_t *p = &engine->synth_presets[28];
         memset(p, 0, sizeof(*p));
@@ -618,40 +680,44 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.0f;  /* single oscillator */
+        p->osc_mix = 0.0f;  /* single oscillator, Polysix style */
         p->unison_voices = 3;
-        p->unison_detune = 8.0f;
+        p->unison_detune = 10.0f;  /* chorus spread */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 3000.0f;
-        p->filter_resonance = 2.0f;
-        p->filter_env_depth = 1500.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.4f, 0.5f, 0.4f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.35f, 0.3f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.3f, 0.1f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 1800.0f;  /* warm, not bright */
+        p->filter_resonance = 1.5f;  /* gentle */
+        p->filter_env_depth = 1000.0f;
+        p->amp_env = (sq_adsr_params_t){0.005f, 0.5f, 0.55f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.4f, 0.3f, 0.35f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.25f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 29: "JP-8 Pad" — Roland Jupiter-8 lush evolving pad */
+    /* Preset 29: "JP-8 Pad" — Roland Jupiter-8 lush evolving pad
+     * Max unison (7) at 22 cents for massive width, saw+saw for richness,
+     * cutoff under 1000 for warmth, slow LFO filter movement */
     {
         sq_synth_preset_t *p = &engine->synth_presets[29];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "JP-8 Pad");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
-        p->osc2_wave = WAVE_TRIANGLE;
-        p->osc_mix = 0.35f;
-        p->osc2_detune = 0.07f;
+        p->osc2_wave = WAVE_SAW;  /* both saws for full spectrum */
+        p->osc_mix = 0.5f;
+        p->osc2_detune = 0.08f;
         p->unison_voices = 7;
-        p->unison_detune = 16.0f;
+        p->unison_detune = 22.0f;  /* wider for massive image */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1800.0f;
-        p->filter_resonance = 1.2f;
-        p->filter_env_depth = 1200.0f;
-        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.9f, 2.0f};
-        p->filter_env = (sq_adsr_params_t){0.8f, 1.0f, 0.5f, 1.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.15f, 0.2f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 900.0f;  /* warm, beauty is in the chorus */
+        p->filter_resonance = 0.8f;  /* no resonance, pure warmth */
+        p->filter_env_depth = 500.0f;  /* subtle brightness swell */
+        p->amp_env = (sq_adsr_params_t){1.5f, 0.5f, 0.9f, 2.5f};
+        p->filter_env = (sq_adsr_params_t){1.2f, 1.0f, 0.5f, 2.0f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.12f, 0.15f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 30: "Sub 37" — Moog Sub 37 mono lead */
+    /* Preset 30: "Sub 37" — Moog Sub 37 mono lead, fat and present
+     * Square+saw sub octave, moderate cutoff, filter env for bite,
+     * sustain 0.75 for held lead notes, subtle pitch vibrato */
     {
         sq_synth_preset_t *p = &engine->synth_presets[30];
         memset(p, 0, sizeof(*p));
@@ -663,11 +729,11 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc2_detune = -12.0f;  /* sub oscillator one octave down */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1000.0f;
-        p->filter_resonance = 3.5f;
-        p->filter_env_depth = 4500.0f;
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.2f, 0.7f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.18f, 0.4f, 0.12f};
+        p->filter_cutoff = 800.0f;  /* darker baseline */
+        p->filter_resonance = 2.5f;  /* reduced from 3.5 */
+        p->filter_env_depth = 3000.0f;  /* moderate attack bite */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.25f, 0.75f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.2f, 0.35f, 0.15f};
         p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 5.0f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
@@ -801,7 +867,9 @@ void synth_init_presets(sq_engine_t *engine)
 
     /* ── Wavetable Additions ──────────────────────────────────────── */
 
-    /* Preset 38: "WT Glass" — harmonics bank with fast env sweep */
+    /* Preset 38: "WT Glass" — crystalline glass tones with long ring
+     * Harmonics bank starting bright, env sweeps down to fundamental,
+     * long decay (2s) and release for natural glass resonance */
     {
         sq_synth_preset_t *p = &engine->synth_presets[38];
         memset(p, 0, sizeof(*p));
@@ -809,14 +877,16 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 1;  /* Harmonics */
         p->wt_position = 0.8f;
-        p->wt_env_depth = -0.7f;
-        p->wt_lfo_depth = 0.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 1.5f, 0.0f, 0.8f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.8f, 0.0f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->wt_env_depth = -0.6f;  /* sweeps from bright to dark */
+        p->wt_lfo_depth = 0.05f;  /* subtle shimmer */
+        p->amp_env = (sq_adsr_params_t){0.001f, 2.0f, 0.0f, 1.2f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 1.0f, 0.0f, 0.5f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 3.0f, 0.03f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 39: "WT Wobble" — analog bank with LFO wobble */
+    /* Preset 39: "WT Wobble" — dubstep/bass music wobble bass
+     * LFO on both wavetable position AND filter for dual-axis movement,
+     * high sustain so it wobbles as long as note is held */
     {
         sq_synth_preset_t *p = &engine->synth_presets[39];
         memset(p, 0, sizeof(*p));
@@ -825,15 +895,17 @@ void synth_init_presets(sq_engine_t *engine)
         p->wt_bank_index = 0;  /* Analog */
         p->wt_position = 0.2f;
         p->wt_env_depth = 0.0f;
-        p->wt_lfo_depth = 0.8f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.7f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.5f, 0.5f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 3.0f, 1.0f, LFO_DEST_FILTER, 0.0};
+        p->wt_lfo_depth = 0.7f;
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.8f, 0.3f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.3f, 0.5f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 2.0f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
     /* ── More Subtractive Classics ────────────────────────────────── */
 
-    /* Preset 40: "Sync Lead" — hard sync-like aggressive lead */
+    /* Preset 40: "Sync Lead" — hard-sync-like aggressive lead
+     * Osc2 at octave+fifth creates sync-like harmonics,
+     * resonance 2.5 (not 4.0), moderate env depth for attack edge */
     {
         sq_synth_preset_t *p = &engine->synth_presets[40];
         memset(p, 0, sizeof(*p));
@@ -845,15 +917,17 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc2_detune = 19.0f; /* octave + fifth */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2000.0f;
-        p->filter_resonance = 4.0f;
-        p->filter_env_depth = 5000.0f;
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.15f, 0.7f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.2f, 0.3f, 0.1f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_cutoff = 1200.0f;  /* moderate, env adds brightness */
+        p->filter_resonance = 2.5f;  /* present but not harsh */
+        p->filter_env_depth = 3500.0f;  /* reduced sweep */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.2f, 0.75f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.003f, 0.15f, 0.3f, 0.12f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 41: "Whistle" — pure sine lead with vibrato */
+    /* Preset 41: "Whistle" — pure sine lead with expressive vibrato
+     * Sine wave needs no filtering, vibrato depth 0.08 is musical,
+     * slow attack (0.08s) simulates breath onset */
     {
         sq_synth_preset_t *p = &engine->synth_presets[41];
         memset(p, 0, sizeof(*p));
@@ -864,15 +938,17 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc_mix = 0.0f;
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 20000.0f;  /* wide open */
+        p->filter_cutoff = 8000.0f;  /* open but not harsh */
         p->filter_resonance = 0.7f;
         p->filter_env_depth = 0.0f;
-        p->amp_env = (sq_adsr_params_t){0.05f, 0.1f, 0.9f, 0.2f};
+        p->amp_env = (sq_adsr_params_t){0.08f, 0.1f, 0.9f, 0.3f};
         p->filter_env = (sq_adsr_params_t){0.001f, 0.01f, 1.0f, 0.01f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.12f, LFO_DEST_PITCH, 0.0};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.08f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 42: "Tape Strings" — Mellotron-like slow strings */
+    /* Preset 42: "Tape Strings" — Mellotron-like lo-fi string ensemble
+     * Heavy detune (25 cents) simulates tape wow/flutter,
+     * lower cutoff for the muffled tape character, pitch wobble via LFO */
     {
         sq_synth_preset_t *p = &engine->synth_presets[42];
         memset(p, 0, sizeof(*p));
@@ -881,19 +957,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_TRIANGLE;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.03f;
+        p->osc2_detune = 0.05f;
         p->unison_voices = 5;
-        p->unison_detune = 22.0f;
+        p->unison_detune = 25.0f;  /* tape wow/flutter */
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2200.0f;
-        p->filter_resonance = 0.8f;
-        p->filter_env_depth = 400.0f;
-        p->amp_env = (sq_adsr_params_t){0.4f, 0.3f, 0.7f, 0.8f};
-        p->filter_env = (sq_adsr_params_t){0.3f, 0.4f, 0.4f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 4.0f, 0.03f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 1500.0f;  /* muffled tape character */
+        p->filter_resonance = 0.7f;  /* no resonance, tape is smooth */
+        p->filter_env_depth = 300.0f;  /* barely any movement */
+        p->amp_env = (sq_adsr_params_t){0.6f, 0.3f, 0.75f, 1.0f};
+        p->filter_env = (sq_adsr_params_t){0.4f, 0.4f, 0.5f, 0.6f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 3.5f, 0.04f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 43: "Detuned Saw" — wide saw stack for EDM */
+    /* Preset 43: "Detuned Saw" — massive EDM saw stack, wide and warm
+     * 7 voices at 25 cents, cutoff 2000 (not 5000 = harsh),
+     * useful for chords and drops, high sustain */
     {
         sq_synth_preset_t *p = &engine->synth_presets[43];
         memset(p, 0, sizeof(*p));
@@ -902,19 +980,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.2f;
+        p->osc2_detune = 0.15f;
         p->unison_voices = 7;
-        p->unison_detune = 30.0f;
+        p->unison_detune = 25.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 5000.0f;
-        p->filter_resonance = 1.0f;
-        p->filter_env_depth = 2000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.8f, 0.4f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.3f, 0.5f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_cutoff = 2000.0f;  /* warm, not harsh */
+        p->filter_resonance = 0.7f;  /* no resonance, pure width */
+        p->filter_env_depth = 1000.0f;
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.25f, 0.85f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.5f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.06f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 44: "Rezzy Pluck" — high-resonance filter pluck */
+    /* Preset 44: "Rezzy Pluck" — resonant pluck with character, not bleep
+     * Resonance at 4.0 (not 10.0 = painful), env depth 2500 (not 7000),
+     * decay 0.35s for body, 2 unison voices for width */
     {
         sq_synth_preset_t *p = &engine->synth_presets[44];
         memset(p, 0, sizeof(*p));
@@ -922,18 +1002,22 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.0f;
-        p->unison_voices = 1;
+        p->osc_mix = 0.3f;
+        p->osc2_detune = 0.06f;
+        p->unison_voices = 2;  /* stereo width */
+        p->unison_detune = 8.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 400.0f;
-        p->filter_resonance = 10.0f;
-        p->filter_env_depth = 7000.0f;
-        p->amp_env = (sq_adsr_params_t){0.001f, 0.2f, 0.0f, 0.02f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.12f, 0.0f, 0.01f};
+        p->filter_cutoff = 350.0f;
+        p->filter_resonance = 4.0f;  /* character but not painful */
+        p->filter_env_depth = 2500.0f;  /* moderate sweep */
+        p->amp_env = (sq_adsr_params_t){0.001f, 0.35f, 0.0f, 0.1f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.2f, 0.0f, 0.06f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 45: "Soft Keys" — warm electric piano feel */
+    /* Preset 45: "Soft Keys" — warm mellow keys, Fender Rhodes feel
+     * Triangle+sine for soft character, lower cutoff (2500) for warmth,
+     * tremolo LFO for vintage character, good sustain for chords */
     {
         sq_synth_preset_t *p = &engine->synth_presets[45];
         memset(p, 0, sizeof(*p));
@@ -942,38 +1026,44 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_TRIANGLE;
         p->osc2_wave = WAVE_SINE;
         p->osc_mix = 0.4f;
-        p->osc2_detune = 0.0f;
+        p->osc2_detune = 0.03f;  /* tiny detune for life */
         p->unison_voices = 3;
-        p->unison_detune = 5.0f;
+        p->unison_detune = 6.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 4000.0f;
-        p->filter_resonance = 1.0f;
-        p->filter_env_depth = 1000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.5f, 0.4f, 0.5f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.4f, 0.2f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 4.0f, 0.02f, LFO_DEST_AMP, 0.0};
+        p->filter_cutoff = 2500.0f;  /* warm but still defined */
+        p->filter_resonance = 0.8f;
+        p->filter_env_depth = 800.0f;
+        p->amp_env = (sq_adsr_params_t){0.008f, 0.6f, 0.45f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.005f, 0.4f, 0.25f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 4.0f, 0.03f, LFO_DEST_AMP, 0.0};
     }
 
-    /* Preset 46: "Sub Bass" — deep sub-bass sine */
+    /* Preset 46: "Sub Bass" — 808-style deep sub, weight and presence
+     * Pure sine for sub-frequency weight, minimal harmonics,
+     * LONG decay (2s) — the weight comes from sustaining low frequencies,
+     * filter env click on attack for transient definition */
     {
         sq_synth_preset_t *p = &engine->synth_presets[46];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Sub Bass");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SINE;
-        p->osc2_wave = WAVE_SINE;
-        p->osc_mix = 0.0f;
+        p->osc2_wave = WAVE_TRIANGLE;  /* slight harmonics for definition */
+        p->osc_mix = 0.1f;  /* mostly sine, touch of triangle */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 200.0f;
-        p->filter_resonance = 1.0f;
-        p->filter_env_depth = 200.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.3f, 0.8f, 0.2f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.2f, 0.5f, 0.1f};
+        p->filter_cutoff = 180.0f;  /* very dark, sub-only */
+        p->filter_resonance = 0.8f;  /* no resonance, clean sub */
+        p->filter_env_depth = 600.0f;  /* slight click on attack */
+        p->amp_env = (sq_adsr_params_t){0.003f, 2.0f, 0.0f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.05f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 47: "Reso Sweep" — filter resonance sweep pad */
+    /* Preset 47: "Reso Sweep" — slow filter sweep pad, dramatic
+     * Resonance at 5.0 (reduced from 8.0) for musicality,
+     * very slow filter env attack (3s) creates cinematic sweep,
+     * 5 unison for width to support the resonant peak */
     {
         sq_synth_preset_t *p = &engine->synth_presets[47];
         memset(p, 0, sizeof(*p));
@@ -983,15 +1073,15 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
         p->osc2_detune = 0.08f;
-        p->unison_voices = 3;
-        p->unison_detune = 10.0f;
+        p->unison_voices = 5;  /* more width to support the sweep */
+        p->unison_detune = 15.0f;
         p->filter_type = FILTER_LOWPASS;
         p->filter_cutoff = 200.0f;
-        p->filter_resonance = 8.0f;
-        p->filter_env_depth = 6000.0f;
-        p->amp_env = (sq_adsr_params_t){0.5f, 0.5f, 0.8f, 1.0f};
-        p->filter_env = (sq_adsr_params_t){2.0f, 1.0f, 0.3f, 1.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_resonance = 5.0f;  /* dramatic but not painful */
+        p->filter_env_depth = 4000.0f;  /* wide sweep range */
+        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){3.0f, 1.0f, 0.3f, 2.0f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.1f, 0.08f, LFO_DEST_FILTER, 0.0};
     }
 
     /* Preset 48: "DX Sitar" — FM sitar/twang */
@@ -1012,7 +1102,9 @@ void synth_init_presets(sq_engine_t *engine)
             {0.001f, 0.15f, 0.0f, 0.08f}};
     }
 
-    /* Preset 49: "WT Choir" — formant bank with slow LFO */
+    /* Preset 49: "WT Choir" — ethereal choir pad, slow and wide
+     * Formant bank with slow LFO sweeping vowel positions,
+     * long attack (1.2s) for choir swell, high sustain */
     {
         sq_synth_preset_t *p = &engine->synth_presets[49];
         memset(p, 0, sizeof(*p));
@@ -1020,75 +1112,85 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_WAVETABLE;
         p->wt_bank_index = 3;  /* Formant */
         p->wt_position = 0.2f;
-        p->wt_env_depth = 0.0f;
-        p->wt_lfo_depth = 0.4f;
-        p->amp_env = (sq_adsr_params_t){0.8f, 0.5f, 0.85f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.5f, 0.5f, 0.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.2f, 1.0f, LFO_DEST_FILTER, 0.0};
+        p->wt_env_depth = 0.1f;  /* subtle env sweep */
+        p->wt_lfo_depth = 0.35f;
+        p->amp_env = (sq_adsr_params_t){1.2f, 0.5f, 0.85f, 2.0f};
+        p->filter_env = (sq_adsr_params_t){0.8f, 0.5f, 0.5f, 1.0f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.15f, 0.8f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 50: "Trap 808" — deep sub bass with pitch envelope, long decay */
+    /* Preset 50: "Trap 808" — MASSIVE sustaining 808 boom
+     * Pure sine for low-end weight, triangle adds slight definition,
+     * LONG decay (3s) is essential — 808 weight = long sustain time,
+     * filter click on attack for transient punch, then pure sub */
     {
         sq_synth_preset_t *p = &engine->synth_presets[50];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Trap 808");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SINE;
-        p->osc2_wave = WAVE_SINE;
-        p->osc_mix = 0.0f;
+        p->osc2_wave = WAVE_TRIANGLE;
+        p->osc_mix = 0.12f;  /* mostly sine, hint of triangle */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 120.0f;
-        p->filter_resonance = 1.5f;
-        p->filter_env_depth = 400.0f;
-        p->amp_env = (sq_adsr_params_t){0.002f, 1.5f, 0.0f, 0.8f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.6f, 0.0f, 0.3f};
+        p->filter_cutoff = 150.0f;  /* very low, sub territory */
+        p->filter_resonance = 0.7f;  /* clean, no resonance */
+        p->filter_env_depth = 800.0f;  /* attack click, not brightness */
+        p->amp_env = (sq_adsr_params_t){0.001f, 3.0f, 0.0f, 1.5f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 51: "Trap Lead" — detuned saw lead with filter sweep */
+    /* Preset 51: "Trap Lead" — dark menacing trap melody lead
+     * Detuned for width, dark filter with slow LFO movement,
+     * high sustain (0.75) for held melodic lines */
     {
         sq_synth_preset_t *p = &engine->synth_presets[51];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Trap Lead");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
-        p->osc2_wave = WAVE_SAW;
-        p->osc_mix = 0.5f;
-        p->osc2_detune = 0.15f;
+        p->osc2_wave = WAVE_SQUARE;  /* saw+square for more character */
+        p->osc_mix = 0.45f;
+        p->osc2_detune = 0.1f;
         p->unison_voices = 3;
         p->unison_detune = 12.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 600.0f;
-        p->filter_resonance = 4.0f;
-        p->filter_env_depth = 5000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.6f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.8f, 0.2f, 0.3f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_cutoff = 500.0f;  /* dark and menacing */
+        p->filter_resonance = 1.8f;
+        p->filter_env_depth = 2000.0f;
+        p->amp_env = (sq_adsr_params_t){0.015f, 0.4f, 0.75f, 0.5f};
+        p->filter_env = (sq_adsr_params_t){0.01f, 0.8f, 0.3f, 0.4f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.15f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 52: "Dark Pad" — minor chord pad, slow attack, chorus-like */
+    /* Preset 52: "Dark Pad" — Stranger Things-style ominous atmosphere
+     * Square+saw for hollow darkness, cutoff under 500Hz,
+     * max unison for massive width, slow LFO = ominous movement,
+     * very slow attack (2s) and release (3.5s) for cinematic swells */
     {
         sq_synth_preset_t *p = &engine->synth_presets[52];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Dark Pad");
         p->synth_mode = SYNTH_SUBTRACTIVE;
-        p->osc1_wave = WAVE_SAW;
-        p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.4f;
-        p->osc2_detune = 0.07f;
-        p->unison_voices = 5;
-        p->unison_detune = 15.0f;
+        p->osc1_wave = WAVE_SQUARE;  /* hollow, ominous character */
+        p->osc2_wave = WAVE_SAW;
+        p->osc_mix = 0.45f;
+        p->osc2_detune = 0.08f;
+        p->unison_voices = 7;
+        p->unison_detune = 22.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 1200.0f;
-        p->filter_resonance = 2.0f;
-        p->filter_env_depth = 800.0f;
-        p->amp_env = (sq_adsr_params_t){1.0f, 0.5f, 0.85f, 2.0f};
-        p->filter_env = (sq_adsr_params_t){0.8f, 0.5f, 0.6f, 1.5f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.5f, 0.3f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 450.0f;  /* very dark, ominous */
+        p->filter_resonance = 1.0f;
+        p->filter_env_depth = 400.0f;  /* barely opens */
+        p->amp_env = (sq_adsr_params_t){2.0f, 0.8f, 0.85f, 3.5f};
+        p->filter_env = (sq_adsr_params_t){2.5f, 1.0f, 0.4f, 3.0f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.15f, 0.12f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 53: "Dark Arp" — short plucky arp sound, filter envelope */
+    /* Preset 53: "Dark Arp" — sinister pluck for arpeggios, body not bleep
+     * KEY anti-bleep rules: decay 0.45s, resonance 1.5, env depth 1800,
+     * 2 unison voices for stereo body */
     {
         sq_synth_preset_t *p = &engine->synth_presets[53];
         memset(p, 0, sizeof(*p));
@@ -1096,19 +1198,22 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.3f;
-        p->osc2_detune = 0.0f;
-        p->unison_voices = 1;
+        p->osc_mix = 0.4f;
+        p->osc2_detune = 0.04f;
+        p->unison_voices = 3;  /* wider for arp shimmer */
+        p->unison_detune = 10.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 400.0f;
-        p->filter_resonance = 5.0f;
-        p->filter_env_depth = 4000.0f;
-        p->amp_env = (sq_adsr_params_t){0.002f, 0.15f, 0.0f, 0.05f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.2f, 0.0f, 0.05f};
+        p->filter_cutoff = 350.0f;  /* dark baseline */
+        p->filter_resonance = 1.5f;  /* under 2.0: body not bleep */
+        p->filter_env_depth = 1800.0f;  /* moderate, not extreme */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.45f, 0.0f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.35f, 0.0f, 0.15f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 54: "Dark Bass" — growly bass, saw + square, low cutoff */
+    /* Preset 54: "Dark Bass" — menacing growling darkwave bass
+     * Saw+square for harmonic richness, low cutoff (300Hz),
+     * LFO on filter for subtle growl, sustain 0.6 for held notes */
     {
         sq_synth_preset_t *p = &engine->synth_presets[54];
         memset(p, 0, sizeof(*p));
@@ -1117,19 +1222,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
         p->osc_mix = 0.5f;
-        p->osc2_detune = -0.02f;
+        p->osc2_detune = -0.06f;  /* slight detune down for weight */
         p->unison_voices = 2;
         p->unison_detune = 5.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 350.0f;
-        p->filter_resonance = 4.0f;
-        p->filter_env_depth = 2000.0f;
-        p->amp_env = (sq_adsr_params_t){0.005f, 0.3f, 0.5f, 0.15f};
-        p->filter_env = (sq_adsr_params_t){0.005f, 0.25f, 0.3f, 0.1f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
+        p->filter_cutoff = 300.0f;  /* dark, in 200-600Hz bass range */
+        p->filter_resonance = 2.0f;  /* slight edge */
+        p->filter_env_depth = 1200.0f;  /* moderate attack punch */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.5f, 0.6f, 0.2f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.25f, 0.2f, 0.12f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 0.3f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 55: "Synth Pad" — warm sawtooth pad, unison, slow attack */
+    /* Preset 55: "Synth Pad" — lush warm synthwave pad
+     * Max unison (7) at 20 cents, cutoff 1000Hz for warmth,
+     * NO resonance (pure Juno-like warmth), slow LFO filter movement */
     {
         sq_synth_preset_t *p = &engine->synth_presets[55];
         memset(p, 0, sizeof(*p));
@@ -1138,19 +1245,21 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.06f;
-        p->unison_voices = 5;
-        p->unison_detune = 18.0f;
+        p->osc2_detune = 0.08f;
+        p->unison_voices = 7;
+        p->unison_detune = 20.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 2500.0f;
-        p->filter_resonance = 1.5f;
-        p->filter_env_depth = 1000.0f;
-        p->amp_env = (sq_adsr_params_t){0.8f, 0.4f, 0.9f, 1.5f};
-        p->filter_env = (sq_adsr_params_t){0.6f, 0.5f, 0.7f, 1.0f};
-        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.3f, 0.2f, LFO_DEST_FILTER, 0.0};
+        p->filter_cutoff = 1000.0f;  /* warm, not bright */
+        p->filter_resonance = 0.7f;  /* no resonance */
+        p->filter_env_depth = 400.0f;  /* barely opens */
+        p->amp_env = (sq_adsr_params_t){1.2f, 0.5f, 0.9f, 2.5f};
+        p->filter_env = (sq_adsr_params_t){1.5f, 0.8f, 0.7f, 2.0f};
+        p->lfo = (sq_lfo_t){WAVE_TRIANGLE, 0.12f, 0.1f, LFO_DEST_FILTER, 0.0};
     }
 
-    /* Preset 56: "Synth Lead" — bright lead, saw wave, moderate filter */
+    /* Preset 56: "Synth Lead" — expressive synthwave lead
+     * Saw+square for rich harmonics, moderate filter for presence,
+     * sustain 0.8 for held melody lines, subtle vibrato for expression */
     {
         sq_synth_preset_t *p = &engine->synth_presets[56];
         memset(p, 0, sizeof(*p));
@@ -1158,20 +1267,22 @@ void synth_init_presets(sq_engine_t *engine)
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.35f;
-        p->osc2_detune = 0.1f;
+        p->osc_mix = 0.4f;
+        p->osc2_detune = 0.08f;
         p->unison_voices = 3;
-        p->unison_detune = 8.0f;
+        p->unison_detune = 10.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 3000.0f;
-        p->filter_resonance = 2.5f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.01f, 0.15f, 0.7f, 0.3f};
-        p->filter_env = (sq_adsr_params_t){0.01f, 0.3f, 0.4f, 0.2f};
-        p->lfo = (sq_lfo_t){WAVE_SINE, 5.5f, 0.08f, LFO_DEST_PITCH, 0.0};
+        p->filter_cutoff = 1400.0f;  /* moderate, cuts through mix */
+        p->filter_resonance = 1.5f;
+        p->filter_env_depth = 1800.0f;  /* attack bite */
+        p->amp_env = (sq_adsr_params_t){0.01f, 0.2f, 0.8f, 0.4f};
+        p->filter_env = (sq_adsr_params_t){0.008f, 0.4f, 0.45f, 0.3f};
+        p->lfo = (sq_lfo_t){WAVE_SINE, 5.0f, 0.05f, LFO_DEST_PITCH, 0.0};
     }
 
-    /* Preset 57: "Synth Bass" — thick bass, saw + saw detuned, punchy */
+    /* Preset 57: "Synth Bass" — fat synthwave bass, punchy and warm
+     * Two saws slightly detuned down, cutoff 350Hz for warmth,
+     * filter env gives attack definition, longer decay (0.5s) */
     {
         sq_synth_preset_t *p = &engine->synth_presets[57];
         memset(p, 0, sizeof(*p));
@@ -1180,35 +1291,39 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc1_wave = WAVE_SAW;
         p->osc2_wave = WAVE_SAW;
         p->osc_mix = 0.5f;
-        p->osc2_detune = 0.08f;
+        p->osc2_detune = -0.08f;
         p->unison_voices = 2;
-        p->unison_detune = 6.0f;
+        p->unison_detune = 4.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 600.0f;
-        p->filter_resonance = 3.0f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.003f, 0.25f, 0.3f, 0.1f};
-        p->filter_env = (sq_adsr_params_t){0.003f, 0.2f, 0.2f, 0.08f};
+        p->filter_cutoff = 350.0f;  /* dark and warm */
+        p->filter_resonance = 1.8f;
+        p->filter_env_depth = 1500.0f;  /* attack punch */
+        p->amp_env = (sq_adsr_params_t){0.002f, 0.5f, 0.45f, 0.15f};
+        p->filter_env = (sq_adsr_params_t){0.001f, 0.2f, 0.12f, 0.1f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
-    /* Preset 58: "Retro Arp" — short bright arp, triangle wave, fast decay */
+    /* Preset 58: "Retro Arp" — warm 80s arpeggio pluck, body not bleep
+     * Triangle+saw for softer attack, cutoff 1200 (not too bright),
+     * decay 0.4s gives ring and body, resonance 1.0 = warm not harsh,
+     * 3 unison voices for retro chorus width */
     {
         sq_synth_preset_t *p = &engine->synth_presets[58];
         memset(p, 0, sizeof(*p));
         snprintf(p->name, sizeof(p->name), "%s", "Retro Arp");
         p->synth_mode = SYNTH_SUBTRACTIVE;
         p->osc1_wave = WAVE_TRIANGLE;
-        p->osc2_wave = WAVE_SQUARE;
-        p->osc_mix = 0.25f;
-        p->osc2_detune = 0.0f;
-        p->unison_voices = 1;
+        p->osc2_wave = WAVE_SAW;
+        p->osc_mix = 0.35f;
+        p->osc2_detune = 0.06f;
+        p->unison_voices = 3;  /* more chorus for retro feel */
+        p->unison_detune = 12.0f;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 4000.0f;
-        p->filter_resonance = 2.0f;
-        p->filter_env_depth = 3000.0f;
-        p->amp_env = (sq_adsr_params_t){0.002f, 0.12f, 0.0f, 0.04f};
-        p->filter_env = (sq_adsr_params_t){0.001f, 0.15f, 0.0f, 0.04f};
+        p->filter_cutoff = 1200.0f;  /* warm, not harsh */
+        p->filter_resonance = 1.0f;  /* smooth */
+        p->filter_env_depth = 1200.0f;  /* moderate sweep */
+        p->amp_env = (sq_adsr_params_t){0.003f, 0.4f, 0.0f, 0.18f};
+        p->filter_env = (sq_adsr_params_t){0.002f, 0.3f, 0.0f, 0.12f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
     }
 
