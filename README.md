@@ -8,6 +8,16 @@
 
 A standalone drum machine, step sequencer, and synthesizer — also available as a VST3/CLAP plugin and a GTK 4.0 native Linux frontend. 72 bundled drum samples, 50 synth presets, pattern-based arrangement, and offline WAV/MP3 export. All dependencies vendored, zero external runtime dependencies.
 
+## Downloads
+
+Pre-built binaries are available on the [Releases](https://github.com/averagenative/0x808/releases) page:
+
+| Platform | Files |
+|----------|-------|
+| **Windows** | Installer (`.exe`) or portable zip (standalone + VST3 + CLAP) |
+| **Linux** | Tarball (ImGui + GTK + plugins) or AppImage |
+| **macOS** | DMG (standalone .app) or zip (standalone + VST3 + CLAP) |
+
 ## Screenshots
 
 ### GTK 4.0 Frontend (Vaporwave Theme)
@@ -39,11 +49,11 @@ A standalone drum machine, step sequencer, and synthesizer — also available as
 
 | Frontend | Binary | Platform | Notes |
 |----------|--------|----------|-------|
-| **ImGui Standalone** | `0x808` / `0x808.exe` | Linux, Windows | SDL2 + OpenGL + Dear ImGui |
+| **ImGui Standalone** | `0x808` / `0x808.exe` | Linux, macOS, Windows | SDL2 + OpenGL + Dear ImGui |
 | **GTK 4.0** | `0x808_gtk` | Linux | Native GTK widgets + Cairo rendering |
-| **VST3 Plugin** | `0x808.vst3` | Linux, Windows | Embeds in DAW host window |
-| **CLAP Plugin** | `0x808.clap` | Linux, Windows | Embeds in DAW host window |
-| **CLI** | `0x808_cli` | Linux, Windows | Terminal-only audio engine |
+| **VST3 Plugin** | `0x808.vst3` | Linux, macOS, Windows | Embeds in DAW host window |
+| **CLAP Plugin** | `0x808.clap` | Linux, macOS, Windows | Embeds in DAW host window |
+| **CLI** | `0x808_cli` | Linux, macOS, Windows | Terminal-only audio engine |
 
 All GUI frontends share the `sq_app` controller library (C99) for keyboard shortcuts, panel state, playhead, and undo coordination. See `docs/FRONTEND_FEATURES.md` for the full feature parity specification.
 
@@ -280,6 +290,7 @@ The engine (Layer 1) has zero knowledge of GUI or audio drivers. The app control
 | [dr_wav/dr_mp3/dr_flac](https://github.com/mackron/dr_libs) | Public Domain | Audio file decoding |
 | [TinySoundFont](https://github.com/schellingb/TinySoundFont) | MIT | SoundFont2 synthesis |
 | [cJSON](https://github.com/DaveGamble/cJSON) | MIT | JSON parsing for project files |
+| [RtMidi](https://github.com/thestk/rtmidi) | MIT | Cross-platform MIDI I/O |
 | [Shine](https://github.com/toots/shine) | LGPL-2 | Fixed-point MP3 encoder (opt-in) |
 
 ## MP3 Export (Optional)

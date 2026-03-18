@@ -733,6 +733,22 @@ int project_load(sq_engine_t *engine, const char *filepath)
                         }
                     }
                 }
+#ifdef __APPLE__
+                /* 3. macOS .app bundle: try Contents/Resources/ */
+                if (!loaded && engine->base_dir[0]) {
+                    char full[1024];
+                    snprintf(full, sizeof(full), "%s../Resources/%s",
+                             engine->base_dir, sp->valuestring);
+                    char resolved[1024];
+                    const char *try_path = (realpath(full, resolved)) ? resolved : full;
+                    if (sample_io_load(try_path, &engine->samples[idx]) == 0) {
+                        engine->num_samples++;
+                        loaded = true;
+                        LOG_INFO("Loaded sample [%d]: %s (bundle)", idx,
+                                 engine->samples[idx].name);
+                    }
+                }
+#endif
                 if (!loaded) {
                     LOG_WARN("Could not load sample: %s", sp->valuestring);
                     /* Add placeholder with name */

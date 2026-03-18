@@ -10,6 +10,7 @@
 #include "formats/sample_io.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>  /* realpath */
 
 #define LOG_TAG "kits"
 #include "core/log.h"
@@ -156,11 +157,15 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
         }
 
 #ifdef __APPLE__
-        /* macOS .app bundle: try Contents/Resources/ relative to exe dir */
+        /* macOS .app bundle: try Contents/Resources/ relative to exe dir.
+         * Resolve with realpath() so the stored filepath has no ".."
+         * components — otherwise path_is_safe() rejects it on reload. */
         if (base_dir && base_dir[0]) {
             snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
                      base_dir, kit->paths[i]);
-            if (sample_io_load(full_path, &engine->samples[i]) == 0) {
+            char resolved[1024];
+            if (realpath(full_path, resolved) &&
+                sample_io_load(resolved, &engine->samples[i]) == 0) {
                 loaded++;
                 LOG_INFO("  [%d] %s (bundle)", i, engine->samples[i].name);
                 continue;

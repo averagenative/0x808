@@ -489,14 +489,20 @@ int main(int argc, char *argv[])
             }
         }
 #ifdef __APPLE__
-        /* macOS .app bundle: samples are in Contents/Resources/ */
+        /* macOS .app bundle: samples are in Contents/Resources/.
+         * Resolve with realpath() so stored filepaths have no ".."
+         * components — otherwise path_is_safe() rejects them on reload. */
         if (g_engine.num_samples == 0 && base_dir[0]) {
             LOG_INFO("Trying macOS .app bundle Resources directory...");
             for (int i = 0; kit_808[i]; i++) {
                 char full_path[1024];
                 snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
                          base_dir, kit_808[i]);
-                load_sample(full_path);
+                char resolved[1024];
+                if (realpath(full_path, resolved))
+                    load_sample(resolved);
+                else
+                    load_sample(full_path);
             }
         }
 #endif
