@@ -428,6 +428,29 @@ extern "C" void sample_browser_draw(sq_engine_t *engine,
             }
         }
 
+        /* Draw slice markers if the selected track has sample_start set */
+        /* Simple onset detection preview: draw vertical lines at energy peaks */
+        if (nframes > 512 && pw > 0) {
+            uint32_t win = 512;
+            float prev_rms = 0.0f;
+            float slice_thresh = 0.01f;
+            for (uint32_t f = 0; f + win < nframes; f += win) {
+                float sum = 0.0f;
+                for (uint32_t i = f; i < f + win; i++) {
+                    float v = sdata[i * nch];
+                    sum += v * v;
+                }
+                float rms = sum / (float)win;
+                if (rms > slice_thresh && prev_rms < slice_thresh * 0.3f && f > 0) {
+                    float sx = wf_pos.x + ((float)f / (float)nframes) * wf_w;
+                    dl->AddLine(ImVec2(sx, wf_pos.y),
+                                ImVec2(sx, wf_pos.y + wf_h),
+                                IM_COL32(255, 100, 50, 150), 1.0f);
+                }
+                prev_rms = rms;
+            }
+        }
+
         /* Advance cursor past the waveform rect */
         ImGui::Dummy(ImVec2(wf_w, wf_h));
 

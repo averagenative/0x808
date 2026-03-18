@@ -352,7 +352,7 @@ static void setup_plugin_demo_pattern(sq_engine_t *engine)
 
     /* ── 808 sub bass: ONE deep note sustaining the whole bar ── */
     if (synth_bass < p->num_tracks) {
-        p->tracks[synth_bass].steps[0].note = 12;      /* C0 */
+        p->tracks[synth_bass].steps[0].note = 24;      /* C1 */
         p->tracks[synth_bass].steps[0].velocity = 127;
         p->tracks[synth_bass].steps[0].length = 14.0f;  /* sustains 14 steps */
         /* Tape saturation for analog warmth */

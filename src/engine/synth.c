@@ -1133,9 +1133,9 @@ void synth_init_presets(sq_engine_t *engine)
         p->osc_mix = 0.12f;  /* mostly sine, hint of triangle */
         p->unison_voices = 1;
         p->filter_type = FILTER_LOWPASS;
-        p->filter_cutoff = 150.0f;  /* very low, sub territory */
-        p->filter_resonance = 0.7f;  /* clean, no resonance */
-        p->filter_env_depth = 800.0f;  /* attack click, not brightness */
+        p->filter_cutoff = 300.0f;  /* low but audible on consumer speakers */
+        p->filter_resonance = 1.2f;  /* slight warmth */
+        p->filter_env_depth = 1200.0f;  /* punchy attack click */
         p->amp_env = (sq_adsr_params_t){0.001f, 3.0f, 0.0f, 1.5f};
         p->filter_env = (sq_adsr_params_t){0.001f, 0.1f, 0.0f, 0.3f};
         p->lfo = (sq_lfo_t){WAVE_SINE, 0.0f, 0.0f, LFO_DEST_NONE, 0.0};
@@ -1495,6 +1495,8 @@ int synth_trigger(sq_engine_t *engine, int preset_index,
 
     /* Initialize smoothed filter cutoff to preset value */
     v->smoothed_cutoff = p->filter_cutoff;
+    v->plock_cutoff = 0.0f;
+    v->plock_resonance = 0.0f;
 
     /* Initialize unison phases — spread starting phases for width */
     int uv = p->unison_voices;
@@ -2007,14 +2009,18 @@ void synth_render(sq_engine_t *engine, float *output, uint32_t num_frames)
             /* Update filter coefficients every 32 samples with smoothing */
             if (++filter_update_counter >= 32) {
                 filter_update_counter = 0;
-                float target_cutoff = p->filter_cutoff
+                float base_cutoff = (v->plock_cutoff > 0.0f)
+                                   ? v->plock_cutoff : p->filter_cutoff;
+                float base_reso   = (v->plock_resonance > 0.0f)
+                                   ? v->plock_resonance : p->filter_resonance;
+                float target_cutoff = base_cutoff
                                     + filt_env * p->filter_env_depth;
                 if (lfo_filter) target_cutoff += lfo_val * 2000.0f;
 
                 /* Smooth the cutoff to prevent clicks (TASK-043) */
                 v->smoothed_cutoff = smooth_param(v->smoothed_cutoff,
                                                    target_cutoff, smooth_coeff * 32.0f);
-                filter_calc_coeffs(&fc, v->smoothed_cutoff, p->filter_resonance,
+                filter_calc_coeffs(&fc, v->smoothed_cutoff, base_reso,
                                    engine->sample_rate);
             }
 

@@ -53,6 +53,7 @@ typedef enum {
     SQ_ACTION_SAVE,
     SQ_ACTION_LOAD,
     SQ_ACTION_TOGGLE_THEME,
+    SQ_ACTION_TAP_TEMPO,
 } sq_app_action_t;
 
 /* ─── Panel identifiers ──────────────────────────────────────────────────── */
@@ -125,6 +126,13 @@ typedef struct {
     char  midi_device_name[SQ_DEVICE_NAME_LEN];
     int   midi_port_index;  /* -1 = none */
 
+    /* Tap tempo state */
+    uint64_t tap_times[4];  /* last 4 tap timestamps (microseconds) */
+    int      tap_count;     /* how many taps in current sequence */
+
+    /* UI preferences */
+    bool     show_tooltips; /* show hover tooltips (default: true) */
+
 } sq_app_t;
 
 /* ─── Public API ──────────────────────────────────────────────────────────── */
@@ -168,6 +176,13 @@ void sq_app_set_status(sq_app_t *app, const char *msg, uint32_t frames);
  * Tick the status timer (call once per frame). Clears message when expired.
  */
 void sq_app_update_status(sq_app_t *app);
+
+/*
+ * Tap tempo: call on each tap. Computes BPM from inter-tap timing.
+ * now_us: current time in microseconds (e.g., from SDL_GetPerformanceCounter).
+ * Returns the computed BPM, or 0 if not enough taps yet.
+ */
+double sq_app_tap_tempo(sq_app_t *app, uint64_t now_us);
 
 /*
  * Get the synth preset index to use for keyboard/piano playback.

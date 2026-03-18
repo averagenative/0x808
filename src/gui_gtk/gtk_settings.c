@@ -159,6 +159,15 @@ static void on_midi_device_changed(GObject *obj, GParamSpec *pspec, gpointer use
     }
 }
 
+static void on_midi_mode_changed(GObject *obj, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec; (void)user_data;
+    sq_midi_t *m = (sq_midi_t *)g_gtk.midi;
+    if (!m) return;
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(obj));
+    sq_midi_set_input_mode(m, (sq_midi_input_mode_t)sel);
+}
+
 GtkWidget *gtk_settings_new(void)
 {
     refresh_devices();
@@ -242,6 +251,21 @@ GtkWidget *gtk_settings_new(void)
                          G_CALLBACK(on_midi_device_changed), NULL);
 
         gtk_box_append(GTK_BOX(box), s_midi_dropdown);
+
+        /* MIDI Input Mode dropdown */
+        GtkStringList *mode_model = gtk_string_list_new(NULL);
+        gtk_string_list_append(mode_model, "Synth (keyboard)");
+        gtk_string_list_append(mode_model, "Drum Pads (GM map)");
+        GtkWidget *mode_dropdown = gtk_drop_down_new(G_LIST_MODEL(mode_model), NULL);
+        g_object_unref(mode_model);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(mode_dropdown),
+                                   (guint)sq_midi_get_input_mode(midi));
+        g_signal_connect(mode_dropdown, "notify::selected",
+                         G_CALLBACK(on_midi_mode_changed), NULL);
+        GtkWidget *mode_label = gtk_label_new("Input Mode:");
+        gtk_widget_set_halign(mode_label, GTK_ALIGN_START);
+        gtk_box_append(GTK_BOX(box), mode_label);
+        gtk_box_append(GTK_BOX(box), mode_dropdown);
 
         gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
     }

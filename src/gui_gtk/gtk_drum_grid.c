@@ -9,6 +9,7 @@
 #include "gtk_gui.h"
 #include "gui/undo.h"
 #include "engine/kits.h"
+#include "engine/sequencer.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -307,6 +308,52 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
         cairo_rectangle(cr, vol_x, vol_y, vol_w * track->volume, vol_h);
         cairo_fill(cr);
 
+        /* Choke group indicator */
+        if (track->choke_group > 0) {
+            char chk[4];
+            snprintf(chk, sizeof(chk), "C%d", track->choke_group);
+            cairo_set_font_size(cr, 8.0);
+            cairo_set_source_rgba(cr, 0.9, 0.7, 0.2, 0.9);
+            cairo_move_to(cr, vol_x, vol_y + vol_h + 9);
+            cairo_show_text(cr, chk);
+        }
+
+        /* Track length + Rnd/Euc/Rev buttons row */
+        {
+            double row3_y = ty + 27;
+            cairo_set_font_size(cr, 7.5);
+
+            /* Track length */
+            char len_str[8];
+            snprintf(len_str, sizeof(len_str), "L:%d", (int)track->length);
+            cairo_set_source_rgba(cr, 0.6, 0.8, 0.6, 0.9);
+            cairo_move_to(cr, 4, row3_y + 8);
+            cairo_show_text(cr, len_str);
+
+            /* Rnd button */
+            cairo_set_source_rgba(cr, 0.3, 0.3, 0.35, 0.8);
+            cairo_rectangle(cr, 30, row3_y, 20, 10);
+            cairo_fill(cr);
+            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.9);
+            cairo_move_to(cr, 32, row3_y + 8);
+            cairo_show_text(cr, "Rnd");
+
+            /* Euc button */
+            cairo_set_source_rgba(cr, 0.3, 0.3, 0.35, 0.8);
+            cairo_rectangle(cr, 52, row3_y, 20, 10);
+            cairo_fill(cr);
+            cairo_set_source_rgba(cr, 0.8, 0.8, 0.8, 0.9);
+            cairo_move_to(cr, 54, row3_y + 8);
+            cairo_show_text(cr, "Euc");
+
+            /* Rev indicator for sampler tracks */
+            if (track->type == TRACK_SAMPLER && track->sample_reverse) {
+                cairo_set_source_rgba(cr, 1.0, 0.6, 0.2, 0.9);
+                cairo_move_to(cr, 74, row3_y + 8);
+                cairo_show_text(cr, "<Rev");
+            }
+        }
+
         /* ── Step cells ───────────────────────────────────────────── */
         for (uint32_t s = 0; s < track->length; s++) {
             double sx = g.grid_x + s * g.cell_w + CELL_PAD;
@@ -362,6 +409,17 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
                     snprintf(pstr, sizeof(pstr), "%+d", pitch);
                     cairo_move_to(cr, sx + sw - 16, sy + 9);
                     cairo_show_text(cr, pstr);
+                }
+
+                /* Probability indicator */
+                uint8_t prob = track->steps[s].probability;
+                if (prob > 0 && prob < 100 && sw > 16) {
+                    cairo_set_source_rgba(cr, 1.0, 0.8, 0.2, 0.7);
+                    cairo_set_font_size(cr, 7.0);
+                    char pbuf[6];
+                    snprintf(pbuf, sizeof(pbuf), "%d%%", prob);
+                    cairo_move_to(cr, sx + 2, sy + 9);
+                    cairo_show_text(cr, pbuf);
                 }
             } else {
                 /* Inactive step — beat-aligned shading */
@@ -463,6 +521,64 @@ static void on_click(GtkGestureClick *gesture, int n_press,
             if (x >= CTRL_W - 22 && x < CTRL_W - 4 &&
                 y >= btn_y && y < btn_y + 14) {
                 pat->tracks[track].solo = !pat->tracks[track].solo;
+            }
+
+            /* Choke group area click: cycle 0 → 1 → ... → 8 → 0 */
+            double chk_x0 = CTRL_W - 42;
+            double chk_y0 = ty + 26;
+            if (x >= chk_x0 && x < chk_x0 + 20 &&
+                y >= chk_y0 && y < chk_y0 + 12) {
+                uint8_t cg = pat->tracks[track].choke_group;
+                pat->tracks[track].choke_group = (cg >= 8) ? 0 : cg + 1;
+                char msg[32];
+                if (pat->tracks[track].choke_group == 0)
+                    snprintf(msg, sizeof(msg), "Choke: Off");
+                else
+                    snprintf(msg, sizeof(msg), "Choke: C%d",
+                             pat->tracks[track].choke_group);
+                sq_app_set_status(&g_gtk.app, msg, 60);
+            }
+
+            /* Row 3 buttons: Len click (cycle), Rnd, Euc, Rev */
+            double row3_y = ty + 27;
+
+            /* Length click: cycle 4→8→12→16→24→32→64→4 */
+            if (x >= 4 && x < 28 && y >= row3_y && y < row3_y + 10) {
+                static const int lens[] = {4, 8, 12, 16, 24, 32, 64};
+                int cur = (int)pat->tracks[track].length;
+                int next = 16;
+                for (int li = 0; li < 6; li++) {
+                    if (cur <= lens[li]) { next = lens[li + 1]; break; }
+                }
+                if (cur >= 64) next = 4;
+                pat->tracks[track].length = (uint32_t)next;
+                char msg[32];
+                snprintf(msg, sizeof(msg), "Length: %d", next);
+                sq_app_set_status(&g_gtk.app, msg, 60);
+            }
+
+            /* Rnd button click */
+            if (x >= 30 && x < 50 && y >= row3_y && y < row3_y + 10) {
+                undo_push(engine);
+                sequencer_randomize_track(engine, track, 0.4f);
+                sq_app_set_status(&g_gtk.app, "Randomized", 60);
+            }
+
+            /* Euc button click */
+            if (x >= 52 && x < 72 && y >= row3_y && y < row3_y + 10) {
+                undo_push(engine);
+                sequencer_euclidean_fill(engine, track, 4,
+                    (int)pat->tracks[track].length, 0, 100);
+                sq_app_set_status(&g_gtk.app, "Euclidean 4-pulse", 60);
+            }
+
+            /* Rev toggle for sampler tracks */
+            if (x >= 74 && x < 94 && y >= row3_y && y < row3_y + 10) {
+                if (pat->tracks[track].type == TRACK_SAMPLER) {
+                    pat->tracks[track].sample_reverse = !pat->tracks[track].sample_reverse;
+                    sq_app_set_status(&g_gtk.app,
+                        pat->tracks[track].sample_reverse ? "Reverse: ON" : "Reverse: OFF", 60);
+                }
             }
 
             /* Track name click: cycle sample/preset */
@@ -688,6 +804,79 @@ static void on_pitch_changed(GtkSpinButton *spin, gpointer user_data)
     gtk_widget_queue_draw(g_gtk.drum_grid_area);
 }
 
+static void on_prob_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+
+    int val = gtk_spin_button_get_value_as_int(spin);
+    pat->tracks[s_popup_track].steps[s_popup_step].probability =
+        (val >= 100) ? 0 : (uint8_t)val;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_retrig_changed(GObject *obj, GParamSpec *pspec, gpointer user_data)
+{
+    (void)pspec; (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(obj));
+    /* 0=Off, 1=2x, 2=3x, 3=4x */
+    pat->tracks[s_popup_track].steps[s_popup_step].retrigger =
+        (sel == 0) ? 0 : (uint8_t)(sel + 1);
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_utime_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+    double val = gtk_spin_button_get_value(spin);
+    pat->tracks[s_popup_track].steps[s_popup_step].micro_offset = (float)val;
+    gtk_widget_queue_draw(g_gtk.drum_grid_area);
+}
+
+static void on_plock_cut_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+    pat->tracks[s_popup_track].steps[s_popup_step].param[0] =
+        (float)gtk_spin_button_get_value(spin);
+}
+
+static void on_plock_res_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    sq_engine_t *engine = g_gtk.engine;
+    if (!engine || s_popup_track < 0 || s_popup_step < 0) return;
+    int pi = engine->transport.current_pattern;
+    if (pi < 0 || (uint32_t)pi >= engine->num_patterns) return;
+    sq_pattern_t *pat = &engine->patterns[pi];
+    if ((uint32_t)s_popup_track >= pat->num_tracks) return;
+    pat->tracks[s_popup_track].steps[s_popup_step].param[1] =
+        (float)gtk_spin_button_get_value(spin);
+}
+
 static void on_delete_note(GtkWidget *btn, gpointer user_data)
 {
     (void)btn; (void)user_data;
@@ -700,8 +889,15 @@ static void on_delete_note(GtkWidget *btn, gpointer user_data)
     if ((uint32_t)s_popup_track >= pat->num_tracks) return;
 
     undo_push(engine);
-    pat->tracks[s_popup_track].steps[s_popup_step].velocity = 0;
-    pat->tracks[s_popup_track].steps[s_popup_step].pitch_offset = 0;
+    sq_step_t *s = &pat->tracks[s_popup_track].steps[s_popup_step];
+    s->velocity = 0;
+    s->pitch_offset = 0;
+    s->probability = 0;
+    s->retrigger = 0;
+    s->micro_offset = 0.0f;
+    s->length = 0.0f;
+    s->note = 0;
+    for (int p = 0; p < 4; p++) s->param[p] = 0.0f;
     gtk_widget_queue_draw(g_gtk.drum_grid_area);
     if (s_popover) gtk_popover_popdown(GTK_POPOVER(s_popover));
 }
@@ -823,6 +1019,72 @@ static void show_step_popover(int track, int step, double click_x, double click_
     g_signal_connect(s_pitch_spin, "value-changed", G_CALLBACK(on_pitch_changed), NULL);
     gtk_box_append(GTK_BOX(pitch_row), s_pitch_spin);
     gtk_box_append(GTK_BOX(box), pitch_row);
+
+    /* Probability row */
+    GtkWidget *prob_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(prob_row), gtk_label_new("Prob %:"));
+    int prob_val = st->probability;
+    if (prob_val == 0) prob_val = 100;
+    GtkAdjustment *prob_adj = gtk_adjustment_new(prob_val, 1, 100, 1, 10, 0);
+    GtkWidget *prob_spin = gtk_spin_button_new(prob_adj, 1, 0);
+    gtk_widget_set_hexpand(prob_spin, TRUE);
+    g_signal_connect(prob_spin, "value-changed", G_CALLBACK(on_prob_changed), NULL);
+    gtk_box_append(GTK_BOX(prob_row), prob_spin);
+    gtk_box_append(GTK_BOX(box), prob_row);
+
+    /* Retrigger row */
+    GtkWidget *retrig_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(retrig_row), gtk_label_new("Retrig:"));
+    GtkStringList *retrig_model = gtk_string_list_new(NULL);
+    gtk_string_list_append(retrig_model, "Off");
+    gtk_string_list_append(retrig_model, "2x");
+    gtk_string_list_append(retrig_model, "3x");
+    gtk_string_list_append(retrig_model, "4x");
+    GtkWidget *retrig_dd = gtk_drop_down_new(G_LIST_MODEL(retrig_model), NULL);
+    g_object_unref(retrig_model);
+    int rt = st->retrigger;
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(retrig_dd),
+                               (rt >= 2 && rt <= 4) ? (guint)(rt - 1) : 0);
+    g_signal_connect(retrig_dd, "notify::selected", G_CALLBACK(on_retrig_changed), NULL);
+    gtk_widget_set_hexpand(retrig_dd, TRUE);
+    gtk_box_append(GTK_BOX(retrig_row), retrig_dd);
+    gtk_box_append(GTK_BOX(box), retrig_row);
+
+    /* Micro-timing row */
+    GtkWidget *utime_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(utime_row), gtk_label_new("Timing:"));
+    GtkAdjustment *utime_adj = gtk_adjustment_new(st->micro_offset, -0.5, 0.5, 0.01, 0.1, 0);
+    GtkWidget *utime_spin = gtk_spin_button_new(utime_adj, 0.01, 2);
+    gtk_widget_set_hexpand(utime_spin, TRUE);
+    g_signal_connect(utime_spin, "value-changed", G_CALLBACK(on_utime_changed), NULL);
+    gtk_box_append(GTK_BOX(utime_row), utime_spin);
+    gtk_box_append(GTK_BOX(box), utime_row);
+
+    /* Parameter locks (synth tracks only) */
+    if ((uint32_t)track < pat->num_tracks &&
+        pat->tracks[track].type == TRACK_SYNTH) {
+        GtkWidget *plock_label = gtk_label_new("P-Locks");
+        gtk_widget_set_halign(plock_label, GTK_ALIGN_START);
+        gtk_box_append(GTK_BOX(box), plock_label);
+
+        GtkWidget *pcut_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        gtk_box_append(GTK_BOX(pcut_row), gtk_label_new("Cutoff:"));
+        GtkAdjustment *pcut_adj = gtk_adjustment_new(st->param[0], 0, 20000, 10, 100, 0);
+        GtkWidget *pcut_spin = gtk_spin_button_new(pcut_adj, 10, 0);
+        gtk_widget_set_hexpand(pcut_spin, TRUE);
+        g_signal_connect(pcut_spin, "value-changed", G_CALLBACK(on_plock_cut_changed), NULL);
+        gtk_box_append(GTK_BOX(pcut_row), pcut_spin);
+        gtk_box_append(GTK_BOX(box), pcut_row);
+
+        GtkWidget *pres_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        gtk_box_append(GTK_BOX(pres_row), gtk_label_new("Reso:"));
+        GtkAdjustment *pres_adj = gtk_adjustment_new(st->param[1], 0, 20, 0.1, 1, 0);
+        GtkWidget *pres_spin = gtk_spin_button_new(pres_adj, 0.1, 1);
+        gtk_widget_set_hexpand(pres_spin, TRUE);
+        g_signal_connect(pres_spin, "value-changed", G_CALLBACK(on_plock_res_changed), NULL);
+        gtk_box_append(GTK_BOX(pres_row), pres_spin);
+        gtk_box_append(GTK_BOX(box), pres_row);
+    }
 
     /* Separator */
     gtk_box_append(GTK_BOX(box), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));

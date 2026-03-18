@@ -31,6 +31,9 @@ void sq_app_init(sq_app_t *app)
     /* MIDI defaults */
     app->midi_device_name[0] = '\0';
     app->midi_port_index = -1;
+
+    /* UI preferences */
+    app->show_tooltips = true;
 }
 
 void sq_app_init_rec_config(sq_rec_config_t *cfg)
@@ -69,11 +72,22 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
 
     /* Transport: space always works */
     if (key == SQ_KEY_SPACE) {
+        bool was_playing = engine->transport.playing;
         engine->transport.playing = !engine->transport.playing;
         engine->transport.current_beat = 0.0;
         engine->transport.sample_position = 0;
         engine->transport.current_step = 0;
         app->visual_step = 0;
+        if (was_playing && !engine->transport.playing) {
+            /* Stop: kill all voices immediately */
+            for (int v = 0; v < SQ_MAX_VOICES; v++)
+                engine->voices[v].active = false;
+            for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++)
+                engine->synth_voices[v].active = false;
+        } else if (!was_playing && engine->transport.playing) {
+            /* Play: trigger step 0 immediately so first beat isn't missed */
+            engine->transport.step0_pending = true;
+        }
         /* Caller must set play_start_ticks if playing started */
         return SQ_ACTION_NONE;
     }
@@ -103,6 +117,9 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
             return SQ_ACTION_LOAD;
 
         case SQ_KEY_T:
+            return SQ_ACTION_TAP_TEMPO;
+
+        case SQ_KEY_G:
             return SQ_ACTION_TOGGLE_THEME;
 
         case SQ_KEY_C: {
@@ -178,9 +195,13 @@ void sq_app_update_playhead(sq_app_t *app, sq_engine_t *engine,
         double beats = elapsed * (engine->transport.bpm / 60.0);
         int pat_len = 16;
         int pi = engine->transport.current_pattern;
-        if (pi >= 0 && (uint32_t)pi < engine->num_patterns &&
-            engine->patterns[pi].num_tracks > 0)
-            pat_len = (int)engine->patterns[pi].tracks[0].length;
+        if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+            /* Use longest track length for visual playhead (polymeter) */
+            for (uint32_t t = 0; t < engine->patterns[pi].num_tracks; t++) {
+                int tl = (int)engine->patterns[pi].tracks[t].length;
+                if (tl > pat_len) pat_len = tl;
+            }
+        }
         app->visual_step = ((int)floor(beats * STEPS_PER_BEAT)) % pat_len;
     } else if (app->was_playing && !engine->transport.playing) {
         app->visual_step = 0;
@@ -204,6 +225,39 @@ void sq_app_update_status(sq_app_t *app)
         if (app->status_timer == 0)
             app->status_msg[0] = '\0';
     }
+}
+
+double sq_app_tap_tempo(sq_app_t *app, uint64_t now_us)
+{
+    /* Reset if gap > 2 seconds since last tap */
+    if (app->tap_count > 0 &&
+        (now_us - app->tap_times[(app->tap_count - 1) % 4]) > 2000000) {
+        app->tap_count = 0;
+    }
+
+    /* Record this tap */
+    app->tap_times[app->tap_count % 4] = now_us;
+    app->tap_count++;
+
+    /* Need at least 2 taps to compute interval */
+    if (app->tap_count < 2) return 0.0;
+
+    /* Average interval from available taps (up to 4) */
+    int n = app->tap_count;
+    if (n > 4) n = 4;
+    uint64_t first = app->tap_times[(app->tap_count - n) % 4];
+    uint64_t last  = app->tap_times[(app->tap_count - 1) % 4];
+    double avg_interval_sec = (double)(last - first) / (double)(n - 1) / 1000000.0;
+
+    if (avg_interval_sec <= 0.0) return 0.0;
+
+    double bpm = 60.0 / avg_interval_sec;
+
+    /* Clamp to valid range */
+    if (bpm < 20.0)  bpm = 20.0;
+    if (bpm > 300.0) bpm = 300.0;
+
+    return bpm;
 }
 
 /* ─── Keyboard preset lookup ──────────────────────────────────────────────── */

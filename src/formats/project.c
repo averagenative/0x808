@@ -26,18 +26,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 /* ─── Path safety helper ─────────────────────────────────────────────────── */
 
 static bool path_is_safe(const char *path)
 {
     if (!path || !path[0]) return false;
-    /* Reject absolute paths (Unix or Windows) */
-    if (path[0] == '/') return false;
-    if (path[0] == '\\') return false;
-    if (strlen(path) >= 2 && path[1] == ':') return false; /* e.g. C:\ */
-    /* Reject path traversal */
+    /* Reject path traversal (directory escape) */
     if (strstr(path, "..")) return false;
+    /* Allow absolute paths — needed for autosave with full filepaths */
     return true;
 }
 
@@ -137,6 +135,20 @@ static cJSON *step_to_json(const sq_step_t *s)
         cJSON_AddNumberToObject(j, "note", s->note);
     if (s->length > 0.0f)
         cJSON_AddNumberToObject(j, "len", s->length);
+    if (s->probability > 0)
+        cJSON_AddNumberToObject(j, "prob", s->probability);
+    if (s->retrigger > 0)
+        cJSON_AddNumberToObject(j, "retrig", s->retrigger);
+    if (s->micro_offset != 0.0f)
+        cJSON_AddNumberToObject(j, "utime", s->micro_offset);
+    /* Parameter locks (only save non-zero) */
+    for (int p = 0; p < 4; p++) {
+        if (s->param[p] != 0.0f) {
+            char key[8];
+            snprintf(key, sizeof(key), "p%d", p);
+            cJSON_AddNumberToObject(j, key, s->param[p]);
+        }
+    }
     return j;
 }
 
@@ -153,6 +165,16 @@ static cJSON *track_to_json(const sq_track_t *t)
     cJSON_AddBoolToObject(j, "solo", t->solo);
     cJSON_AddNumberToObject(j, "humanize", t->humanize);
     cJSON_AddNumberToObject(j, "color_index", t->color_index);
+    if (t->choke_group > 0)
+        cJSON_AddNumberToObject(j, "choke_group", t->choke_group);
+    if (t->timing_humanize > 0.0f)
+        cJSON_AddNumberToObject(j, "timing_humanize", t->timing_humanize);
+    if (t->sample_start > 0)
+        cJSON_AddNumberToObject(j, "sample_start", t->sample_start);
+    if (t->sample_end > 0)
+        cJSON_AddNumberToObject(j, "sample_end", t->sample_end);
+    if (t->sample_reverse)
+        cJSON_AddBoolToObject(j, "sample_reverse", t->sample_reverse);
     cJSON_AddNumberToObject(j, "sf2_preset", t->sf2_preset);
 
     /* Steps — sparse: only save non-empty ones with their index */
@@ -250,6 +272,19 @@ int project_save(const sq_engine_t *engine, const char *filepath)
     cJSON_AddNumberToObject(root, "master_volume", engine->master_volume);
     cJSON_AddNumberToObject(root, "sample_rate", engine->sample_rate);
 
+    /* MIDI CC map — only save non-default entries */
+    {
+        cJSON *cc_map = cJSON_CreateObject();
+        for (int i = 0; i < 128; i++) {
+            if (engine->cc_map.map[i] != -1) {
+                char key[8];
+                snprintf(key, sizeof(key), "%d", i);
+                cJSON_AddNumberToObject(cc_map, key, engine->cc_map.map[i]);
+            }
+        }
+        cJSON_AddItemToObject(root, "cc_map", cc_map);
+    }
+
     /* Sample paths */
     cJSON *samples = cJSON_CreateArray();
     if (!samples) {
@@ -258,7 +293,11 @@ int project_save(const sq_engine_t *engine, const char *filepath)
         return -1;
     }
     for (uint32_t i = 0; i < engine->num_samples; i++) {
-        cJSON_AddItemToArray(samples, cJSON_CreateString(engine->samples[i].name));
+        /* Save full filepath if available, otherwise just the name */
+        const char *path = engine->samples[i].filepath[0]
+                         ? engine->samples[i].filepath
+                         : engine->samples[i].name;
+        cJSON_AddItemToArray(samples, cJSON_CreateString(path));
     }
     cJSON_AddItemToObject(root, "sample_paths", samples);
 
@@ -332,15 +371,20 @@ int project_save(const sq_engine_t *engine, const char *filepath)
         return -1;
     }
 
-    FILE *f = fopen(filepath, "w");
+    FILE *f = fopen(filepath, "wb");
     if (!f) {
         LOG_ERROR("Failed to open %s for writing", filepath);
         free(json_str);
         return -1;
     }
 
-    fputs(json_str, f);
+    size_t len = strlen(json_str);
+    size_t written = fwrite(json_str, 1, len, f);
+    fflush(f);
     fclose(f);
+    if (written != len) {
+        LOG_ERROR("Short write: expected %zu, wrote %zu", len, written);
+    }
     free(json_str);
 
     LOG_INFO("Project saved: %s", filepath);
@@ -514,9 +558,9 @@ static void json_to_effect_slot(const cJSON *j, sq_effect_slot_t *slot, uint32_t
 
 int project_load(sq_engine_t *engine, const char *filepath)
 {
-    FILE *f = fopen(filepath, "r");
+    FILE *f = fopen(filepath, "rb");
     if (!f) {
-        LOG_ERROR("Failed to open %s", filepath);
+        LOG_ERROR("Failed to open %s (errno=%d)", filepath, errno);
         return -1;
     }
 
@@ -602,11 +646,57 @@ int project_load(sq_engine_t *engine, const char *filepath)
         }
     }
 
-    /* Load samples (by path — try to find them) */
+    /* MIDI CC map */
+    cJSON *cc_map = cJSON_GetObjectItem(root, "cc_map");
+    if (cc_map && cJSON_IsObject(cc_map)) {
+        /* Start from factory defaults, then override with saved values */
+        cJSON *entry = NULL;
+        cJSON_ArrayForEach(entry, cc_map) {
+            int cc = atoi(entry->string);
+            if (cc >= 0 && cc < 128) {
+                int param = (int)entry->valuedouble;
+                if (param >= -1 && param < SQ_PARAM_COUNT)
+                    engine->cc_map.map[cc] = (int8_t)param;
+            }
+        }
+    }
+
+    /* Load samples (by path — try to find them).
+     * Skip if samples are already loaded with matching names (e.g., autosave
+     * restoring after demo pattern already loaded the same kit). */
     cJSON *samples = cJSON_GetObjectItem(root, "sample_paths");
     if (samples && cJSON_IsArray(samples)) {
         int n = cJSON_GetArraySize(samples);
-        for (int i = 0; i < n && engine->num_samples < SQ_MAX_SAMPLES; i++) {
+
+        /* Check if the already-loaded samples match the project's sample list */
+        bool samples_match = ((int)engine->num_samples >= n);
+        if (samples_match) {
+            for (int i = 0; i < n; i++) {
+                cJSON *sp = cJSON_GetArrayItem(samples, i);
+                if (!sp || !sp->valuestring) { samples_match = false; break; }
+                /* Compare by name (strip path prefix if any) */
+                const char *saved_name = sp->valuestring;
+                const char *slash = strrchr(saved_name, '/');
+                if (!slash) slash = strrchr(saved_name, '\\');
+                if (slash) saved_name = slash + 1;
+                bool found = false;
+                for (uint32_t e = 0; e < engine->num_samples; e++) {
+                    if (strstr(engine->samples[e].name, saved_name)) {
+                        found = true; break;
+                    }
+                }
+                if (!found) { samples_match = false; break; }
+            }
+        }
+        if (samples_match) {
+            LOG_INFO("Samples already loaded (%d match, %d in engine) — skipping reload",
+                     n, engine->num_samples);
+        } else {
+            LOG_INFO("Samples don't match (project has %d, engine has %d) — reloading",
+                     n, engine->num_samples);
+        }
+
+        for (int i = 0; i < n && !samples_match && engine->num_samples < SQ_MAX_SAMPLES; i++) {
             cJSON *sp = cJSON_GetArrayItem(samples, i);
             if (sp && sp->valuestring) {
                 /* Reject unsafe paths (traversal, absolute) */
@@ -614,16 +704,33 @@ int project_load(sq_engine_t *engine, const char *filepath)
                     LOG_WARN("Rejected unsafe sample path: %s", sp->valuestring);
                     continue;
                 }
-                /* Try loading from the saved path */
+                /* Try loading from several locations */
                 int idx = (int)engine->num_samples;
-                /* Try several locations */
-                const char *paths[] = {sp->valuestring, NULL};
                 bool loaded = false;
-                for (int p = 0; paths[p] && !loaded; p++) {
-                    if (sample_io_load(paths[p], &engine->samples[idx]) == 0) {
-                        engine->num_samples++;
-                        loaded = true;
-                        LOG_INFO("Loaded sample [%d]: %s", idx, engine->samples[idx].name);
+
+                /* 1. Try the saved path directly */
+                if (sample_io_load(sp->valuestring, &engine->samples[idx]) == 0) {
+                    engine->num_samples++;
+                    loaded = true;
+                    LOG_INFO("Loaded sample [%d]: %s", idx, engine->samples[idx].name);
+                }
+
+                /* 2. Try relative to base_dir (e.g., base_dir/samples/808/name) */
+                if (!loaded && engine->base_dir[0]) {
+                    /* Search in base_dir/samples/ subdirs */
+                    const char *kit_dirs[] = {"samples/808/", "samples/909/",
+                                              "samples/505/", "samples/mrk2/",
+                                              "samples/", NULL};
+                    for (int kd = 0; kit_dirs[kd] && !loaded; kd++) {
+                        char full[1024];
+                        snprintf(full, sizeof(full), "%s%s%s",
+                                 engine->base_dir, kit_dirs[kd], sp->valuestring);
+                        if (sample_io_load(full, &engine->samples[idx]) == 0) {
+                            engine->num_samples++;
+                            loaded = true;
+                            LOG_INFO("Loaded sample [%d]: %s (from %s)",
+                                     idx, engine->samples[idx].name, kit_dirs[kd]);
+                        }
                     }
                 }
                 if (!loaded) {
@@ -728,6 +835,11 @@ int project_load(sq_engine_t *engine, const char *filepath)
                         track->humanize = clampf(h, 0.0f, 1.0f);
                     }
                     v = cJSON_GetObjectItem(tj, "color_index"); if (v) track->color_index = (uint8_t)clampi((int)v->valuedouble, 0, 7);
+                    v = cJSON_GetObjectItem(tj, "choke_group"); if (v) track->choke_group = (uint8_t)clampi((int)v->valuedouble, 0, 8);
+                    v = cJSON_GetObjectItem(tj, "timing_humanize"); if (v) track->timing_humanize = clampf((float)v->valuedouble, 0.0f, 1.0f);
+                    v = cJSON_GetObjectItem(tj, "sample_start"); if (v) track->sample_start = (uint32_t)v->valuedouble;
+                    v = cJSON_GetObjectItem(tj, "sample_end"); if (v) track->sample_end = (uint32_t)v->valuedouble;
+                    v = cJSON_GetObjectItem(tj, "sample_reverse"); if (v) track->sample_reverse = cJSON_IsTrue(v);
                     v = cJSON_GetObjectItem(tj, "sf2_preset"); if (v) track->sf2_preset = clampi((int)v->valuedouble, -1, SQ_MAX_SF2_PRESETS - 1);
 
                     /* Steps (sparse) */
@@ -748,6 +860,14 @@ int project_load(sq_engine_t *engine, const char *filepath)
                                 v = cJSON_GetObjectItem(step_item, "pitch"); if (v) s->pitch_offset = (int8_t)clampi((int)v->valuedouble, -24, 24);
                                 v = cJSON_GetObjectItem(step_item, "note");  if (v) s->note = (uint8_t)clampi((int)v->valuedouble, 0, 127);
                                 v = cJSON_GetObjectItem(step_item, "len");   if (v) s->length = clampf((float)v->valuedouble, 0.0f, 64.0f);
+                                v = cJSON_GetObjectItem(step_item, "prob");  if (v) s->probability = (uint8_t)clampi((int)v->valuedouble, 0, 100);
+                                v = cJSON_GetObjectItem(step_item, "retrig"); if (v) s->retrigger = (uint8_t)clampi((int)v->valuedouble, 0, 4);
+                                v = cJSON_GetObjectItem(step_item, "utime"); if (v) s->micro_offset = clampf((float)v->valuedouble, -0.5f, 0.5f);
+                                for (int p = 0; p < 4; p++) {
+                                    char pk[4]; snprintf(pk, sizeof(pk), "p%d", p);
+                                    v = cJSON_GetObjectItem(step_item, pk);
+                                    if (v) s->param[p] = (float)v->valuedouble;
+                                }
                             }
                         }
                     }
@@ -817,6 +937,20 @@ int project_load(sq_engine_t *engine, const char *filepath)
     }
 
     cJSON_Delete(root);
-    LOG_INFO("Project loaded: %s", filepath);
+    LOG_INFO("Project loaded: %s (samples=%d, presets=%d, patterns=%d)",
+             filepath, engine->num_samples, engine->num_synth_presets,
+             engine->num_patterns);
+    /* Log first pattern tracks for debugging */
+    if (engine->num_patterns > 0) {
+        sq_pattern_t *p0 = &engine->patterns[0];
+        for (uint32_t t = 0; t < p0->num_tracks && t < 4; t++) {
+            int active = 0;
+            for (uint32_t s = 0; s < p0->tracks[t].length; s++)
+                if (p0->tracks[t].steps[s].velocity > 0) active++;
+            LOG_INFO("  Track %d: type=%d sample=%d preset=%d len=%d active_steps=%d",
+                     t, p0->tracks[t].type, p0->tracks[t].sample_index,
+                     p0->tracks[t].synth_preset, p0->tracks[t].length, active);
+        }
+    }
     return 0;
 }

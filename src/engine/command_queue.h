@@ -41,6 +41,8 @@ typedef enum {
     CMD_SET_TRACK_PAN,
     CMD_SET_TRACK_MUTE,
     CMD_SET_TRACK_SOLO,
+    CMD_MIDI_CC,           /* MIDI CC → mapped parameter */
+    CMD_PITCH_BEND,        /* MIDI pitch bend (14-bit) */
 } sq_cmd_type_t;
 
 typedef struct {
@@ -67,6 +69,13 @@ typedef struct {
             uint16_t track;
             float    value;
         } track_param;
+        struct {              /* for MIDI CC */
+            uint8_t  cc;       /* CC number 0-127 */
+            uint8_t  value;    /* CC value 0-127 */
+        } midi_cc;
+        struct {              /* for pitch bend */
+            int16_t  value;    /* -8192 to +8191 */
+        } pitch_bend;
     };
 } sq_command_t;
 

@@ -51,6 +51,11 @@ sq_theme_t theme_current(void)
     return s_current_theme;
 }
 
+int theme_get_current(void)
+{
+    return (int)s_current_theme;
+}
+
 void theme_toggle(void)
 {
     s_active_user_theme = -1;

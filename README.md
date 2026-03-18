@@ -60,6 +60,26 @@ The VST3 must keep its bundle structure: copy the entire `0x808.vst3/` directory
 
 The Windows installer handles this automatically.
 
+## MIDI Input
+
+USB MIDI controllers are supported on all platforms (ALSA on Linux, WinMM on Windows, CoreMIDI on macOS). Controllers are auto-detected on plug-in and auto-reconnected if unplugged and replugged.
+
+**Bluetooth MIDI limitation:** Bluetooth MIDI is not directly supported. On Windows, the WinMM backend only sees USB/virtual MIDI ports. As a workaround, use [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) to create a virtual port and [MIDIberry](https://apps.microsoft.com/detail/9n39720h2m05) (free, Microsoft Store) to bridge your Bluetooth MIDI device to the virtual port.
+
+**Default CC mappings** (work out of the box with most controllers):
+
+| CC | Parameter | Controllers |
+|----|-----------|-------------|
+| 1 | Filter Cutoff (mod wheel) | Universal |
+| 7 | Master Volume | Universal |
+| 70-77 | Cutoff, Reso, Attack, Decay, Sustain, Release, Reverb, Delay | Akai MPK Mini |
+| 21-28 | Same as above | Novation Launchkey |
+| 74 | Filter Cutoff | GM2 standard |
+| 71 | Filter Resonance | GM2 standard |
+| 91 | Reverb Send | GM2 standard |
+
+Custom mappings can be created via **MIDI Learn**: right-click any synth knob, then twist the controller knob to bind it.
+
 ## Keyboard Shortcuts
 
 | Key | Action |
@@ -73,7 +93,8 @@ The Windows installer handles this automatically.
 | Ctrl+V | Paste pattern |
 | Ctrl+Z | Undo |
 | Ctrl+Shift+Z | Redo |
-| Ctrl+T | Cycle theme |
+| Ctrl+T | Tap tempo |
+| Ctrl+G | Cycle theme |
 | Escape | Quit |
 
 ## Mouse Controls

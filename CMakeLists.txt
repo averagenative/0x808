@@ -169,6 +169,7 @@ set_target_properties(sequencer_standalone PROPERTIES
 
 add_library(sq_app STATIC
     src/app/sq_app.c
+    src/app/session.c
     src/gui/undo.c
 )
 target_include_directories(sq_app PUBLIC
@@ -413,7 +414,7 @@ if(BUILD_PLUGINS)
                 ${CMAKE_SOURCE_DIR}/deps/imgui
                 ${CMAKE_SOURCE_DIR}/deps/imgui/backends
             )
-            target_link_libraries(${target_name} PRIVATE sq_gui ${SDL2_LIBRARIES} ${SQ_OPENGL_LIB})
+            target_link_libraries(${target_name} PRIVATE sq_gui sq_midi ${SDL2_LIBRARIES} ${SQ_OPENGL_LIB})
         else()
             target_compile_definitions(${target_name} PRIVATE SQ_PLUGIN_NO_GUI=1)
         endif()
@@ -528,6 +529,7 @@ target_include_directories(midi_test PRIVATE
 )
 target_link_libraries(midi_test PRIVATE
     sq_midi
+    sq_app
     ${PLATFORM_LIBS}
 )
 

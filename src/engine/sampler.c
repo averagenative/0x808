@@ -76,11 +76,14 @@ void sampler_trigger(sq_engine_t *engine, int sample_index,
 
     v->active       = true;
     v->sample_index = sample_index;
-    v->position     = 0.0;
     v->velocity     = velocity;
     v->volume       = volume;
     v->pan          = pan;
+    v->clip_start   = 0;
+    v->clip_end     = 0;
+    v->reverse      = false;
     v->start_time   = engine->transport.sample_position;
+    v->position     = 0.0;
 
     /*
      * Pitch shifting via playback rate:
@@ -108,6 +111,16 @@ void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames)
         uint32_t total = s->num_frames;
         uint32_t ch    = s->num_channels;
 
+        /* Apply clip start/end */
+        uint32_t play_start = v->clip_start;
+        uint32_t play_end   = (v->clip_end > 0 && v->clip_end <= total) ? v->clip_end : total;
+        if (play_start >= play_end) play_start = 0;
+        uint32_t play_len = play_end - play_start;
+
+        /* Reverse: start from end, rate is negative */
+        if (v->reverse && v->position == 0.0)
+            v->position = (double)(play_len - 1);
+
         /* Compute gain: velocity * track volume */
         float gain = v->velocity * v->volume;
 
@@ -121,12 +134,15 @@ void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames)
         float right_gain = gain * (1.0f + v->pan) * 0.5f;
 
         for (uint32_t f = 0; f < num_frames; f++) {
-            /* Check if we've reached the end of the sample */
+            /* Check bounds */
             int pos = (int)v->position;
-            if (pos >= (int)total - 1) {
-                v->active = false;
-                break;
+            if (v->reverse) {
+                if (pos < 0) { v->active = false; break; }
+            } else {
+                if (pos >= (int)play_len - 1) { v->active = false; break; }
             }
+            /* Offset into actual sample data */
+            pos += (int)play_start;
 
             /* Get the fractional part for interpolation */
             float frac = (float)(v->position - (double)pos);
@@ -165,7 +181,10 @@ void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames)
             output[f * 2 + 1] += sample_r * right_gain;
 
             /* Advance playback position by the pitch rate */
-            v->position += v->rate;
+            if (v->reverse)
+                v->position -= v->rate;
+            else
+                v->position += v->rate;
         }
     }
 }

@@ -329,6 +329,19 @@ static void on_redo_clicked(GtkWidget *btn, gpointer user_data)
         sq_app_set_status(&g_gtk.app, "Redo", 90);
 }
 
+static void on_tap_tempo_clicked(GtkWidget *btn, gpointer user_data)
+{
+    (void)btn; (void)user_data;
+    uint64_t now_us = (uint64_t)(g_get_monotonic_time());
+    double bpm = sq_app_tap_tempo(&g_gtk.app, now_us);
+    if (bpm > 0.0) {
+        g_gtk.engine->transport.bpm = bpm;
+        char msg[32];
+        snprintf(msg, sizeof(msg), "Tap: %.0f BPM", bpm);
+        sq_app_set_status(&g_gtk.app, msg, 90);
+    }
+}
+
 static void on_rec_clicked(GtkWidget *btn, gpointer user_data)
 {
     (void)btn; (void)user_data;
@@ -801,6 +814,17 @@ static gboolean on_key_pressed(GtkEventControllerKey *ctrl,
     case SQ_ACTION_TOGGLE_THEME:
         gtk_theme_cycle(g_gtk.window);
         return TRUE;
+    case SQ_ACTION_TAP_TEMPO: {
+        uint64_t now_us = (uint64_t)(g_get_monotonic_time());
+        double bpm = sq_app_tap_tempo(&g_gtk.app, now_us);
+        if (bpm > 0.0) {
+            g_gtk.engine->transport.bpm = bpm;
+            char msg[32];
+            snprintf(msg, sizeof(msg), "Tap: %.0f BPM", bpm);
+            sq_app_set_status(&g_gtk.app, msg, 90);
+        }
+        return TRUE;
+    }
     case SQ_ACTION_NONE:
     default:
         break;
@@ -1008,6 +1032,12 @@ static GtkWidget *build_toolbar(void)
     GtkWidget *bpm_knob = gtk_knob_new(60, 200, &s_bpm_float, "BPM");
     gtk_widget_set_size_request(bpm_knob, 50, 55);
     gtk_box_append(GTK_BOX(row1), bpm_knob);
+
+    /* Tap Tempo button */
+    GtkWidget *tap_btn = gtk_button_new_with_label("TAP");
+    gtk_widget_set_size_request(tap_btn, 40, 30);
+    g_signal_connect(tap_btn, "clicked", G_CALLBACK(on_tap_tempo_clicked), NULL);
+    gtk_box_append(GTK_BOX(row1), tap_btn);
 
     /* Swing knob */
     s_swing_float = g_gtk.engine->transport.swing * 100.0f;

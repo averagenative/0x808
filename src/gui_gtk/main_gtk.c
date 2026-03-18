@@ -23,6 +23,8 @@
 
 #include "engine/sampler.h"
 #include "engine/sq_midi.h"
+#include "app/session.h"
+#include "formats/project.h"
 #include "formats/sample_io.h"
 
 #define LOG_TAG "gtk_main"
@@ -238,10 +240,10 @@ static void setup_demo_pattern(void)
     }
 
     /* ── 808 sub bass: ONE long note per bar, deep as possible ──
-     * Single C0 (MIDI 12) sustaining the entire bar.
+     * Single C1 (MIDI 24) sustaining the entire bar.
      * This is what makes trap FEEL heavy — one massive sub note. */
     if (synth_bass < p->num_tracks) {
-        const uint8_t notes[] = {12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* C0 only */
+        const uint8_t notes[] = {24,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* C1 */
         const uint8_t vels[]  = {127,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
         const float   lens[]  = {14,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};  /* sustains 14 steps */
         for (int s = 0; s < 16; s++) {
@@ -358,6 +360,8 @@ int main(int argc, char *argv[])
     signal(SIGABRT, crash_handler);
     signal(SIGFPE, crash_handler);
     signal(SIGBUS, crash_handler);
+    signal(SIGTERM, SIG_DFL); /* Let GTK handle SIGTERM gracefully */
+    signal(SIGINT,  SIG_DFL); /* Let GTK handle SIGINT gracefully */
 
     LOG_INFO("0x808 GTK frontend starting");
 
@@ -390,7 +394,7 @@ int main(int argc, char *argv[])
 
     /* Default: select first synth track (matches ImGui standalone behavior) */
 
-    /* Load samples and set up demo pattern */
+    /* Load samples and set up demo pattern (fallback if no saved project) */
     load_default_samples();
     setup_demo_pattern();
 
@@ -412,6 +416,17 @@ int main(int argc, char *argv[])
     /* Initialize audio */
     if (audio_init() != 0) {
         LOG_ERROR("Audio init failed — continuing without audio");
+    }
+
+    /* Load session state + auto-load last project */
+    {
+        char last_project[512] = {0};
+        sq_session_load(&g_gtk.app, &g_engine, NULL, NULL, NULL,
+                        last_project, sizeof(last_project));
+        if (last_project[0]) {
+            if (project_load(&g_engine, last_project) == 0)
+                LOG_INFO("Auto-loaded project: %s", last_project);
+        }
     }
 
     /* Register audio restart callback for settings panel */
@@ -438,6 +453,13 @@ int main(int argc, char *argv[])
                      G_CALLBACK(gtk_window_setup), NULL);
 
     int status = g_application_run(G_APPLICATION(g_gtk.gtk_app), argc, argv);
+
+    /* Auto-save current state */
+    {
+        const char *autosave = sq_session_autosave_path();
+        project_save(&g_engine, autosave);
+        sq_session_save(&g_gtk.app, &g_engine, 1280, 720, 0, autosave);
+    }
 
     /* Cleanup */
     g_object_unref(g_gtk.gtk_app);

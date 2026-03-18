@@ -290,6 +290,19 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
                     case SQ_ACTION_TOGGLE_THEME:
                         theme_toggle();
                         break;
+                    case SQ_ACTION_TAP_TEMPO: {
+                        uint64_t now_us = (uint64_t)(
+                            (double)SDL_GetPerformanceCounter() /
+                            (double)SDL_GetPerformanceFrequency() * 1000000.0);
+                        double bpm = sq_app_tap_tempo(&gui->app, now_us);
+                        if (bpm > 0.0) {
+                            engine->transport.bpm = bpm;
+                            char msg[32];
+                            snprintf(msg, sizeof(msg), "Tap: %.0f BPM", bpm);
+                            sq_app_set_status(&gui->app, msg, 90);
+                        }
+                        break;
+                    }
                     case SQ_ACTION_NONE:
                     default:
                         break;

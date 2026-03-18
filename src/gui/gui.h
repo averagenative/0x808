@@ -54,9 +54,30 @@ void gui_set_audio_restart(void (*fn)(void *), void *userdata);
 const char *gui_get_audio_device_name(void);
 int gui_get_audio_device_index(void);
 
-/* Set the MIDI handle so settings panel can use it. */
+/* Get the app state (for session save). Returns sq_app_t*. */
+void *gui_get_app(void);
+
+/* Get/set the current project file path. */
+const char *gui_get_project_path(void);
+void gui_set_project_path(const char *path);
+
+/* Show native file dialog. is_save=1 for save, 0 for open.
+ * Returns 1 if user picked a file, 0 if cancelled. */
+int gui_file_dialog(char *buf, int bufsize, int is_save, const char *default_path);
+
+/* Trigger the "saving..." indicator in the toolbar (shows for 2 seconds). */
+void gui_trigger_autosave_indicator(void);
+
+/* Global tooltip enable/disable (checked by all tooltip calls). */
+extern int g_tooltips_enabled;
+
+/* Tooltip helper — only shows if tooltips are enabled globally. */
+#define SQ_TOOLTIP(text) do { if (g_tooltips_enabled) ImGui::SetTooltip(text); } while(0)
+
+/* Set/get the MIDI handle so settings panel and learn mode can use it. */
 struct sq_midi;
 void gui_set_midi(struct sq_midi *midi);
+struct sq_midi *gui_get_midi(void);
 
 #ifdef __cplusplus
 }

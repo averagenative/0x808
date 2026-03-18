@@ -37,6 +37,9 @@ sq_theme_t theme_current(void);
 /* Toggle between dark and light */
 void theme_toggle(void);
 
+/* Get the current theme index */
+int theme_get_current(void);
+
 /* Get the GL clear color for the current theme */
 void theme_get_clear_color(float out[4]);
 

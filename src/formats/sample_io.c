@@ -115,6 +115,10 @@ int sample_io_load(const char *filepath, sq_sample_t *sample)
     strncpy(sample->name, name, SQ_SAMPLE_NAME_LEN - 1);
     sample->name[SQ_SAMPLE_NAME_LEN - 1] = '\0';
 
+    /* Store full path for project save/reload */
+    strncpy(sample->filepath, filepath, sizeof(sample->filepath) - 1);
+    sample->filepath[sizeof(sample->filepath) - 1] = '\0';
+
     return 0;
 }
 

@@ -4,11 +4,11 @@
 
 #include "core/log.h"
 
-/* Default: errors only in release, everything in debug builds */
+/* Default: warnings in release, everything in debug builds */
 #ifdef NDEBUG
-sq_log_level_t g_sq_log_level    = SQ_LOG_ERROR;
-#else
 sq_log_level_t g_sq_log_level    = SQ_LOG_WARN;
+#else
+sq_log_level_t g_sq_log_level    = SQ_LOG_INFO;
 #endif
 double         g_sq_log_start_ms = 0.0;
 

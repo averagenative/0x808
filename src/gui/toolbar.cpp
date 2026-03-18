@@ -24,6 +24,7 @@ extern "C" {
 #include "gui/theme.h"
 #include "engine/export.h"
 #include "engine/synth.h"
+#include "engine/sq_midi.h"
 #define LOG_TAG "toolbar"
 #include "core/log.h"
 }
@@ -38,6 +39,14 @@ extern "C" {
 
 /* Pattern scroll offset — shared between standalone and plugin */
 int g_pat_scroll = 0;
+
+/* Autosave indicator timer (seconds remaining) — set by gui_trigger_autosave_indicator() */
+static float g_autosave_timer = 0.0f;
+
+extern "C" void gui_trigger_autosave_indicator(void)
+{
+    g_autosave_timer = 2.0f; /* show for 2 seconds */
+}
 
 /* ─── Helper: draw a soft glow behind a rect ──────────────────────────────── */
 
@@ -186,11 +195,15 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         engine->transport.current_step = 0;
         g_visual_step = 0;
         if (new_state) {
+            engine->transport.step0_pending = true;
             if (p->play_start_ticks)
                 *p->play_start_ticks = SDL_GetPerformanceCounter();
         } else {
-            /* Release all synth voices so they fade out */
-            synth_release_all(engine);
+            /* Kill all voices immediately on stop */
+            for (int v = 0; v < SQ_MAX_VOICES; v++)
+                engine->voices[v].active = false;
+            for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++)
+                engine->synth_voices[v].active = false;
         }
     }
     if (!is_plugin && was_playing)
@@ -309,6 +322,57 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - knob_label_off);
         ImGui::PopID();
     }
+
+    /* ── Tap Tempo button ─────────────────────────────────────────── */
+    ImGui::SameLine();
+    {
+        static uint64_t s_tap_times[4] = {0};
+        static int s_tap_count = 0;
+
+        if (ImGui::Button("TAP", ImVec2(36, btn_h))) {
+            uint64_t now_us = (uint64_t)(
+                (double)SDL_GetPerformanceCounter() /
+                (double)SDL_GetPerformanceFrequency() * 1000000.0);
+
+            /* Reset if gap > 2 seconds */
+            if (s_tap_count > 0 &&
+                (now_us - s_tap_times[(s_tap_count - 1) % 4]) > 2000000)
+                s_tap_count = 0;
+
+            s_tap_times[s_tap_count % 4] = now_us;
+            s_tap_count++;
+
+            if (s_tap_count >= 2) {
+                int n = s_tap_count > 4 ? 4 : s_tap_count;
+                uint64_t first = s_tap_times[(s_tap_count - n) % 4];
+                uint64_t last  = s_tap_times[(s_tap_count - 1) % 4];
+                double avg_sec = (double)(last - first) / (double)(n - 1) / 1000000.0;
+                if (avg_sec > 0.0) {
+                    double bpm = 60.0 / avg_sec;
+                    if (bpm < 20.0)  bpm = 20.0;
+                    if (bpm > 300.0) bpm = 300.0;
+                    engine->transport.bpm = bpm;
+                }
+            }
+        }
+        if (ImGui::IsItemHovered()) SQ_TOOLTIP("Tap Tempo (Ctrl+T)");
+    }
+
+    /* ── MIDI Learn indicator ─────────────────────────────────────── */
+    {
+        extern struct sq_midi *gui_get_midi(void);
+        struct sq_midi *midi = gui_get_midi();
+        if (midi && sq_midi_learn_active(midi) != SQ_PARAM_NONE) {
+            ImGui::SameLine();
+            float t = (float)ImGui::GetTime();
+            float pulse = 0.5f + 0.5f * sinf(t * 6.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(1.0f, 0.85f, 0.15f, pulse));
+            ImGui::Text("LEARN");
+            ImGui::PopStyleColor();
+        }
+    }
+
     if (!is_plugin) {
         ImGui::SameLine(0, 4);
         { float sy = ImGui::GetCursorScreenPos().y; float sx = ImGui::GetCursorScreenPos().x;
@@ -370,29 +434,30 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
     /* ── Panel toggle buttons ──────────────────────────────────────── */
     ImGui::SameLine(0, 8);
     const float tbtn_w = is_plugin ? 45.0f : 70.0f;
-    const float tbtn_sm = is_plugin ? 45.0f : 50.0f;
+    const float tbtn_sm = 45.0f; /* compact buttons for all builds */
     const ImVec2 btn_sz(tbtn_w, btn_h);
     const ImVec2 btn_sm(tbtn_sm, btn_h);
 
     float export_x = ImGui::GetCursorPosX();
 
-    if (ImGui::Button(export_dialog_visible() ? "EXPORT*" : "EXPORT",
-                       ImVec2(is_plugin ? 60.0f : 70.0f, btn_h))) {
+    if (ImGui::Button(export_dialog_visible() ? "EXP*" : "EXP",
+                       ImVec2(45.0f, btn_h))) {
         if (export_dialog_visible())
             export_dialog_hide();
         else
             export_dialog_show();
     }
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Export (WAV/MP3/FLAC)");
     ImGui::SameLine();
 
     {
         int *vis = pattern_presets_visible_ptr();
-        const char *pre_label = is_plugin ? (*vis ? "PRE*" : "PRE")
-                                          : (*vis ? "PRESETS*" : "PRESETS");
+        const char *pre_label = *vis ? "PRE*" : "PRE";
         if (ColoredButton(pre_label, *vis != 0, ImVec4(0.71f, 0.55f, 0.24f, 1.0f),
-                          ImVec2(is_plugin ? 45.0f : 70.0f, btn_h)))
+                          ImVec2(45.0f, btn_h)))
             *vis = !*vis;
     }
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Pattern Presets");
     ImGui::SameLine();
 
     /* Panel toggles differ: plugin has PNO + KEY, standalone has just PIANO */
@@ -428,17 +493,20 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                 }
             }
         }
+        if (ImGui::IsItemHovered()) SQ_TOOLTIP("Piano Roll");
         ImGui::SameLine();
 
         if (ColoredButton(*p->show_keyboard ? "KEY*" : "KEY",
                           *p->show_keyboard, ImVec4(0.71f, 0.51f, 0.24f, 1.0f), btn_sm))
             *p->show_keyboard = !*p->show_keyboard;
+        if (ImGui::IsItemHovered()) SQ_TOOLTIP("Virtual Keyboard");
         ImGui::SameLine();
     } else {
         /* Standalone: PIANO button toggles keyboard */
-        if (ColoredButton(*p->show_keyboard ? "PIANO*" : "PIANO",
+        if (ColoredButton(*p->show_keyboard ? "PNO*" : "PNO",
                           *p->show_keyboard, ImVec4(0.24f, 0.47f, 0.71f, 1.0f), btn_sz))
             *p->show_keyboard = !*p->show_keyboard;
+        if (ImGui::IsItemHovered()) SQ_TOOLTIP("Piano / Virtual Keyboard");
         ImGui::SameLine();
     }
 
@@ -455,26 +523,28 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                           mode_colors[engine->transport.mode], btn_sm))
             engine->transport.mode = (sq_play_mode_t)((engine->transport.mode + 1) % 3);
     }
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Pattern / Song / Perform mode");
     ImGui::SameLine();
 
-    if (ColoredButton(*p->show_mixer ? (is_plugin ? "MIX/FX*" : "MIXER/FX*")
-                                     : (is_plugin ? "MIX/FX" : "MIXER/FX"),
+    if (ColoredButton(*p->show_mixer ? "MIX/FX*" : "MIX/FX",
                       *p->show_mixer, ImVec4(0.51f, 0.31f, 0.63f, 1.0f),
                       ImVec2(is_plugin ? 55.0f : 75.0f, btn_h)))
         *p->show_mixer = !*p->show_mixer;
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Mixer / Effects");
     ImGui::SameLine();
 
-    if (ColoredButton(*p->show_browser ? (is_plugin ? "BRW*" : "BROWSE*")
-                                       : (is_plugin ? "BRW" : "BROWSE"),
+    if (ColoredButton(*p->show_browser ? "BRW*" : "BRW",
                       *p->show_browser, ImVec4(0.24f, 0.51f, 0.24f, 1.0f),
                       ImVec2(is_plugin ? 45.0f : 70.0f, btn_h)))
         *p->show_browser = !*p->show_browser;
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Sample Browser");
     ImGui::SameLine();
 
     /* THEME button with popup selector */
     {
-        if (ImGui::Button(is_plugin ? "THM" : "THEME", btn_sm))
+        if (ImGui::Button("THM", btn_sm))
             ImGui::OpenPopup("ThemePopup");
+        if (ImGui::IsItemHovered()) SQ_TOOLTIP("Theme");
         if (ImGui::BeginPopup("ThemePopup")) {
             ImGui::Text("Select Theme:");
             ImGui::Separator();
@@ -541,13 +611,33 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         }
     }
 
-    /* ── Window controls: [gear] _ [] X (standalone only) ───────────── */
+    /* ── Window controls: [autosave] [gear] _ [] X (standalone only) ─ */
     if (!is_plugin && p->window) {
         ImGui::SameLine();
         ImVec2 wc_sz(35.0f, btn_h);
         float gear_w = btn_h; /* square button */
-        float controls_w = gear_w + 4 + wc_sz.x * 3 + 2 * 2 + 8;
+        float autosave_w = 0.0f;
+
+        /* Pulsing "auto-saving..." indicator */
+        if (g_autosave_timer > 0.0f) {
+            autosave_w = 80.0f;
+            g_autosave_timer -= ImGui::GetIO().DeltaTime;
+        }
+
+        float controls_w = autosave_w + gear_w + 4 + wc_sz.x * 3 + 2 * 2 + 8;
         ImGui::SameLine(ImGui::GetWindowWidth() - controls_w);
+
+        if (g_autosave_timer > 0.0f) {
+            float t = (float)ImGui::GetTime();
+            float pulse = 0.5f + 0.5f * sinf(t * 4.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                ImVec4(0.4f, 0.85f, 0.4f, pulse));
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+            ImGui::Text("saving...");
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+        }
 
         /* Settings gear icon */
         if (p->show_settings) {
@@ -716,6 +806,39 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             ImGui::SameLine(0, 2);
         }
 
+        /* MIDI Learn button (only when a MIDI device is connected) */
+        {
+            extern struct sq_midi *gui_get_midi(void);
+            struct sq_midi *lmidi = gui_get_midi();
+            if (lmidi && sq_midi_get_open_port(lmidi) >= 0) {
+                bool learning = (sq_midi_learn_active(lmidi) != SQ_PARAM_NONE);
+                if (learning) {
+                    float lt = (float)ImGui::GetTime();
+                    float lp = 0.5f + 0.5f * sinf(lt * 6.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Button,
+                        ImVec4(0.6f * lp, 0.55f * lp, 0.1f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.7f, 0.65f, 0.15f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(0.5f, 0.45f, 0.1f, 1.0f));
+                }
+                if (ImGui::Button(learning ? "LRN*" : "LRN",
+                                  ImVec2(35.0f, pat_btn_h))) {
+                    if (learning)
+                        sq_midi_learn_cancel(lmidi);
+                    else
+                        sq_midi_learn_start(lmidi, SQ_PARAM_FILTER_CUTOFF);
+                }
+                if (learning)
+                    ImGui::PopStyleColor(3);
+                if (ImGui::IsItemHovered())
+                    SQ_TOOLTIP(learning
+                        ? "Click to cancel. Or twist a knob."
+                        : "MIDI Learn: binds next CC to filter cutoff.\nRight-click synth knobs for other params.");
+                ImGui::SameLine(0, 2);
+            }
+        }
+
         /* Right scroll button */
         if (end < total) {
             if (ImGui::Button(">##patR", ImVec2(scroll_btn_w, pat_btn_h)))
@@ -744,6 +867,20 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                     }
                 }
             }
+            ImGui::SameLine(0, 2);
+        }
+
+        /* "-" button to delete last pattern */
+        if (engine->num_patterns > 1) {
+            if (ImGui::Button("-##delpat", ImVec2(pat_btn_w, pat_btn_h))) {
+                engine->num_patterns--;
+                if ((uint32_t)engine->transport.current_pattern >= engine->num_patterns)
+                    engine->transport.current_pattern = (int)engine->num_patterns - 1;
+                if (g_pat_scroll > 0 && g_pat_scroll + max_visible > (int)engine->num_patterns)
+                    g_pat_scroll--;
+            }
+            if (ImGui::IsItemHovered())
+                SQ_TOOLTIP("Delete last pattern");
             ImGui::SameLine(0, 2);
         }
 

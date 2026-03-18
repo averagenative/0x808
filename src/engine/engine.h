@@ -21,6 +21,24 @@ extern "C" {
 #include "engine/effects.h"
 #include "engine/command_queue.h"
 
+/* ─── Mappable MIDI CC parameters ─────────────────────────────────────────── */
+
+typedef enum {
+    SQ_PARAM_NONE = -1,
+    SQ_PARAM_MASTER_VOLUME = 0,
+    SQ_PARAM_BPM,
+    SQ_PARAM_SWING,
+    SQ_PARAM_FILTER_CUTOFF,
+    SQ_PARAM_FILTER_RESONANCE,
+    SQ_PARAM_AMP_ATTACK,
+    SQ_PARAM_AMP_DECAY,
+    SQ_PARAM_AMP_SUSTAIN,
+    SQ_PARAM_AMP_RELEASE,
+    SQ_PARAM_DELAY_WET,
+    SQ_PARAM_REVERB_WET,
+    SQ_PARAM_COUNT
+} sq_param_id_t;
+
 /* ─── Limits ──────────────────────────────────────────────────────────────── */
 
 #define SQ_MAX_TRACKS      16   /* max tracks per pattern                    */
@@ -40,6 +58,7 @@ typedef struct {
     uint32_t num_channels;      /* 1 = mono, 2 = stereo                     */
     uint32_t sample_rate;       /* original sample rate (e.g., 44100)        */
     char     name[SQ_SAMPLE_NAME_LEN];
+    char     filepath[512];     /* full path used to load (for project save) */
 } sq_sample_t;
 
 /* ─── Voice: a single instance of a sample being played back ──────────────── */
@@ -52,6 +71,9 @@ typedef struct {
     float    velocity;          /* amplitude scale from step velocity (0-1)  */
     float    volume;            /* track volume (0-1)                        */
     float    pan;               /* track pan (-1 = left, 0 = center, 1 = R) */
+    uint32_t clip_start;       /* sample start frame (0 = default)          */
+    uint32_t clip_end;         /* sample end frame (0 = full length)        */
+    bool     reverse;          /* play sample in reverse                    */
     uint64_t start_time;        /* sample position when voice was triggered  */
 } sq_voice_t;
 
@@ -61,7 +83,10 @@ typedef struct {
     uint8_t  velocity;          /* 0 = off, 1-127 = on (louder = higher)     */
     int8_t   pitch_offset;      /* semitones from root (-24 to +24)          */
     uint8_t  note;              /* MIDI note number (for piano roll mode)    */
+    uint8_t  probability;       /* 0 = always (100%), 1-100 = percentage     */
+    uint8_t  retrigger;         /* 0 = off, 2-4 = subdivisions per step     */
     float    length;            /* note length in steps (for piano roll)     */
+    float    micro_offset;      /* timing offset in steps (-0.5 to +0.5)    */
     float    param[4];          /* per-step parameter automation slots       */
 } sq_step_t;
 
@@ -85,7 +110,12 @@ typedef struct {
     bool       mute;            /* if true, track produces no audio          */
     bool       solo;            /* if true, only soloed tracks are heard     */
     float      humanize;        /* velocity randomization 0.0-1.0           */
+    float      timing_humanize; /* timing randomization 0.0-1.0            */
+    uint32_t   sample_start;   /* sample playback start frame (0=default)  */
+    uint32_t   sample_end;     /* sample playback end frame (0=full)       */
+    bool       sample_reverse; /* play sample in reverse                   */
     uint8_t    color_index;     /* 0-7, index into track color palette      */
+    uint8_t    choke_group;    /* 0 = none, 1-8 = exclusive mute group    */
     sq_effect_slot_t effects[MAX_TRACK_EFFECTS]; /* per-track insert effects */
 } sq_track_t;
 
@@ -128,6 +158,7 @@ typedef struct {
     int            current_section; /* which section in arrangement          */
     int            queued_section;  /* next section to play (perform mode)   */
     bool           pattern_completed; /* set when pattern wraps to step 0   */
+    bool           step0_pending;    /* trigger step 0 on next process call */
     int            section_repeat;    /* current repeat count within section */
     float          swing;           /* swing amount 0.0 (straight) to 1.0   */
 } sq_transport_t;
@@ -297,6 +328,9 @@ typedef struct {
     /* Wavetable per-voice state */
     double wt_phase;            /* oscillator phase (0.0 - 1.0)             */
     float  wt_smoothed_pos;     /* smoothed wavetable position               */
+    float  pitch_bend;          /* MIDI pitch bend in semitones (±2)        */
+    float  plock_cutoff;       /* per-voice cutoff override (0 = use preset) */
+    float  plock_resonance;    /* per-voice resonance override (0 = use preset) */
 } sq_synth_voice_t;
 
 /* Wavetable storage — pre-computed waveforms (for subtractive oscillators) */
@@ -358,6 +392,21 @@ typedef struct {
 
 #define SQ_MAX_ACTIVE_NOTES 16
 
+/* ─── Retrigger queue (for note repeat / ratcheting) ─────────────────────── */
+
+typedef struct {
+    uint32_t remaining;      /* samples until next retrigger (0 = inactive) */
+    uint32_t interval;       /* samples between retriggers                  */
+    uint8_t  count;          /* how many retriggers left                    */
+    uint8_t  track;          /* which track to retrigger                    */
+    float    velocity;       /* initial velocity (decays per retrigger)     */
+    float    vel_decay;      /* multiply velocity by this each retrigger    */
+    int8_t   pitch_offset;   /* pitch offset from original step             */
+    uint8_t  note;           /* MIDI note (for synth tracks)                */
+} sq_retrigger_t;
+
+#define SQ_MAX_RETRIGGERS 8
+
 /* ─── Engine: the top-level state container ───────────────────────────────── */
 
 typedef struct tsf tsf; /* forward declare */
@@ -404,8 +453,14 @@ typedef struct {
     /* Simple PRNG state for humanization (xorshift32) */
     uint32_t       rng_state;
 
+    /* MIDI CC → parameter mapping (used by engine to apply CC commands) */
+    struct { int8_t map[128]; } cc_map;
+
     /* Active note tracking for sequencer note-off */
     sq_active_note_t active_notes[SQ_MAX_ACTIVE_NOTES];
+
+    /* Retrigger queue (note repeat / ratcheting) */
+    sq_retrigger_t retriggers[SQ_MAX_RETRIGGERS];
 
     /* Streaming recorder (writes to disk in real-time) */
     sq_recorder_t  recorder;

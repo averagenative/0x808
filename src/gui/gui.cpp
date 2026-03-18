@@ -217,6 +217,7 @@ static int sdl_to_sq_key(int sdlk)
     case SDLK_c:         return SQ_KEY_C;
     case SDLK_o:         return SQ_KEY_O;
     case SDLK_s:         return SQ_KEY_S;
+    case SDLK_g:         return SQ_KEY_G;
     case SDLK_t:         return SQ_KEY_T;
     case SDLK_v:         return SQ_KEY_V;
     case SDLK_z:         return SQ_KEY_Z;
@@ -239,9 +240,24 @@ static int sdl_to_sq_mod(int sdl_mod)
 static SDL_Window    *g_window = NULL;
 static SDL_GLContext  g_gl_ctx = NULL;
 static sq_app_t       g_app;
-static struct sq_midi *g_midi = NULL;
+/* g_midi is now in gui_globals.cpp via gui_get_midi() */
+
+void *gui_get_app(void) { return &g_app; }
 static char g_project_path[512] = "";
 static bool g_project_path_init = false;
+
+const char *gui_get_project_path(void) { return g_project_path; }
+void gui_set_project_path(const char *path) {
+    if (path) {
+        snprintf(g_project_path, sizeof(g_project_path), "%s", path);
+        g_project_path_init = true;
+    }
+}
+
+int gui_file_dialog(char *buf, int bufsize, int is_save, const char *default_path)
+{
+    return native_file_dialog(buf, (size_t)bufsize, is_save != 0, default_path) ? 1 : 0;
+}
 
 /* ─── Public API ──────────────────────────────────────────────────────────── */
 
@@ -342,6 +358,46 @@ int gui_frame(sq_engine_t *engine)
             snprintf(g_project_path, sizeof(g_project_path), "project.sqproj");
     }
 
+    /* Sync MIDI input preset to the selected synth track */
+    {
+        struct sq_midi *midi = gui_get_midi();
+        if (midi) {
+            int preset = sq_app_get_keyboard_preset(&g_app, engine);
+            if (preset >= 0)
+                sq_midi_set_preset(midi, preset);
+
+            /* Auto-reconnect MIDI device if unplugged and replugged */
+            static double last_reconnect_check = 0;
+            double rc_now = ImGui::GetTime();
+            if (rc_now - last_reconnect_check > 3.0) {
+                last_reconnect_check = rc_now;
+                int count = sq_midi_get_port_count(midi);
+                int open_port = sq_midi_get_open_port(midi);
+
+                /* Detect unplug: if our port is gone, close it */
+                if (open_port >= 0 && open_port >= count) {
+                    sq_midi_close_port(midi);
+                    g_app.midi_port_index = -1;
+                    sq_app_set_status(&g_app, "MIDI device disconnected", 120);
+                    open_port = -1;
+                }
+
+                /* Auto-reconnect: if disconnected and we know the device name */
+                if (open_port < 0 && g_app.midi_device_name[0] && count > 0) {
+                    for (int i = 0; i < count; i++) {
+                        const char *name = sq_midi_get_port_name(midi, i);
+                        if (name && strstr(name, g_app.midi_device_name)) {
+                            sq_midi_open_port(midi, i);
+                            g_app.midi_port_index = i;
+                            sq_app_set_status(&g_app, "MIDI reconnected", 120);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /* Auto-select first synth track on startup */
     if (g_app.selected_track < 0) {
         int pi = engine->transport.current_pattern;
@@ -392,7 +448,6 @@ int gui_frame(sq_engine_t *engine)
             bool imgui_wants_kb = ImGui::GetIO().WantCaptureKeyboard;
             bool is_transport = (sq_key == SQ_KEY_SPACE || sq_key == SQ_KEY_ESCAPE);
             bool is_pattern_key = (!is_ctrl && sq_key >= SQ_KEY_1 && sq_key <= SQ_KEY_9);
-
             if (is_transport || is_pattern_key || is_ctrl || !imgui_wants_kb) {
                 sq_app_action_t action = sq_app_handle_key(&g_app, engine,
                                                             sq_key, sq_mod, true);
@@ -436,6 +491,19 @@ int gui_frame(sq_engine_t *engine)
                 case SQ_ACTION_TOGGLE_THEME:
                     theme_toggle();
                     break;
+                case SQ_ACTION_TAP_TEMPO: {
+                    uint64_t now_us = (uint64_t)(
+                        (double)SDL_GetPerformanceCounter() /
+                        (double)SDL_GetPerformanceFrequency() * 1000000.0);
+                    double bpm = sq_app_tap_tempo(&g_app, now_us);
+                    if (bpm > 0.0) {
+                        engine->transport.bpm = bpm;
+                        char msg[32];
+                        snprintf(msg, sizeof(msg), "Tap: %.0f BPM", bpm);
+                        sq_app_set_status(&g_app, msg, 90);
+                    }
+                    break;
+                }
                 case SQ_ACTION_NONE:
                 default:
                     break;
@@ -589,7 +657,7 @@ int gui_frame(sq_engine_t *engine)
         float settings_x = main_w - settings_w;
         if (g_app.panels[SQ_PANEL_BROWSER])
             settings_x -= browser_w;
-        settings_panel_draw(engine, &g_app, g_midi, settings_x, grid_y, settings_w, total_h);
+        settings_panel_draw(engine, &g_app, gui_get_midi(), settings_x, grid_y, settings_w, total_h);
     }
 
     /* Virtual keyboard */
@@ -654,10 +722,7 @@ int gui_get_audio_device_index(void)
     return g_app.audio_config.device_index;
 }
 
-void gui_set_midi(struct sq_midi *midi)
-{
-    g_midi = midi;
-}
+/* gui_set_midi / gui_get_midi are now in gui_globals.cpp */
 
 void gui_shutdown(void)
 {

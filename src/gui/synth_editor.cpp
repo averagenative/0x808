@@ -7,17 +7,49 @@
 
 #include "imgui.h"
 
+#include <cstdio>
+#include <cstring>
+#include <cstdint>
+#include <math.h>
+
 extern "C" {
 #include "engine/engine.h"
+#include "engine/sq_midi.h"
 #define LOG_TAG "synth_ed"
 #include "core/log.h"
 #include "gui/knobs.h"
+#include "gui/gui.h"
+struct sq_midi *gui_get_midi(void); /* defined in gui.cpp */
 }
 
-#include <cstdio>
-#include <cstring>
-#include <cmath>
-#include <cstdint>
+/* ─── MIDI learn helper ──────────────────────────────────────────────────── */
+
+static void midi_learn_check(sq_param_id_t param)
+{
+    struct sq_midi *midi = gui_get_midi();
+    if (!midi) return;
+
+    /* Tooltip for MIDI learn */
+    if (g_tooltips_enabled && ImGui::IsItemHovered())
+        ImGui::SetTooltip("Right-click to MIDI learn\n(applies to all presets globally)");
+
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        if (sq_midi_learn_active(midi) == param)
+            sq_midi_learn_cancel(midi);
+        else
+            sq_midi_learn_start(midi, param);
+    }
+
+    if (sq_midi_learn_active(midi) == param) {
+        float t = (float)ImGui::GetTime();
+        float pulse = 0.5f + 0.5f * sinf(t * 6.0f);
+        ImVec2 mn = ImGui::GetItemRectMin();
+        ImVec2 mx = ImGui::GetItemRectMax();
+        ImGui::GetWindowDrawList()->AddRect(
+            ImVec2(mn.x - 2, mn.y - 2), ImVec2(mx.x + 2, mx.y + 2),
+            IM_COL32(255, 220, 40, (int)(pulse * 255)), 4.0f, 0, 2.0f);
+    }
+}
 
 /* Waveform names for display */
 static const char *wave_names[] = {"Saw", "Square", "Triangle", "Sine"};
@@ -535,8 +567,10 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     p->filter_type = (sq_filter_type_t)ft;
 
     knob_float("Cut", &p->filter_cutoff, 20.0f, 20000.0f, 1000.0f, 10.0f);
+    midi_learn_check(SQ_PARAM_FILTER_CUTOFF);
     ImGui::SameLine();
     knob_float("Res", &p->filter_resonance, 0.5f, 20.0f, 1.0f, 0.1f);
+    midi_learn_check(SQ_PARAM_FILTER_RESONANCE);
     knob_float("Env", &p->filter_env_depth, -10000.0f, 10000.0f, 0.0f, 50.0f);
 
     ImGui::Text("Filter Env:");
@@ -564,11 +598,15 @@ static void draw_subtractive(sq_synth_preset_t *p, float panel_h)
     ImGui::Separator();
 
     knob_float("A##amp", &p->amp_env.attack, 0.001f, 2.0f, 0.005f, 0.001f);
+    midi_learn_check(SQ_PARAM_AMP_ATTACK);
     ImGui::SameLine();
     knob_float("D##amp", &p->amp_env.decay, 0.001f, 2.0f, 0.3f, 0.001f);
+    midi_learn_check(SQ_PARAM_AMP_DECAY);
     knob_float("S##amp", &p->amp_env.sustain, 0.0f, 1.0f, 0.8f, 0.01f);
+    midi_learn_check(SQ_PARAM_AMP_SUSTAIN);
     ImGui::SameLine();
     knob_float("R##amp", &p->amp_env.release, 0.001f, 5.0f, 0.5f, 0.001f);
+    midi_learn_check(SQ_PARAM_AMP_RELEASE);
 
     /* Amp envelope visualization */
     float avail_w2 = ImGui::GetContentRegionAvail().x;

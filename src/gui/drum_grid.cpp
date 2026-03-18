@@ -28,6 +28,7 @@ extern "C" {
 #include "gui/theme.h"
 #include "gui/mixer_view.h"
 #include "engine/sampler.h"
+#include "engine/sequencer.h"
 #include "engine/kits.h"
 }
 
@@ -125,10 +126,17 @@ void drum_grid_draw(sq_engine_t *engine,
     /* Layout constants */
     float track_panel_w = 200.0f;  /* width for track name + controls */
     float cell_pad = 2.0f;
-    uint32_t num_steps = pattern->tracks[0].length;
+    /* Use longest track length for playhead and global grid width */
+    uint32_t num_steps = 16;
+    for (uint32_t t = 0; t < pattern->num_tracks; t++) {
+        if (pattern->tracks[t].length > num_steps)
+            num_steps = pattern->tracks[t].length;
+    }
     float grid_w = w - track_panel_w - 32.0f; /* extra margin for glow bleed */
     float cell_w = grid_w / (float)num_steps;
-    float row_h = 96.0f;
+    float row_h_collapsed = 66.0f;  /* unselected: name + mute/solo + type badge */
+    float row_h_expanded  = 130.0f; /* selected: all controls visible */
+    float row_h = row_h_collapsed;  /* default, overridden per track below */
     /* Use the GUI's wall-clock-driven visual step */
     int current_step = g_visual_step;
 
@@ -183,6 +191,9 @@ void drum_grid_draw(sq_engine_t *engine,
     for (uint32_t t = 0; t < pattern->num_tracks; t++) {
         sq_track_t *track = &pattern->tracks[t];
         ImU32 base_color = track_colors[track->color_index % NUM_TRACK_COLORS];
+
+        /* Dynamic row height: expanded for selected track, collapsed for others */
+        row_h = (g_selected_track == (int)t) ? row_h_expanded : row_h_collapsed;
 
         /* Draw separator line before first synth/SF2 track */
         if ((track->type == TRACK_SYNTH || track->type == TRACK_SF2) && !drew_separator) {
@@ -307,9 +318,14 @@ void drum_grid_draw(sq_engine_t *engine,
                 ImGui::PopStyleColor(3);
             }
 
+            /* Only show detailed controls for the selected track */
+            bool is_expanded = (g_selected_track == (int)t);
+
             /* Row 2: Volume + Humanize knobs */
+            if (is_expanded)
             {
-                ImGui::Text("V:%.0f", track->volume * 100);
+                ImGui::Text("Vol");
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Track Volume");
                 ImGui::SameLine();
                 char vol_id[32];
                 snprintf(vol_id, sizeof(vol_id), "##vol%u", t);
@@ -317,13 +333,96 @@ void drum_grid_draw(sq_engine_t *engine,
                 ImGui::SliderFloat(vol_id, &track->volume, 0.0f, 1.0f, "");
                 ImGui::PopItemWidth();
                 ImGui::SameLine();
-                ImGui::Text("H:%.0f%%", track->humanize * 100);
+                ImGui::Text("H");
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Velocity Humanize\nRandomizes hit velocity each loop");
                 ImGui::SameLine();
                 char hum_id[32];
                 snprintf(hum_id, sizeof(hum_id), "##hum%u", t);
-                ImGui::PushItemWidth(40);
+                ImGui::PushItemWidth(35);
                 ImGui::SliderFloat(hum_id, &track->humanize, 0.0f, 1.0f, "");
                 ImGui::PopItemWidth();
+                ImGui::SameLine();
+                ImGui::Text("T");
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Timing Humanize\nRandomizes step timing each loop");
+                ImGui::SameLine();
+                char thum_id[32];
+                snprintf(thum_id, sizeof(thum_id), "##thum%u", t);
+                ImGui::PushItemWidth(35);
+                ImGui::SliderFloat(thum_id, &track->timing_humanize, 0.0f, 1.0f, "");
+                ImGui::PopItemWidth();
+            }
+
+            /* Choke group selector (compact) */
+            if (is_expanded)
+            {
+                const char *choke_labels[] = { "--", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8" };
+                int cg = track->choke_group;
+                if (cg < 0 || cg > 8) cg = 0;
+                ImGui::Text("Chk");
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Choke Group\nTracks in same group silence each other");
+                ImGui::SameLine();
+                char choke_id[32];
+                snprintf(choke_id, sizeof(choke_id), "##chk%u", t);
+                ImGui::PushItemWidth(36);
+                if (ImGui::BeginCombo(choke_id, choke_labels[cg], ImGuiComboFlags_NoArrowButton)) {
+                    for (int c = 0; c <= 8; c++) {
+                        if (ImGui::Selectable(choke_labels[c], cg == c))
+                            track->choke_group = (uint8_t)c;
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::PopItemWidth();
+
+                /* Track length (polymeter) */
+                ImGui::SameLine();
+                {
+                    static const int len_opts[] = {4, 6, 8, 12, 16, 24, 32, 48, 64};
+                    static const char *len_labels[] = {"4","6","8","12","16","24","32","48","64"};
+                    int cur_sel = 4; /* default to 16 */
+                    for (int li = 0; li < 9; li++) {
+                        if ((int)track->length == len_opts[li]) { cur_sel = li; break; }
+                    }
+                    char len_id[32];
+                    snprintf(len_id, sizeof(len_id), "##len%u", t);
+                    ImGui::PushItemWidth(36);
+                    if (ImGui::BeginCombo(len_id, len_labels[cur_sel], ImGuiComboFlags_NoArrowButton)) {
+                        for (int li = 0; li < 9; li++) {
+                            if (ImGui::Selectable(len_labels[li], cur_sel == li))
+                                track->length = (uint32_t)len_opts[li];
+                        }
+                        ImGui::EndCombo();
+                    }
+                    ImGui::PopItemWidth();
+                }
+            }
+
+            /* Randomize + Euclidean buttons */
+            if (is_expanded)
+            {
+                char rnd_id[32], euc_id[32];
+                snprintf(rnd_id, sizeof(rnd_id), "Rnd##r%u", t);
+                snprintf(euc_id, sizeof(euc_id), "Euc##e%u", t);
+                if (ImGui::SmallButton(rnd_id)) {
+                    sequencer_randomize_track(engine, (int)t, 0.4f);
+                }
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Randomize pattern (40%% density)");
+                ImGui::SameLine();
+                if (ImGui::SmallButton(euc_id)) {
+                    sequencer_euclidean_fill(engine, (int)t, 4, (int)track->length, 0, 100);
+                }
+                if (ImGui::IsItemHovered()) SQ_TOOLTIP("Euclidean rhythm (4 pulses)");
+                /* Sample reverse toggle for sampler tracks */
+                if (track->type == TRACK_SAMPLER) {
+                    ImGui::SameLine();
+                    char rev_id[32];
+                    snprintf(rev_id, sizeof(rev_id), "Rev##rv%u", t);
+                    if (ImGui::SmallButton(rev_id))
+                        track->sample_reverse = !track->sample_reverse;
+                    if (track->sample_reverse) {
+                        ImGui::SameLine();
+                        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "<");
+                    }
+                }
             }
 
             /* Row 3: Track type toggle (Sampler / Synth / SF2) + Sample/Preset selector */
@@ -437,7 +536,11 @@ void drum_grid_draw(sq_engine_t *engine,
         char cells_id[64];
         snprintf(cells_id, sizeof(cells_id), "Steps_%u", t);
         ImVec2 cells_origin = ImGui::GetCursorScreenPos();
-        float cells_region_w = (float)num_steps * cell_w;
+        uint32_t track_steps = track->length;
+        if (track_steps < 1) track_steps = 1;
+        if (track_steps > SQ_MAX_STEPS) track_steps = SQ_MAX_STEPS;
+        float track_cell_w = grid_w / (float)track_steps;
+        float cells_region_w = (float)track_steps * track_cell_w;
 
         ImGui::BeginChild(cells_id, ImVec2(cells_region_w, row_h - 4), false,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -445,7 +548,7 @@ void drum_grid_draw(sq_engine_t *engine,
             ImDrawList *cell_dl = ImGui::GetWindowDrawList();
             ImVec2 origin = ImGui::GetCursorScreenPos();
 
-            for (uint32_t s = 0; s < num_steps; s++) {
+            for (uint32_t s = 0; s < track_steps; s++) {
                 sq_step_t *step = &track->steps[s];
                 bool is_active = (step->velocity > 0);
                 bool is_playhead = (engine->transport.playing &&
@@ -472,10 +575,10 @@ void drum_grid_draw(sq_engine_t *engine,
                 }
 
                 /* Cell rectangle */
-                float cx = origin.x + (float)s * cell_w;
+                float cx = origin.x + (float)s * track_cell_w;
                 float cy = origin.y;
                 ImVec2 cell_min = ImVec2(cx + cell_pad * 0.5f, cy);
-                ImVec2 cell_max = ImVec2(cx + cell_w - cell_pad * 0.5f, cy + row_h - 6);
+                ImVec2 cell_max = ImVec2(cx + track_cell_w - cell_pad * 0.5f, cy + row_h - 6);
 
                 /* Hover highlight */
                 bool hovered = ImGui::IsWindowHovered() &&
@@ -609,6 +712,17 @@ void drum_grid_draw(sq_engine_t *engine,
                                 ImVec2(ax + as, ay - as),
                                 ImVec2(ax, ay), pcol);
                         }
+                    }
+
+                    /* Probability indicator: small "P%" at top-right if < 100% */
+                    if (step->probability > 0 && step->probability < 100) {
+                        char plbl[8];
+                        snprintf(plbl, sizeof(plbl), "%d%%", step->probability);
+                        ImVec2 psz = ImGui::CalcTextSize(plbl);
+                        float px = cell_max.x - psz.x - 2.0f;
+                        float py = cell_min.y + 1.0f;
+                        cell_dl->AddText(ImVec2(px, py),
+                            IM_COL32(255, 200, 50, 180), plbl);
                     }
                 }
 
@@ -800,7 +914,7 @@ void drum_grid_draw(sq_engine_t *engine,
             ImGui::SetNextWindowFocus();
         }
 
-        ImGui::SetNextWindowSize(ImVec2(260, 180), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(ImVec2(260, 400), ImGuiCond_Appearing);
 
         bool window_open = true;
         ImGuiWindowFlags edit_flags = ImGuiWindowFlags_NoResize;
@@ -834,6 +948,57 @@ void drum_grid_draw(sq_engine_t *engine,
             ImGui::PopItemWidth();
             ps->pitch_offset = (int8_t)pitch;
 
+            /* Probability slider */
+            int prob = ps->probability;
+            if (prob == 0) prob = 100; /* 0 means 100% (always) */
+            ImGui::Text("Prob:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+            ImGui::SliderInt("##prob_edit", &prob, 1, 100, "%d%%");
+            ImGui::PopItemWidth();
+            ps->probability = (prob >= 100) ? 0 : (uint8_t)prob;
+
+            /* Retrigger selector */
+            const char *retrig_labels[] = { "Off", "2x", "3x", "4x" };
+            int retrig = ps->retrigger;
+            if (retrig < 2) retrig = 0; else retrig -= 1; /* 0=off, 1=2x, 2=3x, 3=4x */
+            ImGui::Text("Retrig:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::Combo("##retrig_edit", &retrig, retrig_labels, 4))
+                ps->retrigger = (retrig == 0) ? 0 : (uint8_t)(retrig + 1);
+            ImGui::PopItemWidth();
+
+            /* Micro-timing offset */
+            float utime = ps->micro_offset;
+            ImGui::Text("Timing:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+            ImGui::SliderFloat("##utime_edit", &utime, -0.5f, 0.5f, "%.2f");
+            ImGui::PopItemWidth();
+            ps->micro_offset = utime;
+
+            /* Parameter locks (synth tracks only) */
+            if (pt->type == TRACK_SYNTH) {
+                ImGui::Spacing();
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "P-Locks:");
+                float pcut = ps->param[0];
+                ImGui::Text("Cutoff:");
+                ImGui::SameLine();
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                ImGui::SliderFloat("##plock_cut", &pcut, 0.0f, 20000.0f, "%.0f");
+                ImGui::PopItemWidth();
+                ps->param[0] = pcut;
+
+                float pres = ps->param[1];
+                ImGui::Text("Reso:");
+                ImGui::SameLine();
+                ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
+                ImGui::SliderFloat("##plock_res", &pres, 0.0f, 20.0f, "%.1f");
+                ImGui::PopItemWidth();
+                ps->param[1] = pres;
+            }
+
             /* Display values */
             ImGui::Spacing();
             char val_text[64];
@@ -845,8 +1010,21 @@ void drum_grid_draw(sq_engine_t *engine,
 
             ImGui::Spacing();
 
-            /* Done button */
-            if (ImGui::Button("Done", ImVec2(ImGui::GetContentRegionAvail().x, 25))) {
+            /* Reset + Done buttons */
+            float btn_w = (ImGui::GetContentRegionAvail().x - 8) * 0.5f;
+            if (ImGui::Button("Reset", ImVec2(btn_w, 25))) {
+                /* Keep velocity (pad stays active), reset everything else */
+                ps->pitch_offset = 0;
+                ps->probability = 0;
+                ps->retrigger = 0;
+                ps->micro_offset = 0.0f;
+                ps->length = 0.0f;
+                ps->note = 0;
+                for (int p = 0; p < 4; p++) ps->param[p] = 0.0f;
+                want_close = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Done", ImVec2(btn_w, 25))) {
                 want_close = true;
             }
         }

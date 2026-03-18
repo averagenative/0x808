@@ -7,6 +7,7 @@
 
 #include "gtk_gui.h"
 #include "engine/synth.h"
+#include "engine/sq_midi.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -606,11 +607,44 @@ static void on_int_slider_changed(GtkRange *range, gpointer user_data)
 
 /* ─── Helper: inline knob with label ──────────────────────────────────────── */
 
+/* Right-click handler for MIDI learn on GTK knobs */
+static void on_knob_midi_learn(GtkGestureClick *gesture, int n_press,
+                                double x, double y, gpointer user_data)
+{
+    (void)gesture; (void)n_press; (void)x; (void)y;
+    sq_midi_t *midi = (sq_midi_t *)g_gtk.midi;
+    if (!midi) return;
+    sq_param_id_t param = (sq_param_id_t)(intptr_t)user_data;
+    if (sq_midi_learn_active(midi) == param)
+        sq_midi_learn_cancel(midi);
+    else
+        sq_midi_learn_start(midi, param);
+    char msg[48];
+    if (sq_midi_learn_active(midi) != SQ_PARAM_NONE)
+        snprintf(msg, sizeof(msg), "MIDI Learn: wiggle a knob on controller...");
+    else
+        snprintf(msg, sizeof(msg), "MIDI Learn cancelled");
+    sq_app_set_status(&g_gtk.app, msg, 120);
+}
+
 static GtkWidget *make_knob(const char *label_text, float min, float max,
                              float *value_ptr)
 {
     GtkWidget *knob = gtk_knob_new(min, max, value_ptr, label_text);
     gtk_widget_set_size_request(knob, 44, 50);
+    return knob;
+}
+
+/* Make a knob with MIDI learn on right-click */
+static GtkWidget *make_knob_learn(const char *label_text, float min, float max,
+                                   float *value_ptr, sq_param_id_t param)
+{
+    GtkWidget *knob = make_knob(label_text, min, max, value_ptr);
+    GtkGesture *rclick = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(rclick), 3); /* right button */
+    g_signal_connect(rclick, "pressed", G_CALLBACK(on_knob_midi_learn),
+                     (gpointer)(intptr_t)param);
+    gtk_widget_add_controller(knob, GTK_EVENT_CONTROLLER(rclick));
     return knob;
 }
 
@@ -623,6 +657,20 @@ static GtkWidget *make_adsr_knobs(float *a, float *d, float *s, float *r,
     gtk_box_append(GTK_BOX(row), make_knob("D", 0.001f, d_max, d));
     gtk_box_append(GTK_BOX(row), make_knob("S", 0, 1, s));
     gtk_box_append(GTK_BOX(row), make_knob("R", 0.001f, r_max, r));
+    return row;
+}
+
+/* Row of 4 ADSR knobs with MIDI learn */
+static GtkWidget *make_adsr_knobs_learn(float *a, float *d, float *s, float *r,
+                                         float a_max, float d_max, float r_max,
+                                         sq_param_id_t pa, sq_param_id_t pd,
+                                         sq_param_id_t ps, sq_param_id_t pr)
+{
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
+    gtk_box_append(GTK_BOX(row), make_knob_learn("A", 0.001f, a_max, a, pa));
+    gtk_box_append(GTK_BOX(row), make_knob_learn("D", 0.001f, d_max, d, pd));
+    gtk_box_append(GTK_BOX(row), make_knob_learn("S", 0, 1, s, ps));
+    gtk_box_append(GTK_BOX(row), make_knob_learn("R", 0.001f, r_max, r, pr));
     return row;
 }
 
@@ -858,8 +906,8 @@ static void rebuild_controls(void)
                   make_int_dropdown("Type", filter_names, 3, (int *)&p->filter_type));
     {
         GtkWidget *filt_row1 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
-        gtk_box_append(GTK_BOX(filt_row1), make_knob("C", 20, 20000, &p->filter_cutoff));
-        gtk_box_append(GTK_BOX(filt_row1), make_knob("R", 0.5, 20, &p->filter_resonance));
+        gtk_box_append(GTK_BOX(filt_row1), make_knob_learn("C", 20, 20000, &p->filter_cutoff, SQ_PARAM_FILTER_CUTOFF));
+        gtk_box_append(GTK_BOX(filt_row1), make_knob_learn("R", 0.5, 20, &p->filter_resonance, SQ_PARAM_FILTER_RESONANCE));
         gtk_box_append(GTK_BOX(col2), filt_row1);
 
         GtkWidget *filt_row2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 2);
@@ -895,9 +943,11 @@ static void rebuild_controls(void)
 
     add_section(col3, "Amp Envelope");
     gtk_box_append(GTK_BOX(col3),
-                  make_adsr_knobs(&p->amp_env.attack, &p->amp_env.decay,
-                                  &p->amp_env.sustain, &p->amp_env.release,
-                                  2.0f, 2.0f, 5.0f));
+                  make_adsr_knobs_learn(&p->amp_env.attack, &p->amp_env.decay,
+                                        &p->amp_env.sustain, &p->amp_env.release,
+                                        2.0f, 2.0f, 5.0f,
+                                        SQ_PARAM_AMP_ATTACK, SQ_PARAM_AMP_DECAY,
+                                        SQ_PARAM_AMP_SUSTAIN, SQ_PARAM_AMP_RELEASE));
 
     s_adsr_ptr = &p->amp_env;
     s_adsr_area = gtk_drawing_area_new();

@@ -15,7 +15,19 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include "engine/command_queue.h"
+#include "engine/engine.h"
+
+/* ─── MIDI CC mapping ────────────────────────────────────────────────────── */
+
+#define SQ_MIDI_CC_UNASSIGNED (-1)
+
+/* CC-to-parameter mapping table: 128 CC slots → param ID */
+typedef struct {
+    int8_t map[128];  /* SQ_PARAM_* or SQ_MIDI_CC_UNASSIGNED (-1) */
+} sq_midi_cc_map_t;
+
+/* Initialize CC map with factory defaults (GM2 + common controller mappings) */
+void sq_midi_cc_map_init(sq_midi_cc_map_t *m);
 
 /* Opaque handle */
 typedef struct sq_midi sq_midi_t;
@@ -47,6 +59,40 @@ void sq_midi_set_preset(sq_midi_t *midi, int preset);
 
 /* Get index of currently open port (-1 if none). */
 int sq_midi_get_open_port(sq_midi_t *midi);
+
+/* Get/set the CC mapping table. */
+sq_midi_cc_map_t *sq_midi_get_cc_map(sq_midi_t *midi);
+
+/* MIDI learn: start learning for a parameter, cancel, or check active. */
+void sq_midi_learn_start(sq_midi_t *midi, sq_param_id_t param);
+void sq_midi_learn_cancel(sq_midi_t *midi);
+sq_param_id_t sq_midi_learn_active(sq_midi_t *midi);
+
+/* MIDI input mode */
+typedef enum {
+    SQ_MIDI_MODE_SYNTH = 0,  /* notes → synth (default) */
+    SQ_MIDI_MODE_DRUM_PADS,  /* notes → GM drum map → sampler tracks */
+} sq_midi_input_mode_t;
+
+void sq_midi_set_input_mode(sq_midi_t *midi, sq_midi_input_mode_t mode);
+sq_midi_input_mode_t sq_midi_get_input_mode(sq_midi_t *midi);
+
+/* ─── MIDI Output ────────────────────────────────────────────────────────── */
+
+/* Get number of available MIDI output ports. */
+int sq_midi_get_output_port_count(sq_midi_t *midi);
+
+/* Get name of a MIDI output port. */
+const char *sq_midi_get_output_port_name(sq_midi_t *midi, int index);
+
+/* Open/close a MIDI output port. */
+int sq_midi_open_output_port(sq_midi_t *midi, int index);
+void sq_midi_close_output_port(sq_midi_t *midi);
+int sq_midi_get_open_output_port(sq_midi_t *midi);
+
+/* Send MIDI note on/off to output. Called from sequencer. */
+void sq_midi_send_note_on(sq_midi_t *midi, uint8_t channel, uint8_t note, uint8_t velocity);
+void sq_midi_send_note_off(sq_midi_t *midi, uint8_t channel, uint8_t note);
 
 #ifdef __cplusplus
 }
