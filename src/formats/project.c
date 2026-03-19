@@ -624,6 +624,10 @@ int project_load(sq_engine_t *engine, const char *filepath)
         return -1;
     }
 
+    /* Preserve base_dir across re-init (sq_engine_init memsets to zero) */
+    char saved_base_dir[512];
+    memcpy(saved_base_dir, engine->base_dir, sizeof(saved_base_dir));
+
     /* Shutdown existing engine state */
     sq_engine_shutdown(engine);
 
@@ -631,6 +635,9 @@ int project_load(sq_engine_t *engine, const char *filepath)
     cJSON *sr = cJSON_GetObjectItem(root, "sample_rate");
     uint32_t sample_rate = sr ? (uint32_t)sr->valuedouble : 44100;
     sq_engine_init(engine, sample_rate);
+
+    /* Restore base_dir so kit reload and reset-to-defaults can find samples */
+    memcpy(engine->base_dir, saved_base_dir, sizeof(engine->base_dir));
 
     /* BPM and volume */
     cJSON *bpm = cJSON_GetObjectItem(root, "bpm");
