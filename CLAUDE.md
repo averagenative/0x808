@@ -55,8 +55,10 @@ Review every change against these items (accumulated from real corrections):
 - [ ] Synth presets: release times ≤ 2.5s for pads, ≤ 0.5s for plucks/basses
 - [ ] No heap allocation in `sq_engine_process()` audio path
 - [ ] New engine fields: update both `sq_engine_init()` and `sq_engine_shutdown()`
+- [ ] `sq_engine_init()` memsets the entire struct to zero — any code that re-inits (e.g., `project_load`) must save/restore host-layer fields like `base_dir`
 - [ ] New panels: add to `sq_panel_t` enum, handle in both frontends + toolbar
 - [ ] Plugin builds: verify no standalone-only code leaks into plugin GUI
 - [ ] Test with ASAN on significant engine changes
 - [ ] Cross-platform: use `#ifdef _WIN32` guards for platform-specific code
 - [ ] Recording: test auto-increment filenames after changes to recorder
+- [ ] Release fixes: rebuild installer + zip and update GitHub release assets (`gh release upload --clobber`)
