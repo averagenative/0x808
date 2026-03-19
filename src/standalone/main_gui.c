@@ -40,6 +40,23 @@
 #include <mach-o/dyld.h>
 #endif
 
+/* ─── Path resolution helper ───────────────────────────────────────────────── */
+
+static char *resolve_path(const char *path, char *resolved, size_t resolved_size)
+{
+#ifdef _WIN32
+    if (_fullpath(resolved, path, resolved_size)) {
+        for (char *p = resolved; *p; p++)
+            if (*p == '/') *p = '\\';
+        return resolved;
+    }
+    return NULL;
+#else
+    (void)resolved_size;
+    return realpath(path, resolved);
+#endif
+}
+
 /* ─── Graceful shutdown flag (for SIGTERM/SIGINT) ──────────────────────────── */
 
 static volatile int g_shutdown_requested = 0;
@@ -483,23 +500,24 @@ int main(int argc, char *argv[])
         if (g_engine.num_samples == 0 && base_dir[0]) {
             LOG_INFO("Trying samples relative to exe directory...");
             for (int i = 0; kit_808[i]; i++) {
-                char full_path[1024];
+                char full_path[1024], resolved[1024];
                 snprintf(full_path, sizeof(full_path), "%s%s", base_dir, kit_808[i]);
-                load_sample(full_path);
+                /* Resolve to canonical path so autosave stores clean paths */
+                if (resolve_path(full_path, resolved, sizeof(resolved)))
+                    load_sample(resolved);
+                else
+                    load_sample(full_path);
             }
         }
 #ifdef __APPLE__
-        /* macOS .app bundle: samples are in Contents/Resources/.
-         * Resolve with realpath() so stored filepaths have no ".."
-         * components — otherwise path_is_safe() rejects them on reload. */
+        /* macOS .app bundle: samples are in Contents/Resources/. */
         if (g_engine.num_samples == 0 && base_dir[0]) {
             LOG_INFO("Trying macOS .app bundle Resources directory...");
             for (int i = 0; kit_808[i]; i++) {
-                char full_path[1024];
+                char full_path[1024], resolved[1024];
                 snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
                          base_dir, kit_808[i]);
-                char resolved[1024];
-                if (realpath(full_path, resolved))
+                if (resolve_path(full_path, resolved, sizeof(resolved)))
                     load_sample(resolved);
                 else
                     load_sample(full_path);

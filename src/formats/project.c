@@ -28,6 +28,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 /* ─── Path safety helper ─────────────────────────────────────────────────── */
 
 static bool path_is_safe(const char *path)
@@ -37,6 +41,23 @@ static bool path_is_safe(const char *path)
     if (strstr(path, "..")) return false;
     /* Allow absolute paths — needed for autosave with full filepaths */
     return true;
+}
+
+/* Resolve a path to its canonical form (no "..", normalized separators).
+ * Returns resolved on success, NULL on failure. */
+static char *resolve_path(const char *path, char *resolved, size_t resolved_size)
+{
+#ifdef _WIN32
+    if (_fullpath(resolved, path, resolved_size)) {
+        for (char *p = resolved; *p; p++)
+            if (*p == '/') *p = '\\';
+        return resolved;
+    }
+    return NULL;
+#else
+    (void)resolved_size;
+    return realpath(path, resolved);
+#endif
 }
 
 /* ─── Clamp helpers ──────────────────────────────────────────────────────── */
@@ -708,8 +729,19 @@ int project_load(sq_engine_t *engine, const char *filepath)
                 int idx = (int)engine->num_samples;
                 bool loaded = false;
 
-                /* 1. Try the saved path directly */
-                if (sample_io_load(sp->valuestring, &engine->samples[idx]) == 0) {
+                /* 1. Try the saved path directly (resolve to canonical form) */
+                {
+                    char resolved[1024];
+                    if (resolve_path(sp->valuestring, resolved, sizeof(resolved)) &&
+                        sample_io_load(resolved, &engine->samples[idx]) == 0) {
+                        engine->num_samples++;
+                        loaded = true;
+                        LOG_INFO("Loaded sample [%d]: %s", idx, engine->samples[idx].name);
+                    }
+                }
+                /* 1b. Try unresolved saved path as fallback */
+                if (!loaded &&
+                    sample_io_load(sp->valuestring, &engine->samples[idx]) == 0) {
                     engine->num_samples++;
                     loaded = true;
                     LOG_INFO("Loaded sample [%d]: %s", idx, engine->samples[idx].name);
@@ -717,15 +749,17 @@ int project_load(sq_engine_t *engine, const char *filepath)
 
                 /* 2. Try relative to base_dir (e.g., base_dir/samples/808/name) */
                 if (!loaded && engine->base_dir[0]) {
-                    /* Search in base_dir/samples/ subdirs */
                     const char *kit_dirs[] = {"samples/808/", "samples/909/",
                                               "samples/505/", "samples/mrk2/",
                                               "samples/", NULL};
                     for (int kd = 0; kit_dirs[kd] && !loaded; kd++) {
-                        char full[1024];
+                        char full[1024], resolved[1024];
                         snprintf(full, sizeof(full), "%s%s%s",
                                  engine->base_dir, kit_dirs[kd], sp->valuestring);
-                        if (sample_io_load(full, &engine->samples[idx]) == 0) {
+                        const char *try_path = full;
+                        if (resolve_path(full, resolved, sizeof(resolved)))
+                            try_path = resolved;
+                        if (sample_io_load(try_path, &engine->samples[idx]) == 0) {
                             engine->num_samples++;
                             loaded = true;
                             LOG_INFO("Loaded sample [%d]: %s (from %s)",
@@ -736,11 +770,12 @@ int project_load(sq_engine_t *engine, const char *filepath)
 #ifdef __APPLE__
                 /* 3. macOS .app bundle: try Contents/Resources/ */
                 if (!loaded && engine->base_dir[0]) {
-                    char full[1024];
+                    char full[1024], resolved[1024];
                     snprintf(full, sizeof(full), "%s../Resources/%s",
                              engine->base_dir, sp->valuestring);
-                    char resolved[1024];
-                    const char *try_path = (realpath(full, resolved)) ? resolved : full;
+                    const char *try_path = full;
+                    if (resolve_path(full, resolved, sizeof(resolved)))
+                        try_path = resolved;
                     if (sample_io_load(try_path, &engine->samples[idx]) == 0) {
                         engine->num_samples++;
                         loaded = true;

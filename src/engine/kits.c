@@ -10,10 +10,31 @@
 #include "formats/sample_io.h"
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>  /* realpath */
+#include <stdlib.h>  /* realpath / _fullpath */
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define LOG_TAG "kits"
 #include "core/log.h"
+
+/* Resolve a path to its canonical form (no "..", normalized separators).
+ * Returns resolved on success, NULL on failure. */
+static char *resolve_path(const char *path, char *resolved, size_t resolved_size)
+{
+#ifdef _WIN32
+    if (_fullpath(resolved, path, resolved_size)) {
+        /* Normalize forward slashes to backslashes */
+        for (char *p = resolved; *p; p++)
+            if (*p == '/') *p = '\\';
+        return resolved;
+    }
+    return NULL;
+#else
+    return realpath(path, resolved);
+#endif
+}
 
 /* Current kit index (-1 = unknown/custom) */
 int sq_current_kit = 0;
@@ -139,9 +160,18 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
     for (int i = 0; i < slots_to_load; i++) {
         char full_path[1024];
 
-        /* Try relative to base_dir first */
+        /* Try relative to base_dir first, resolving to canonical path
+         * so the stored filepath is clean for autosave/reload. */
         if (base_dir && base_dir[0]) {
+            char resolved[1024];
             snprintf(full_path, sizeof(full_path), "%s%s", base_dir, kit->paths[i]);
+            if (resolve_path(full_path, resolved, sizeof(resolved)) &&
+                sample_io_load(resolved, &engine->samples[i]) == 0) {
+                loaded++;
+                LOG_INFO("  [%d] %s", i, engine->samples[i].name);
+                continue;
+            }
+            /* Fall back to unresolved path */
             if (sample_io_load(full_path, &engine->samples[i]) == 0) {
                 loaded++;
                 LOG_INFO("  [%d] %s", i, engine->samples[i].name);
@@ -157,14 +187,12 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
         }
 
 #ifdef __APPLE__
-        /* macOS .app bundle: try Contents/Resources/ relative to exe dir.
-         * Resolve with realpath() so the stored filepath has no ".."
-         * components — otherwise path_is_safe() rejects it on reload. */
+        /* macOS .app bundle: try Contents/Resources/ relative to exe dir. */
         if (base_dir && base_dir[0]) {
             snprintf(full_path, sizeof(full_path), "%s../Resources/%s",
                      base_dir, kit->paths[i]);
             char resolved[1024];
-            if (realpath(full_path, resolved) &&
+            if (resolve_path(full_path, resolved, sizeof(resolved)) &&
                 sample_io_load(resolved, &engine->samples[i]) == 0) {
                 loaded++;
                 LOG_INFO("  [%d] %s (bundle)", i, engine->samples[i].name);
