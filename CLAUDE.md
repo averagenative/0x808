@@ -42,9 +42,17 @@
 - Pre-existing flaky test: `engine_render_test` virtual keyboard timing is non-deterministic
 
 ### Cross-Platform
-- Maintain Linux + Windows (MinGW cross-compile) builds
+- Maintain Linux + Windows (MinGW cross-compile) + macOS builds
+- macOS cross-compile: `brew install mingw-w64` for Windows builds from Mac
 - WSLg audio is broken — use offline render tests or Windows exe for real audio testing
 - Recording output defaults: `~/Music/0x808/` (Linux), `%USERPROFILE%\Music\0x808\` (Windows)
+
+### Release Packaging
+- **CRITICAL**: After ANY code fix, `git pull` first, THEN run `scripts/package_macos.sh` / package scripts, THEN upload. Never upload stale artifacts — the packaging scripts do a full cmake build from the current tree, so they must run against the final committed code.
+- macOS: `scripts/package_macos.sh 1.x.0` → DMG + zip in `release/`
+- Windows: `scripts/package_release.sh 1.x.0` (from Linux) or cross-compile with `cmake/mingw-w64.cmake` + `makensis scripts/0x808_installer.nsi`
+- Upload: `gh release upload v1.x.0 release/artifact --clobber`
+- Verify after upload: download the release artifact and test it — don't assume the upload matches your local build
 
 ## Senior Developer Checklist
 
