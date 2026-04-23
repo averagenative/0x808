@@ -177,6 +177,16 @@ void drum_grid_draw(sq_engine_t *engine,
             }
             ImGui::EndCombo();
         }
+        /* TASK-213: scroll-wheel on the closed combo cycles kits without
+         * having to open the dropdown each time. */
+        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f
+            && sel_kit >= 0) {
+            int delta = (ImGui::GetIO().MouseWheel > 0) ? -1 : 1;
+            int next = sel_kit + delta;
+            if (next < 0) next = 0;
+            if (next >= SQ_NUM_KITS) next = SQ_NUM_KITS - 1;
+            if (next != sel_kit) sq_kit_load(engine, next, engine->base_dir);
+        }
         ImGui::PopItemWidth();
         ImGui::SameLine();
         ImGui::TextDisabled("(%u samples loaded)", engine->num_samples);
@@ -487,6 +497,13 @@ void drum_grid_draw(sq_engine_t *engine,
                         }
                         ImGui::EndCombo();
                     }
+                    if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                        int delta = (ImGui::GetIO().MouseWheel > 0) ? -1 : 1;
+                        int next = sel + delta;
+                        if (next < 0) next = 0;
+                        if (next >= (int)engine->num_samples) next = (int)engine->num_samples - 1;
+                        track->sample_index = next;
+                    }
                 } else if (track->type == TRACK_SYNTH && engine->num_synth_presets > 0) {
                     int sel = track->synth_preset;
                     if (sel < 0) sel = 0;
@@ -503,6 +520,13 @@ void drum_grid_draw(sq_engine_t *engine,
                                 ImGui::SetItemDefaultFocus();
                         }
                         ImGui::EndCombo();
+                    }
+                    if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                        int delta = (ImGui::GetIO().MouseWheel > 0) ? -1 : 1;
+                        int next = sel + delta;
+                        if (next < 0) next = 0;
+                        if (next >= (int)engine->num_synth_presets) next = (int)engine->num_synth_presets - 1;
+                        track->synth_preset = next;
                     }
                 } else if (track->type == TRACK_SF2 && engine->num_sf2_presets > 0) {
                     int sel = track->sf2_preset;
