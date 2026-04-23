@@ -1,0 +1,66 @@
+status: pending
+priority: medium
+depends: TASK-223
+agent: gui
+ref: TASK-227
+---
+Configurable Randomize panel for drum patterns + synths.
+
+Today the RND button (TASK-223) only randomizes sampler step
+velocities using built-in style probabilities. The user wants
+finer control over what gets rolled.
+
+## Proposed UI
+A compact popover anchored to the RND toolbar button (or a
+right-click on it) with checkboxes:
+
+  [x] Randomize pattern steps      (velocity on/off per step)
+  [ ] Randomize kit                (cycle sq_kits[] or, once
+                                    TASK-224 lands, draw from the
+                                    auto-imported pool)
+  [ ] Randomize synth notes        (piano-roll notes for the
+                                    trap-808 / pad tracks, within
+                                    a user-selectable key + octave)
+  [ ] Randomize velocity spread    (re-roll velocities on existing
+                                    hits within a min/max range —
+                                    matches the right-click-drag
+                                    pad editor's velocity scope)
+  [ ] Randomize micro-timing       (adds per-step micro_offset
+                                    for humanize feel)
+  [ ] Randomize pitch offsets      (per-step pitch_offset, matches
+                                    the right-click-drag pad
+                                    editor's pitch scope)
+
+  Style: [four-on-floor / boom-bap / trap / breakbeat / any]
+  Seed:  [optional, blank = random]
+  [Apply] button.
+
+Style dropdown lets the user bias the result; the engine already
+has style-specific profiles in random_pattern.c that we can wire
+up to this selection.
+
+## Engine changes
+- Extend sq_pattern_randomize() to take an options struct:
+    typedef struct {
+        bool steps, velocity, micro, pitch, notes;
+        int  style;   /* -1 = random, 0..3 = specific style */
+        int  seed;    /* 0 = time-based */
+    } sq_random_options_t;
+- Add per-flag helper functions (randomize_velocity, randomize_pitch,
+  randomize_notes) that operate on an existing pattern in-place.
+
+## Acceptance Criteria
+- [ ] Right-click (or dedicated popover) on RND opens the settings
+- [ ] Each checkbox toggles its category independently
+- [ ] Style dropdown changes the distribution bias
+- [ ] Ctrl+R uses the last-applied settings
+- [ ] Settings persisted in the app state (session.json)
+- [ ] Undoable (single undo_push before applying)
+- [ ] Frontend parity (ImGui + GTK)
+
+## Test Plan
+- [ ] Apply with only "velocity" checked → existing steps get new
+      velocities, pattern structure unchanged
+- [ ] Apply with only "notes" checked → synth tracks get new notes,
+      sampler tracks unchanged
+- [ ] Apply with "kit" checked → kit index changes + samples reload

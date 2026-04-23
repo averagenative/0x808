@@ -27,6 +27,8 @@ extern "C" {
 #include "engine/synth.h"
 #include "engine/sq_midi.h"
 #include "engine/random_pattern.h"
+#include "formats/project.h"
+#include "app/sq_app.h"
 #define LOG_TAG "toolbar"
 #include "core/log.h"
 }

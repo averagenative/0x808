@@ -471,6 +471,22 @@ int gui_frame(sq_engine_t *engine)
         if (evt.type == SDL_QUIT)
             quit = 1;
 
+        /* Double-click in the toolbar drag zone toggles maximize.
+         * Only fires when ImGui doesn't own the pointer (i.e. user
+         * is on blank toolbar area, not clicking a button). */
+        if (evt.type == SDL_MOUSEBUTTONDOWN &&
+            evt.button.button == SDL_BUTTON_LEFT &&
+            evt.button.clicks == 2 &&
+            evt.button.y < DRAG_AREA_HEIGHT &&
+            !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive()) {
+            Uint32 flags = SDL_GetWindowFlags(g_window);
+            if (flags & SDL_WINDOW_MAXIMIZED) {
+                SDL_RestoreWindow(g_window);
+            } else {
+                SDL_MaximizeWindow(g_window);
+            }
+        }
+
         bool is_ctrl = (evt.key.keysym.mod & KMOD_CTRL) != 0;
 
         /* QWERTY piano — always active when keyboard panel is shown */

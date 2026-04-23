@@ -154,6 +154,16 @@ static int knob_core(const char *id_str,
         *value = default_val;
     }
 
+    /* Mouse wheel on hover: ±2% of range per click, ±0.2% with Shift */
+    if (is_hovered && io.MouseWheel != 0.0f) {
+        float range = max - min;
+        float wstep = (range > 0.0f) ? range * 0.02f : actual_step;
+        if (io.KeyShift) wstep *= 0.1f;
+        *value += io.MouseWheel * wstep;
+        if (*value < min) *value = min;
+        if (*value > max) *value = max;
+    }
+
     return (*value != old_val) ? 1 : 0;
 }
 

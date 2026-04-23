@@ -1,0 +1,47 @@
+status: pending
+priority: high
+depends: none
+agent: engine
+ref: TASK-226
+---
+Per-track effect slots currently apply to the master bus, not the track.
+
+User report: assigning FX to Track 3 affects every sound on the mix,
+not just Track 3. Source of the bug is in src/engine/mixer.c, where
+the existing comment explicitly acknowledges the simplification:
+
+    /* Step 3.5: Per-track insert effects (applied to the mixed output).
+     * NOTE: True per-track processing would require separate render buffers
+     * per track. For now, we process per-track effects on the master bus
+     * when tracks are active — this is a simplification that applies
+     * effects to the whole mix, but it lets users assign effects per
+     * track in the UI. */
+
+Proper fix requires per-track render buffers. Two possible designs:
+
+1. Tag each voice with its source track_index at trigger time, render
+   all voices into separate per-track buffers, apply that track's FX,
+   then sum into the master bus.
+
+2. Render each track's voices sequentially into a scratch buffer, apply
+   that track's FX, sum into master. Needs a way to filter voices by
+   track during rendering (or temporarily deactivate other tracks).
+
+Option 1 is cleaner but touches sampler.c/synth.c/sf2.c render loops.
+Option 2 is contained in mixer.c but potentially higher CPU.
+
+## Acceptance Criteria
+- [ ] Assigning FX to Track 3 affects only Track 3
+- [ ] Master FX still affect the full mix
+- [ ] No audio glitches from track isolation
+- [ ] No heap allocation in the audio path (pre-allocate scratch buffers)
+- [ ] Tests: render a pattern with distortion on Track 0 only, assert
+      Track 0 has heavy harmonics while Track 1 remains clean
+
+## Test Plan
+- [ ] Play a 2-track pattern, put compressor on Track 0 with heavy
+      ratio — Track 1 audio should not get ducked
+- [ ] Put reverb on every track separately vs on master — output should
+      differ noticeably
+- [ ] Snapshot test: offline-render output unchanged when no per-track
+      FX are active

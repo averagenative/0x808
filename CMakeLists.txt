@@ -252,6 +252,7 @@ if(SDL2_FOUND AND OpenGL_FOUND)
         src/gui/pattern_presets.cpp
         src/gui/virtual_keyboard.cpp
         src/gui/theme.cpp
+        src/gui/user_patterns.c
     )
     target_include_directories(sq_gui PUBLIC
         ${CMAKE_SOURCE_DIR}/src

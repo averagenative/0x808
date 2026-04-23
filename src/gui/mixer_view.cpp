@@ -83,7 +83,21 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
 {
     ImGui::PushID(slot_id);
 
-    ImGui::Text("%s", label);
+    /* Header with colour coded by "slot is active" vs "empty" so filled
+     * slots pop out of the row at a glance. */
+    bool active = (slot->type != EFFECT_NONE && !slot->bypass);
+    ImVec2 hdr_min = ImGui::GetCursorScreenPos();
+    float w = ImGui::GetContentRegionAvail().x;
+    ImU32 hdr_col = active ? IM_COL32(60, 110, 60, 255)
+                  : (slot->type != EFFECT_NONE) ? IM_COL32(90, 90, 55, 255)
+                                                : IM_COL32(55, 55, 62, 255);
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        hdr_min, ImVec2(hdr_min.x + w, hdr_min.y + 22),
+        hdr_col, 3.0f);
+    ImGui::GetWindowDrawList()->AddText(
+        ImVec2(hdr_min.x + 6, hdr_min.y + 4),
+        IM_COL32(230, 230, 230, 255), label);
+    ImGui::Dummy(ImVec2(w, 24));
     ImGui::Separator();
 
     /* Type selector */
@@ -418,10 +432,22 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
 
     /* --- Top section: Effects browse + slots --- */
     float total_h = ImGui::GetContentRegionAvail().y;
-    float bottom_h = total_h * 0.55f;
+    /* Give the FX area more screen time — it's the primary working area
+     * of this panel. Guarantee at least 280px so every slot's parameter
+     * sliders stay readable instead of collapsing to a thin strip. */
+    float top_h = total_h * 0.62f;
+    if (top_h < 280.0f) top_h = 280.0f;
+    if (top_h > total_h - 140.0f) top_h = total_h - 140.0f;
+    float bottom_h = total_h - top_h;
     if (bottom_h < 100.0f) bottom_h = 100.0f;
-    float top_h = total_h - bottom_h;
-    if (top_h < 50.0f) top_h = 50.0f;
+
+    /* Tinted header stripe so the FX section is visually distinct from
+     * the track-strip area below. */
+    ImVec2 fx_hdr_min = ImGui::GetCursorScreenPos();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        fx_hdr_min, ImVec2(fx_hdr_min.x + ImGui::GetContentRegionAvail().x,
+                           fx_hdr_min.y + top_h),
+        IM_COL32(30, 32, 38, 255));
 
     if (ImGui::BeginChild("EffectsPanel", ImVec2(0, top_h),
                           ImGuiChildFlags_Borders)) {

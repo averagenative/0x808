@@ -14,6 +14,7 @@
 extern "C" {
 #include "engine/engine.h"
 #include "gui/undo.h"
+#include "gui/user_patterns.h"
 }
 
 extern "C" {
@@ -522,6 +523,85 @@ extern "C" void pattern_presets_draw(sq_engine_t *engine)
         }
     }
     ImGui::PopStyleColor();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    /* --- My Patterns (user save/load) --- */
+    ImGui::Text("My Patterns:");
+
+    static char s_save_name[SQ_USER_PATTERN_NAME_LEN] = "";
+    static bool s_needs_refresh = true;
+    static int  s_user_idx = 0;
+
+    if (s_needs_refresh) {
+        user_patterns_refresh();
+        s_needs_refresh = false;
+    }
+
+    ImGui::SetNextItemWidth(180.0f);
+    ImGui::InputTextWithHint("##user_name", "Pattern name...",
+                             s_save_name, sizeof(s_save_name));
+    ImGui::SameLine();
+    bool can_save = (s_save_name[0] != '\0');
+    if (!can_save) ImGui::BeginDisabled();
+    if (ImGui::Button("Save Current")) {
+        int pi = engine->transport.current_pattern;
+        if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+            if (user_patterns_save(&engine->patterns[pi], s_save_name,
+                                   engine->transport.bpm) == 0) {
+                s_save_name[0] = '\0';
+                s_needs_refresh = true;
+            }
+        }
+    }
+    if (!can_save) ImGui::EndDisabled();
+
+    int user_count = user_patterns_count();
+    if (user_count > 0) {
+        if (s_user_idx >= user_count) s_user_idx = user_count - 1;
+        const sq_user_pattern_entry_t *cur = user_patterns_get(s_user_idx);
+        const char *preview = cur ? cur->name : "(none)";
+
+        ImGui::SetNextItemWidth(180.0f);
+        if (ImGui::BeginCombo("##user_pat", preview)) {
+            for (int i = 0; i < user_count; i++) {
+                const sq_user_pattern_entry_t *e = user_patterns_get(i);
+                if (!e) continue;
+                bool sel = (i == s_user_idx);
+                if (ImGui::Selectable(e->name, sel)) s_user_idx = i;
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load##user")) {
+            int pi = engine->transport.current_pattern;
+            if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+                sq_pattern_t tmp;
+                double loaded_bpm = 0.0;
+                if (user_patterns_load(s_user_idx, &tmp, &loaded_bpm) == 0) {
+                    undo_push(engine);
+                    engine->patterns[pi] = tmp;
+                    if (loaded_bpm > 20.0 && loaded_bpm < 400.0)
+                        engine->transport.bpm = loaded_bpm;
+                }
+            }
+        }
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("Delete##user")) {
+            if (user_patterns_delete(s_user_idx) == 0) {
+                s_needs_refresh = true;
+                if (s_user_idx > 0) s_user_idx--;
+            }
+        }
+        ImGui::PopStyleColor();
+    } else {
+        ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f),
+                           "No saved patterns yet — enter a name and hit Save Current.");
+    }
 
     ImGui::Spacing();
 
