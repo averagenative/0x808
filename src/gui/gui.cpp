@@ -397,8 +397,11 @@ int gui_frame(sq_engine_t *engine)
     /* Set default project path from engine base_dir on first frame */
     if (!g_project_path_init) {
         g_project_path_init = true;
+        const size_t suffix_len = sizeof("project.sqproj");  /* incl. NUL */
+        const size_t max_base_len = sizeof(g_project_path) - suffix_len;
         if (engine->base_dir[0])
-            snprintf(g_project_path, sizeof(g_project_path), "%sproject.sqproj", engine->base_dir);
+            snprintf(g_project_path, sizeof(g_project_path), "%.*sproject.sqproj",
+                     (int)max_base_len, engine->base_dir);
         else
             snprintf(g_project_path, sizeof(g_project_path), "project.sqproj");
     }
