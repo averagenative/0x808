@@ -361,6 +361,15 @@ int project_save(const sq_engine_t *engine, const char *filepath)
             && i < (uint32_t)sq_kits[sq_current_kit].num_slots) {
             path = sq_kits[sq_current_kit].paths[i];
         }
+        /* Prefer base_dir-relative paths so the project survives the
+         * AppImage being remounted at a different /tmp/.mount_xxx, an
+         * installer being moved, or the project being shared between
+         * machines. Out-of-tree user-loaded samples keep their absolute
+         * path (loader will try base_dir-relative as a fallback). */
+        size_t bd_len = strlen(engine->base_dir);
+        if (path && bd_len > 0 && strncmp(path, engine->base_dir, bd_len) == 0) {
+            path += bd_len;
+        }
         cJSON_AddItemToArray(samples, cJSON_CreateString(path ? path : ""));
     }
     cJSON_AddItemToObject(root, "sample_paths", samples);
@@ -827,7 +836,26 @@ int project_load(sq_engine_t *engine, const char *filepath)
                     LOG_INFO("Loaded sample [%d]: %s", idx, engine->samples[idx].name);
                 }
 
-                /* 2. Try relative to base_dir (e.g., base_dir/samples/808/name) */
+                /* 2. Try base_dir-relative directly (handles paths saved by
+                 * project_save in their preferred relative form, e.g.
+                 * "samples/808/01.BD.808.wav"). */
+                if (!loaded && engine->base_dir[0]) {
+                    char full[1024], resolved[1024];
+                    snprintf(full, sizeof(full), "%s%s",
+                             engine->base_dir, sp->valuestring);
+                    const char *try_path = full;
+                    if (resolve_path(full, resolved, sizeof(resolved)))
+                        try_path = resolved;
+                    if (sample_io_load(try_path, &engine->samples[idx]) == 0) {
+                        engine->num_samples++;
+                        loaded = true;
+                        LOG_INFO("Loaded sample [%d]: %s (base_dir-relative)",
+                                 idx, engine->samples[idx].name);
+                    }
+                }
+
+                /* 3. Try kit-dir prefix combinations (legacy: project saved
+                 * just the basename, look in each known kit dir). */
                 if (!loaded && engine->base_dir[0]) {
                     const char *kit_dirs[] = {"samples/808/", "samples/909/",
                                               "samples/505/", "samples/mrk2/",

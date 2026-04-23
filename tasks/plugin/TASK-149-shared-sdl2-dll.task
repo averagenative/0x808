@@ -1,0 +1,208 @@
+status: queued
+priority: high
+depends: none
+agent: plugin
+ref: TASK-149
+---
+Replace SDL2 with native Win32/X11/Cocoa for plugin GUI (multi-plugin coexistence + thread safety)
+
+## UPDATED: Complete lessons from 0xFX implementation (2026-03-24)
+
+0xFX has this fully working. Two CLAP instances in Reaper simultaneously, clean
+attach/detach/destroy lifecycle, no crashes. Apply the same patterns here.
+
+### 1. SDL2 Removal — Why and How
+
+Dynamic SDL2.dll FAILED because Windows DLL search order doesn't include the
+plugin DLL's directory — only the host exe's directory (Reaper's folder).
+DllMain runs AFTER import resolution, so SetDllDirectory is too late.
+
+**Solution**: Remove SDL2 from plugins entirely. Use native platform APIs only.
+Standalone app keeps SDL2 — only plugins need native APIs.
+
+### 2. Thread Safety — CRITICAL (5 specific fixes from debugging)
+
+Artists load the same plugin on multiple tracks (separate drum parts, parallel
+processing). Two render threads sharing mutable statics causes heap corruption
+and access violations — crashes during recording are unacceptable.
+
+**Bug 1: Shared texture cache across GL contexts**
+- Problem: Texture cache returned GL IDs created by a different instance's GL
+  context. GL texture IDs are per-context — using the wrong one = access violation.
+- Fix: Add `owner_thread` field to each cache entry. Lookups only return hits
+  from the same thread (same GL context). Mutex protects concurrent access.
+  Cache size increased to 512 for multi-instance.
+- File: `texture.c` (or equivalent)
+
+**Bug 2: WndProc calling ImGui without valid context**
+- Problem: During CreateWindowExW, Windows sends WM_* messages to WndProc before
+  GWLP_USERDATA is set (gui pointer is NULL). Also, ImGui context is created on
+  the render thread — imgui_ctx may be NULL when WndProc fires.
+- Fix: Guard all ImGui calls in WndProc with `if (gui && gui->imgui_ctx)`.
+- File: `gui_plugin_bridge.cpp` WndProc
+
+**Bug 3: Concurrent GL rendering crashes**
+- Problem: Two render threads doing GL operations simultaneously. Even with
+  separate GL contexts, concurrent GL on Windows is unreliable.
+- Fix: Global render mutex (CRITICAL_SECTION) around the entire render frame.
+  Both instances share the lock. Each still gets ~30fps (halved with 2 instances).
+  The lock covers: wglMakeCurrent → ImGui frame → GL render → SwapBuffers.
+- File: `gui_plugin_bridge.cpp` render thread
+
+**Bug 4: WndProc vs render thread deadlock**
+- Problem: WndProc runs on main thread, render thread holds the global mutex.
+  If WndProc tries EnterCriticalSection, it blocks the Windows message pump.
+  If render thread calls PeekMessage which dispatches to WndProc on the same
+  thread, no deadlock but the render lock is already held.
+- Fix: Use TryEnterCriticalSection in WndProc. If the render thread has the
+  lock, WndProc skips ImGui processing (drops that input event). Input feels
+  fine — next frame catches it.
+- File: `gui_plugin_bridge.cpp` WndProc
+
+**Bug 5: Double-detach crash on plugin unload**
+- Problem: Host calls setParent(NULL) then destroyGUI — both trigger detach.
+  Second detach tries to WaitForSingleObject on an already-closed handle.
+- Fix: Check `if (!gui->running) return;` at top of detach function. First
+  detach sets running=false, second detach sees it and skips.
+- File: `gui_plugin_bridge.cpp` detach function
+
+### 3. Implementation Pattern (from 0xFX — apply to 0x808)
+
+#### A. gui_plugin_bridge.cpp — native Win32+WGL:
+```cpp
+struct PluginGUI {
+    sq_engine_t    *engine;       // 0x808 engine (adapt prefix)
+    sq_gui_state_t *gui_state;    // per-instance GUI state
+    HWND            hwnd;
+    HDC             hdc;
+    HGLRC           hglrc;
+    HANDLE          render_thread;
+    volatile bool   running;
+    volatile bool   visible;
+    uint32_t        width, height;
+    void           *parent_handle;
+    ImGuiContext   *imgui_ctx;    // per-instance ImGui context
+};
+
+// Global mutex — serializes ALL GL/ImGui across instances
+static CRITICAL_SECTION s_gl_init_cs;
+static bool s_gl_init_cs_ready = false;
+
+// WndProc: TryEnterCriticalSection, NOT EnterCriticalSection
+static LRESULT CALLBACK PluginWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    PluginGUI *gui = (PluginGUI *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    if (gui && gui->imgui_ctx && s_gl_init_cs_ready) {
+        if (TryEnterCriticalSection(&s_gl_init_cs)) {
+            ImGui::SetCurrentContext(gui->imgui_ctx);
+            LRESULT result = ImGui_ImplWin32_WndProcHandler(hwnd, msg, wp, lp);
+            LeaveCriticalSection(&s_gl_init_cs);
+            if (result) return 0;
+        }
+    }
+    // basic message handling (WM_CHAR, WM_ERASEBKGND, etc.)
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+// Render thread: acquire global lock for entire frame
+EnterCriticalSection(&s_gl_init_cs);
+wglMakeCurrent(gui->hdc, gui->hglrc);
+ImGui::SetCurrentContext(gui->imgui_ctx);
+// ... ImGui NewFrame + render + SwapBuffers ...
+LeaveCriticalSection(&s_gl_init_cs);
+
+// Detach: double-detach guard
+void detach(void *gui_ptr) {
+    PluginGUI *gui = (PluginGUI *)gui_ptr;
+    if (!gui->running) return;  // already detached
+    gui->running = false;
+    WaitForSingleObject(gui->render_thread, INFINITE);
+    // ... cleanup GL, window ...
+}
+```
+
+#### B. imgui_plugin static library (CMakeLists.txt):
+```cmake
+add_library(imgui_plugin STATIC
+    deps/imgui/imgui.cpp
+    deps/imgui/imgui_draw.cpp
+    deps/imgui/imgui_tables.cpp
+    deps/imgui/imgui_widgets.cpp
+    deps/imgui/backends/imgui_impl_opengl3.cpp
+    deps/imgui/backends/imgui_impl_win32.cpp  # Windows only
+)
+# NO SDL2 dependency
+# Standalone keeps the 'imgui' library (with SDL2 backend)
+```
+
+#### C. Texture cache (texture.c):
+```c
+typedef struct {
+    char      path[512];
+    uintptr_t gl_id;
+    int       width, height;
+    uintptr_t owner_thread;  // thread that created this entry
+} TexEntry;
+
+static CRITICAL_SECTION s_tex_cs;
+
+// Lookups: only return hits where owner_thread == current thread
+// Upload: store GetCurrentThreadId() as owner_thread
+// Cache size: 512 (enough for multi-instance)
+```
+
+#### D. GUI renderer — move ALL mutable statics to per-instance struct:
+```c
+// BAD (shared between instances):
+static int selected_tab = 0;
+static bool needs_refresh = true;
+
+// GOOD (per-instance):
+typedef struct {
+    int selected_tab;
+    bool needs_refresh;
+    // ... all mutable state here
+} sq_gui_state_t;
+```
+const static data (pad maps, kit names, lookup tables) is fine — read-only.
+
+#### E. Plugin link libs (CMakeLists.txt):
+```cmake
+# Plugins link imgui_plugin (no SDL2)
+target_link_libraries(plugin PRIVATE imgui_plugin opengl32 gdi32 dwmapi imm32)
+# Standalone keeps imgui (with SDL2)
+target_link_libraries(standalone PRIVATE imgui ${SDL2_LIBRARIES})
+```
+
+### 4. Linux: X11+GLX
+
+Same pattern but with X11 APIs:
+- XOpenDisplay (separate connection per instance)
+- XCreateWindow with CWColormap | CWEventMask
+- glXCreateContext + glXMakeCurrent
+- Manual X11 event → ImGui mapping (no ImGui_ImplX11 backend exists)
+- pthread for render thread, pthread_mutex for global render lock
+
+See 0xFX `gui_plugin_bridge.cpp` lines 339-536 for complete Linux implementation.
+
+### 5. Result (verified in 0xFX):
+- Zero external DLL dependencies
+- Multiple plugin instances coexist safely (~30fps each)
+- 0xFX + 0x808 + 0xSYNTH can all run in the same DAW session
+- No crashes during recording sessions
+- Clean attach/detach/destroy lifecycle
+
+## Acceptance Criteria
+- [ ] 0x808 plugin links NO SDL2
+- [ ] Uses native Win32+WGL for plugin GUI
+- [ ] imgui_plugin library with ImGui_ImplWin32 (separate from standalone imgui)
+- [ ] ALL renderer mutable statics moved to per-instance state struct
+- [ ] Thread-safe texture cache with mutex + per-thread owner tracking
+- [ ] Global render mutex (CRITICAL_SECTION) around entire render frame
+- [ ] TryEnterCriticalSection in WndProc (not blocking EnterCriticalSection)
+- [ ] Double-detach guard in detach function
+- [ ] WndProc guards ImGui calls with null check on gui + imgui_ctx
+- [ ] Each instance has own ImGui context (SetCurrentContext before use)
+- [ ] Multiple 0x808 instances work simultaneously in Reaper
+- [ ] 0x808 + 0xFX can both show GUIs in same Reaper session
+- [ ] No crashes under multi-instance load
+- [ ] Linux X11+GLX implementation (separate Display per instance)

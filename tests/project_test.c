@@ -197,6 +197,56 @@ int main(void) {
     /* Cleanup */
     remove(TEST_FILE);
 
+    /* ── TASK-190: sample paths saved as base_dir-relative ──────────────────
+     * Set engine->base_dir + load a sample whose path lives under it,
+     * then save and inspect the JSON: the saved path must NOT include
+     * the base_dir prefix. */
+    {
+        sq_engine_t e2;
+        sq_engine_init(&e2, 44100);
+        snprintf(e2.base_dir, sizeof(e2.base_dir), "%s/", "./");
+
+        /* Pretend a sample loaded from base_dir + samples/808/01.BD.808.wav */
+        e2.num_samples = 1;
+        snprintf(e2.samples[0].filepath, sizeof(e2.samples[0].filepath),
+                 "%ssamples/808/01.BD.808.wav", e2.base_dir);
+        snprintf(e2.samples[0].name, sizeof(e2.samples[0].name),
+                 "01.BD.808.wav");
+        e2.num_patterns = 1;
+
+#ifdef _WIN32
+        const char *rel_path = "test_relpath.sqproj";
+#else
+        const char *rel_path = "/tmp/test_relpath.sqproj";
+#endif
+        if (project_save(&e2, rel_path) != 0) {
+            fprintf(stderr, "FAIL: relative-path save returned non-zero\n");
+            return 1;
+        }
+        FILE *rf = fopen(rel_path, "rb");
+        if (!rf) {
+            fprintf(stderr, "FAIL: could not reopen %s\n", rel_path);
+            return 1;
+        }
+        char buf[4096];
+        size_t got = fread(buf, 1, sizeof(buf) - 1, rf);
+        buf[got] = '\0';
+        fclose(rf);
+        /* The JSON should contain the relative form, not the absolute one */
+        if (!strstr(buf, "samples/808/01.BD.808.wav")) {
+            fprintf(stderr, "FAIL: JSON missing expected sample path\n");
+            return 1;
+        }
+        if (strstr(buf, "./samples/808/01.BD.808.wav")) {
+            fprintf(stderr, "FAIL: JSON still has the base_dir prefix\n");
+            return 1;
+        }
+        printf("PASS: project_save stripped base_dir prefix from sample path\n");
+
+        sq_engine_shutdown(&e2);
+        remove(rel_path);
+    }
+
     /* ── Regression: poisoned autosave with empty sample paths ─────────────
      * Repro for the AppImage bug where a failed kit load left 8 sample
      * slots with empty filepath+name, project_save wrote "" for each, and
