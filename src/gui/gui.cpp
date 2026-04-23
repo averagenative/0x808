@@ -261,6 +261,7 @@ static int sdl_to_sq_key(int sdlk)
     case SDLK_t:         return SQ_KEY_T;
     case SDLK_v:         return SQ_KEY_V;
     case SDLK_z:         return SQ_KEY_Z;
+    case SDLK_r:         return SQ_KEY_R;
     case SDLK_EQUALS:    return SQ_KEY_EQUALS;
     default:             return SQ_KEY_NONE;
     }

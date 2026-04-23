@@ -150,6 +150,7 @@ static inline int gdk_to_sq_key(guint keyval)
     case GDK_KEY_t:          return SQ_KEY_T;
     case GDK_KEY_v:          return SQ_KEY_V;
     case GDK_KEY_z:          return SQ_KEY_Z;
+    case GDK_KEY_r:          return SQ_KEY_R;
     case GDK_KEY_equal:
     case GDK_KEY_plus:       return SQ_KEY_EQUALS;
     default:                 return SQ_KEY_NONE;

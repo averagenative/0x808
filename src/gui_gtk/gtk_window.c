@@ -22,6 +22,7 @@
 #include "engine/export.h"
 #include "engine/synth.h"
 #include "engine/kits.h"
+#include "engine/random_pattern.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -404,6 +405,18 @@ static void on_presets_clicked(GtkWidget *btn, gpointer data)
 {
     (void)btn; (void)data;
     gtk_presets_show_save(g_gtk.window);
+}
+
+static void on_random_clicked(GtkWidget *btn, gpointer data)
+{
+    (void)btn; (void)data;
+    int pi = g_gtk.engine->transport.current_pattern;
+    if (pi >= 0 && (uint32_t)pi < g_gtk.engine->num_patterns) {
+        undo_push(g_gtk.engine);
+        sq_pattern_randomize(&g_gtk.engine->patterns[pi], 0);
+        sq_app_set_status(&g_gtk.app, "Randomized pattern", 90);
+        if (g_gtk.drum_grid_area) gtk_widget_queue_draw(g_gtk.drum_grid_area);
+    }
 }
 
 static void on_export_clicked(GtkWidget *btn, gpointer data)
@@ -1067,6 +1080,11 @@ static GtkWidget *build_toolbar(void)
     GtkWidget *presets_btn = sq_flat_button_new("PRESETS",
         G_CALLBACK(on_presets_clicked), NULL);
     gtk_box_append(GTK_BOX(row1), presets_btn);
+
+    /* Random button (Ctrl+R) */
+    GtkWidget *random_btn = sq_flat_button_new("RANDOM",
+        G_CALLBACK(on_random_clicked), NULL);
+    gtk_box_append(GTK_BOX(row1), random_btn);
 
     /* PIANO + KEYS panel buttons */
     {

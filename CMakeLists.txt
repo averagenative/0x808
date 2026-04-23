@@ -121,6 +121,7 @@ add_library(sq_engine STATIC
     src/engine/recorder.c
     src/engine/effects.c
     src/engine/kits.c
+    src/engine/random_pattern.c
     src/formats/sample_io.c
     src/formats/project.c
     src/formats/sf2.c
@@ -609,3 +610,7 @@ target_link_libraries(plugin_load_test PRIVATE sq_engine ${PLATFORM_LIBS})
 add_executable(snapshot_test tests/snapshot_test.c)
 target_include_directories(snapshot_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(snapshot_test PRIVATE sq_engine ${PLATFORM_LIBS})
+
+add_executable(random_pattern_test tests/random_pattern_test.c)
+target_include_directories(random_pattern_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(random_pattern_test PRIVATE sq_engine ${PLATFORM_LIBS})

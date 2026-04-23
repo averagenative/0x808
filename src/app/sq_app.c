@@ -7,6 +7,7 @@
 
 #include "app/sq_app.h"
 #include "gui/undo.h"
+#include "engine/random_pattern.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -155,6 +156,16 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
                     sq_app_set_status(app, "Undo", 90);
             }
             return SQ_ACTION_NONE;
+
+        case SQ_KEY_R: {
+            int pi = engine->transport.current_pattern;
+            if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
+                undo_push(engine);
+                sq_pattern_randomize(&engine->patterns[pi], 0);
+                sq_app_set_status(app, "Randomized pattern", 90);
+            }
+            return SQ_ACTION_NONE;
+        }
 
         default:
             break;

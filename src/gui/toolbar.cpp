@@ -19,12 +19,14 @@ extern "C" {
 #include "gui/toolbar.h"
 #include "gui/gui.h"
 #include "gui/knobs.h"
+#include "gui/undo.h"
 #include "gui/export_dialog.h"
 #include "gui/pattern_presets.h"
 #include "gui/theme.h"
 #include "engine/export.h"
 #include "engine/synth.h"
 #include "engine/sq_midi.h"
+#include "engine/random_pattern.h"
 #define LOG_TAG "toolbar"
 #include "core/log.h"
 }
@@ -458,6 +460,16 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             *vis = !*vis;
     }
     if (ImGui::IsItemHovered()) SQ_TOOLTIP("Pattern Presets");
+    ImGui::SameLine();
+
+    /* RND — randomize current pattern (Ctrl+R) */
+    if (ColoredButton("RND", false, ImVec4(0.55f, 0.30f, 0.65f, 1.0f),
+                      ImVec2(45.0f, btn_h))) {
+        sq_pattern_t *cur = &p->engine->patterns[p->engine->transport.current_pattern];
+        undo_push(p->engine);
+        sq_pattern_randomize(cur, 0);
+    }
+    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Randomize pattern (Ctrl+R)");
     ImGui::SameLine();
 
     /* Panel toggles differ: plugin has PNO + KEY, standalone has just PIANO */
