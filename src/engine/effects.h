@@ -33,6 +33,7 @@ typedef enum {
     EFFECT_TAPE,
     EFFECT_SHIMMER,
     EFFECT_EQ,
+    EFFECT_LIMITER,
     EFFECT_TYPE_COUNT
 } sq_effect_type_t;
 
@@ -241,6 +242,20 @@ typedef struct {
     bool  allocated;
 } sq_efx_shimmer_t;
 
+/* ─── Brickwall limiter (lookahead) ──────────────────────────────────────── */
+
+#define LIMITER_LOOKAHEAD_SAMPLES 256  /* ~5.8ms @ 44100 Hz */
+
+typedef struct {
+    float ceiling;          /* maximum output level, linear (0.5 = -6 dB, 1.0 = 0 dB) */
+    float release_ms;       /* gain-recovery time in ms (10-500) */
+    /* State (heap-allocated stereo lookahead delay line) */
+    float *lookahead;       /* size = LIMITER_LOOKAHEAD_SAMPLES * 2 */
+    int    write_pos;
+    float  envelope;        /* current gain reduction (1.0 = none, <1.0 = ducked) */
+    bool   allocated;
+} sq_efx_limiter_t;
+
 /* ─── 3-band parametric EQ ──────────────────────────────────────────────── */
 
 typedef enum {
@@ -292,6 +307,7 @@ typedef struct {
         sq_efx_tape_t      tape;
         sq_efx_shimmer_t   shimmer;
         sq_efx_eq_t        eq;
+        sq_efx_limiter_t   limiter;
     };
 } sq_effect_slot_t;
 

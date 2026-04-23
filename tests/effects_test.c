@@ -176,7 +176,7 @@ int main(void) {
     {
         const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
                                      "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-                                     "Ring Mod", "Tape", "Shimmer", "EQ"};
+                                     "Ring Mod", "Tape", "Shimmer", "EQ", "Limiter"};
         int name_count = (int)(sizeof(type_names) / sizeof(type_names[0]));
         ASSERT(name_count == EFFECT_TYPE_COUNT,
                "Effect type names array must match EFFECT_TYPE_COUNT — did you add a new effect?");
@@ -271,6 +271,57 @@ int main(void) {
         printf("  PASS: EQ -12dB high shelf cuts 8kHz by %.1f dB\n", ratio_db);
 
         effect_free(&eq);
+    }
+
+    /* Test 13: Brickwall limiter
+     *
+     *   a) Below threshold → no signal change
+     *   b) Above threshold → output never exceeds ceiling
+     */
+    {
+        sq_effect_slot_t lim;
+        memset(&lim, 0, sizeof(lim));
+        effect_init(&lim, EFFECT_LIMITER, SAMPLE_RATE);
+        lim.limiter.ceiling = 0.5f;
+        lim.limiter.release_ms = 50.0f;
+
+        /* a) Quiet signal (peak ~0.3) should pass through unchanged. */
+        gen_sine(buf, NUM_FRAMES, 440.0f);
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) buf[i] *= 0.3f;
+        effect_process(&lim, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        float quiet_peak = 0.0f;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) {
+            float v = fabsf(buf[i]); if (v > quiet_peak) quiet_peak = v;
+        }
+        ASSERT(quiet_peak < 0.35f,
+               "Limiter should not amplify a quiet signal");
+        printf("  PASS: Limiter passes quiet signal (peak %.3f)\n", quiet_peak);
+
+        /* b) Hot signal (peak 1.0) hammered through the limiter for several
+         *    blocks must NEVER exceed the ceiling.  We discard the first
+         *    block (lookahead window still filling). */
+        effect_free(&lim);
+        effect_init(&lim, EFFECT_LIMITER, SAMPLE_RATE);
+        lim.limiter.ceiling = 0.5f;
+
+        gen_sine(buf, NUM_FRAMES, 440.0f);  /* peak 1.0 */
+        effect_process(&lim, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+
+        float hot_peak = 0.0f;
+        for (int it = 0; it < 4; it++) {
+            gen_sine(buf, NUM_FRAMES, 440.0f);
+            effect_process(&lim, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+            for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) {
+                float v = fabsf(buf[i]);
+                if (v > hot_peak) hot_peak = v;
+            }
+        }
+        ASSERT(hot_peak <= 0.501f,
+               "Limiter must hold output below ceiling");
+        printf("  PASS: Limiter holds hot signal at %.3f (ceiling 0.500)\n",
+               hot_peak);
+
+        effect_free(&lim);
     }
 
     free(buf);

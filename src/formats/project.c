@@ -250,6 +250,10 @@ static cJSON *track_to_json(const sq_track_t *t)
             cJSON_AddItemToObject(ej, "bands", bands);
             break;
         }
+        case EFFECT_LIMITER:
+            cJSON_AddNumberToObject(ej, "ceiling", t->effects[e].limiter.ceiling);
+            cJSON_AddNumberToObject(ej, "release_ms", t->effects[e].limiter.release_ms);
+            break;
         default:
             break;
         }
@@ -298,6 +302,10 @@ static cJSON *effect_slot_to_json(const sq_effect_slot_t *slot)
         cJSON_AddItemToObject(j, "bands", bands);
         break;
     }
+    case EFFECT_LIMITER:
+        cJSON_AddNumberToObject(j, "ceiling", slot->limiter.ceiling);
+        cJSON_AddNumberToObject(j, "release_ms", slot->limiter.release_ms);
+        break;
     default:
         break;
     }
@@ -629,6 +637,12 @@ static void json_to_effect_slot(const cJSON *j, sq_effect_slot_t *slot, uint32_t
         }
         break;
     }
+    case EFFECT_LIMITER:
+        v = cJSON_GetObjectItem(j, "ceiling");
+        if (v) slot->limiter.ceiling = clampf((float)v->valuedouble, 0.001f, 1.0f);
+        v = cJSON_GetObjectItem(j, "release_ms");
+        if (v) slot->limiter.release_ms = clampf((float)v->valuedouble, 1.0f, 2000.0f);
+        break;
     default:
         break;
     }

@@ -183,6 +183,77 @@ static void eq_process(sq_efx_eq_t *eq, float *buf, uint32_t frames,
     }
 }
 
+/* ─── Brickwall limiter ─────────────────────────────────────────────────────
+ *
+ * Lookahead peak limiter. Inputs are written to a circular delay line; the
+ * peak across the lookahead window determines a per-sample gain that ducks
+ * the delayed output below the configured ceiling. Attack is instant within
+ * the lookahead window; release is exponential. */
+
+static void limiter_process(sq_efx_limiter_t *lim, float *buf, uint32_t frames,
+                            uint32_t sample_rate)
+{
+    if (!lim->allocated) return;
+
+    float ceiling = lim->ceiling;
+    if (ceiling < 0.001f) ceiling = 0.001f;
+    if (ceiling > 1.0f)   ceiling = 1.0f;
+
+    float release_ms = lim->release_ms;
+    if (release_ms < 1.0f)   release_ms = 1.0f;
+    if (release_ms > 2000.0f) release_ms = 2000.0f;
+
+    /* One-pole release coefficient: env approaches 1.0 with this time constant */
+    float release_coef = expf(-1.0f / ((release_ms / 1000.0f) * (float)sample_rate));
+
+    int la = LIMITER_LOOKAHEAD_SAMPLES;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        float in_l = buf[i * 2];
+        float in_r = buf[i * 2 + 1];
+
+        /* Write current input into the delay line */
+        lim->lookahead[lim->write_pos * 2]     = in_l;
+        lim->lookahead[lim->write_pos * 2 + 1] = in_r;
+
+        /* Peak across the lookahead window. We scan the whole window every
+         * sample — O(N) per sample, but N=256 is fine for our buffer sizes. */
+        float peak = 0.0f;
+        for (int s = 0; s < la; s++) {
+            float a = fabsf(lim->lookahead[s * 2]);
+            float b = fabsf(lim->lookahead[s * 2 + 1]);
+            if (a > peak) peak = a;
+            if (b > peak) peak = b;
+        }
+
+        /* Target gain: 1.0 unless peak exceeds ceiling, then duck */
+        float target = (peak > ceiling) ? (ceiling / peak) : 1.0f;
+
+        /* Instant attack (drop), exponential release (recovery) */
+        if (target < lim->envelope) {
+            lim->envelope = target;
+        } else {
+            lim->envelope = target + (lim->envelope - target) * release_coef;
+        }
+
+        /* Read the delayed output and apply the gain envelope */
+        int read_pos = (lim->write_pos + 1) % la;
+        float out_l = lim->lookahead[read_pos * 2]     * lim->envelope;
+        float out_r = lim->lookahead[read_pos * 2 + 1] * lim->envelope;
+
+        /* Final clamp catches any overshoot from envelope smoothing */
+        if (out_l >  ceiling) out_l =  ceiling;
+        if (out_l < -ceiling) out_l = -ceiling;
+        if (out_r >  ceiling) out_r =  ceiling;
+        if (out_r < -ceiling) out_r = -ceiling;
+
+        buf[i * 2]     = out_l;
+        buf[i * 2 + 1] = out_r;
+
+        lim->write_pos = (lim->write_pos + 1) % la;
+    }
+}
+
 /* ─── Delay ──────────────────────────────────────────────────────────────── */
 
 static void delay_process(sq_efx_delay_t *d, float *buf, uint32_t frames,
@@ -739,6 +810,13 @@ void effect_free(sq_effect_slot_t *slot)
         }
         slot->shimmer.allocated = false;
         break;
+    case EFFECT_LIMITER:
+        if (slot->limiter.lookahead) {
+            free(slot->limiter.lookahead);
+            slot->limiter.lookahead = NULL;
+        }
+        slot->limiter.allocated = false;
+        break;
     case EFFECT_OVERDRIVE:
     case EFFECT_FUZZ:
     case EFFECT_BITCRUSHER:
@@ -872,6 +950,15 @@ void effect_init(sq_effect_slot_t *slot, sq_effect_type_t type, uint32_t sample_
         slot->shimmer.buffer = calloc(SHIMMER_BUF_SIZE * 2, sizeof(float));
         slot->shimmer.allocated = (slot->shimmer.buffer != NULL);
         break;
+    case EFFECT_LIMITER:
+        slot->limiter.ceiling = 0.97f;       /* ~-0.3 dBFS */
+        slot->limiter.release_ms = 50.0f;
+        slot->limiter.envelope = 1.0f;
+        slot->limiter.write_pos = 0;
+        slot->limiter.lookahead = calloc(LIMITER_LOOKAHEAD_SAMPLES * 2,
+                                         sizeof(float));
+        slot->limiter.allocated = (slot->limiter.lookahead != NULL);
+        break;
     case EFFECT_EQ:
         slot->eq.bands[0].type = EQ_BAND_LOW_SHELF;
         slot->eq.bands[0].frequency = 250.0f;
@@ -943,6 +1030,9 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
         break;
     case EFFECT_EQ:
         eq_process(&slot->eq, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_LIMITER:
+        limiter_process(&slot->limiter, buffer, num_frames, sample_rate);
         break;
     default:
         break;
