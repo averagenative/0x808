@@ -53,9 +53,16 @@ extern "C" {
 #include <commdlg.h>
 #endif
 
-/* ─── Custom borderless window resize/maximize via Win32 ─────────────────── */
+/* ─── Custom borderless window resize/maximize ────────────────────────────── */
 
 #define RESIZE_BORDER 8
+#define DRAG_AREA_HEIGHT 80   /* matches toolbar_h in gui_frame */
+
+/* Updated each frame after ImGui rendering: true when the mouse is over an
+ * interactive ImGui widget. Read by the SDL hit-test callback to decide
+ * whether the toolbar area should drag the window or pass through to
+ * ImGui input handling. */
+static volatile bool g_imgui_blocks_drag = false;
 
 #ifdef _WIN32
 /* Subclass the Win32 HWND to handle WM_NCHITTEST + WM_NCCALCSIZE for
@@ -151,6 +158,39 @@ static void install_borderless_wndproc(SDL_Window *window)
         SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                      SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
     }
+}
+#else
+/* Cross-platform borderless drag/resize via SDL_SetWindowHitTest.
+ * Used on Linux (X11/Wayland) and macOS, where Win32 wndproc isn't available.
+ * SDL handles the actual window manipulation; we just classify regions. */
+static SDL_HitTestResult SDLCALL borderless_hit_test(SDL_Window *win,
+                                                      const SDL_Point *pt,
+                                                      void *data)
+{
+    (void)data;
+    int w = 0, h = 0;
+    SDL_GetWindowSize(win, &w, &h);
+
+    bool top    = pt->y < RESIZE_BORDER;
+    bool bottom = pt->y >= h - RESIZE_BORDER;
+    bool left   = pt->x < RESIZE_BORDER;
+    bool right  = pt->x >= w - RESIZE_BORDER;
+
+    if (top && left)     return SDL_HITTEST_RESIZE_TOPLEFT;
+    if (top && right)    return SDL_HITTEST_RESIZE_TOPRIGHT;
+    if (bottom && left)  return SDL_HITTEST_RESIZE_BOTTOMLEFT;
+    if (bottom && right) return SDL_HITTEST_RESIZE_BOTTOMRIGHT;
+    if (top)             return SDL_HITTEST_RESIZE_TOP;
+    if (bottom)          return SDL_HITTEST_RESIZE_BOTTOM;
+    if (left)            return SDL_HITTEST_RESIZE_LEFT;
+    if (right)           return SDL_HITTEST_RESIZE_RIGHT;
+
+    /* Drag from blank toolbar area, but defer to ImGui when it owns the
+     * pointer (button hover, dropdown open, slider drag, etc.). */
+    if (pt->y < DRAG_AREA_HEIGHT && !g_imgui_blocks_drag) {
+        return SDL_HITTEST_DRAGGABLE;
+    }
+    return SDL_HITTEST_NORMAL;
 }
 #endif
 
@@ -298,6 +338,10 @@ int gui_init(int width, int height, const char *title)
     SDL_SetWindowMinimumSize(g_window, 800, 500);
 #ifdef _WIN32
     install_borderless_wndproc(g_window);
+#else
+    if (SDL_SetWindowHitTest(g_window, borderless_hit_test, NULL) != 0) {
+        LOG_WARN("SDL_SetWindowHitTest unsupported: %s", SDL_GetError());
+    }
 #endif
     LOG_INFO("gui_init: SDL_CreateWindow OK (borderless, min size 800x500)");
 
@@ -702,6 +746,10 @@ int gui_frame(sq_engine_t *engine)
 
     /* Sync app state back from globals (components may have changed them) */
     g_app.selected_track = g_selected_track;
+
+    /* Tell the borderless hit test whether ImGui owns the pointer right now,
+     * so dragging the toolbar still defers to buttons/dropdowns under it. */
+    g_imgui_blocks_drag = ImGui::IsAnyItemHovered() || ImGui::IsAnyItemActive();
 
     return quit;
 }

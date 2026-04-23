@@ -232,8 +232,19 @@ extern "C" void sample_browser_draw(sq_engine_t *engine,
         return;
     }
 
-    /* Title */
+    /* Title with top-right X close button */
     ImGui::Text("Sample Browser");
+    {
+        const float btn_sz = 20.0f;
+        ImGui::SameLine(ImGui::GetWindowWidth() - btn_sz - 8.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.78f, 0.27f, 0.27f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.86f, 0.35f, 0.35f, 1.0f));
+        if (ImGui::Button("X##browser_close", ImVec2(btn_sz, btn_sz))) {
+            s_close_requested = true;
+        }
+        ImGui::PopStyleColor(3);
+    }
     ImGui::Separator();
 
     /* Current path */
@@ -247,16 +258,6 @@ extern "C" void sample_browser_draw(sq_engine_t *engine,
     if (ImGui::Button("Refresh")) {
         s_needs_refresh = true;
     }
-    ImGui::SameLine();
-
-    /* Close button (red) */
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.63f, 0.20f, 0.20f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.78f, 0.27f, 0.27f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.86f, 0.35f, 0.35f, 1.0f));
-    if (ImGui::Button("X")) {
-        s_close_requested = true;
-    }
-    ImGui::PopStyleColor(3);
     ImGui::SameLine();
 
     /* Load button */

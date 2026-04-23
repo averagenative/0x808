@@ -94,6 +94,18 @@ void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
     }
 
     ImGui::TextUnformatted("Settings");
+    /* Top-right X close button */
+    {
+        const float btn_sz = 20.0f;
+        ImGui::SameLine(ImGui::GetWindowWidth() - btn_sz - 8.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.78f, 0.27f, 0.27f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.86f, 0.35f, 0.35f, 1.0f));
+        if (ImGui::Button("X##settings_close", ImVec2(btn_sz, btn_sz))) {
+            app->panels[SQ_PANEL_SETTINGS] = false;
+        }
+        ImGui::PopStyleColor(3);
+    }
     ImGui::Separator();
 
     /* ── Audio Device Section ─────────────────────────────────────────── */
