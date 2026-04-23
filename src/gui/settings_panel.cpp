@@ -435,6 +435,8 @@ void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
     ImGui::Separator();
     ImGui::Spacing();
     if (ImGui::Button("Reset to Defaults")) {
+        LOG_INFO("Reset to Defaults: base_dir='%s' num_samples=%u current_kit=%d",
+                 engine->base_dir, engine->num_samples, sq_current_kit);
         /* Reset app state */
         sq_app_init(app);
         sq_app_init_rec_config(&app->rec_config);
@@ -475,6 +477,12 @@ void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
 
         /* Reinitialize synth presets to factory defaults */
         synth_init_presets(engine);
+
+        /* Reload default 808 kit BEFORE rebuilding patterns so num_samples
+         * reflects the freshly-loaded kit. Doing this after the rebuild
+         * left patterns with zero sampler tracks if the prior session
+         * had num_samples=0 (e.g. autosave with empty sample paths). */
+        sq_kit_load(engine, 0, engine->base_dir);
 
         /* Fully rebuild patterns from scratch */
         engine->num_patterns = 5;
@@ -538,9 +546,6 @@ void settings_panel_draw(sq_engine_t *engine, sq_app_t *app,
                 p0->tracks[ns + 1].steps[0].length = 0.0f;
             }
         }
-
-        /* Reload default 808 kit */
-        sq_kit_load(engine, 0, engine->base_dir);
 
         /* Delete session + autosave files */
         remove(sq_session_path());

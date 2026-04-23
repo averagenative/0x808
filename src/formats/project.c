@@ -19,6 +19,7 @@
 #include "formats/project.h"
 #include "formats/sample_io.h"
 #include "engine/synth.h"
+#include "engine/kits.h"
 
 #include "cJSON.h"
 
@@ -314,11 +315,19 @@ int project_save(const sq_engine_t *engine, const char *filepath)
         return -1;
     }
     for (uint32_t i = 0; i < engine->num_samples; i++) {
-        /* Save full filepath if available, otherwise just the name */
         const char *path = engine->samples[i].filepath[0]
                          ? engine->samples[i].filepath
-                         : engine->samples[i].name;
-        cJSON_AddItemToArray(samples, cJSON_CreateString(path));
+                         : (engine->samples[i].name[0]
+                            ? engine->samples[i].name
+                            : NULL);
+        /* Slot is empty (failed kit load left it zeroed) — fall back to the
+         * current kit's default path so reload can recover instead of
+         * persisting "" and locking the user out of the kit selector. */
+        if (!path && sq_current_kit >= 0 && sq_current_kit < SQ_NUM_KITS
+            && i < (uint32_t)sq_kits[sq_current_kit].num_slots) {
+            path = sq_kits[sq_current_kit].paths[i];
+        }
+        cJSON_AddItemToArray(samples, cJSON_CreateString(path ? path : ""));
     }
     cJSON_AddItemToObject(root, "sample_paths", samples);
 
@@ -800,6 +809,18 @@ int project_load(sq_engine_t *engine, const char *filepath)
                     engine->num_samples++;
                 }
             }
+        }
+
+        /* Self-heal: if the project listed samples but we ended up with
+         * none loaded (e.g. autosave with empty/stale paths), fall back
+         * to the saved kit so the user isn't stranded with zero samples
+         * and a dead kit selector. */
+        if (!samples_match && engine->num_samples == 0 && n > 0) {
+            int kit = (sq_current_kit >= 0 && sq_current_kit < SQ_NUM_KITS)
+                      ? sq_current_kit : 0;
+            LOG_WARN("All %d sample paths failed to load — restoring kit %d",
+                     n, kit);
+            sq_kit_load(engine, kit, engine->base_dir);
         }
     }
 

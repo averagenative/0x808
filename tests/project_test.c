@@ -197,6 +197,49 @@ int main(void) {
     /* Cleanup */
     remove(TEST_FILE);
 
+    /* ── Regression: poisoned autosave with empty sample paths ─────────────
+     * Repro for the AppImage bug where a failed kit load left 8 sample
+     * slots with empty filepath+name, project_save wrote "" for each, and
+     * the next project_load rejected every entry — leaving num_samples=0
+     * and a dead kit selector. The self-heal in project_load should fall
+     * back to sq_current_kit so num_samples is non-zero. */
+    {
+#ifdef _WIN32
+        const char *poisoned_path = "test_poisoned.sqproj";
+#else
+        const char *poisoned_path = "/tmp/test_poisoned.sqproj";
+#endif
+        FILE *f = fopen(poisoned_path, "w");
+        if (!f) {
+            fprintf(stderr, "FAIL: could not open %s\n", poisoned_path);
+            return 1;
+        }
+        fprintf(f,
+            "{\"version\":1,\"bpm\":145,\"sample_rate\":44100,"
+            "\"sample_paths\":[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"],"
+            "\"patterns\":[{\"name\":\"P1\",\"num_tracks\":0,\"tracks\":[]}]}");
+        fclose(f);
+
+        sq_engine_t poisoned;
+        sq_engine_init(&poisoned, 44100);
+        /* base_dir = project root so sq_kit_load can find samples/808/ wavs */
+        snprintf(poisoned.base_dir, sizeof(poisoned.base_dir), "./");
+
+        printf("\nLoading poisoned autosave...\n");
+        if (project_load(&poisoned, poisoned_path) != 0) {
+            fprintf(stderr, "FAIL: project_load returned non-zero on poisoned file\n");
+            return 1;
+        }
+        if (poisoned.num_samples == 0) {
+            fprintf(stderr, "FAIL: self-heal did not restore kit (num_samples=0)\n");
+            return 1;
+        }
+        printf("PASS: poisoned autosave self-healed (num_samples=%u)\n",
+               poisoned.num_samples);
+        sq_engine_shutdown(&poisoned);
+        remove(poisoned_path);
+    }
+
     printf("\n=== ALL PROJECT SAVE/LOAD TESTS PASSED ===\n");
     return 0;
 }
