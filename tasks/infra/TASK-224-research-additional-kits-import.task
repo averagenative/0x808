@@ -1,0 +1,52 @@
+status: pending
+priority: medium
+depends: none
+agent: infra
+ref: TASK-224
+---
+Research: which additional drum kits should we ship/auto-import?
+
+Today src/engine/kits.c hard-codes 6 kits (808, 909, 505, MRK-2,
+CR-78, LM-2) backed by samples/ wav files in the AppDir.
+
+Goal: identify high-value additions and a plan for getting them
+into the app without ballooning the install size.
+
+## Investigation Areas
+
+1. Iconic / requested machines not yet covered:
+   - LinnDrum, DMX, SP-1200, MPC-60/3000, Drumulator,
+     R-8, RX-5, XR-10, Boss DR-660, etc.
+2. Modern / electronic textures users expect (acoustic kit,
+   trap 808 variants, lo-fi, drum-and-bass breaks, percussion
+   only, claps/snaps packs).
+3. Licensing — which sample packs are CC0 / CC-BY / public
+   domain and safe to redistribute? Audit current samples/
+   directory licensing first (samples/808/LICENSE.md exists).
+4. Auto-import: scan a user-configurable kits directory at
+   startup (e.g. ~/.local/share/0x808/kits/<KitName>/ on Linux,
+   %USERPROFILE%/Documents/0x808/kits/ on Windows). Each
+   subfolder = a kit; map files by filename convention
+   (kick*, snare*, hihat-closed*, etc.).
+5. Compare to what other open-source drum machines ship
+   (Hydrogen, LMMS, Stochas, Surge XT-Drums) for size and
+   structure norms.
+
+## Deliverables
+
+- [ ] Markdown report at docs/research/kit-expansion.md listing:
+  - Recommended new kits with sources + license terms
+  - Estimated total install size impact (current vs proposed)
+  - Auto-import directory layout proposal (cross-platform paths)
+  - File-naming convention spec for user-imported kits
+- [ ] Spike PR (separate task, not in scope here) for the
+      auto-import scanner
+- [ ] Update SQ_NUM_KITS / sq_kits[] plan in the report
+
+## Test Plan
+- [ ] Report reviewed for licensing accuracy before any sample
+      addition
+- [ ] No copyrighted samples added without explicit license
+
+NOTE: Deep web research likely required for kit licensing —
+escalate to general-purpose research agent if needed.

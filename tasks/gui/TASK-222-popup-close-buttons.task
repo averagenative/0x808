@@ -1,0 +1,39 @@
+status: pending
+priority: medium
+depends: none
+agent: gui
+ref: TASK-222
+---
+Add an "X" close button to popup-style panels.
+
+Currently the Settings, Help (?), Sample Browser, and Pattern
+Presets panels can only be dismissed via the toolbar toggles —
+there is no in-panel close affordance, which is unusual UX.
+
+Affected files (ImGui frontend):
+- src/gui/settings_panel.cpp:87 — uses NoTitleBar, no p_open
+- src/gui/sample_browser.cpp:227-230 — uses NoTitleBar, no p_open
+- src/gui/pattern_presets.cpp:428 — already passes &open, verify X
+- Help/About panel — find and update
+
+Either drop NoTitleBar so ImGui draws the standard title+X (and
+keep NoCollapse), or render a manual X button in the top-right
+corner of each panel that toggles the same global show flag the
+toolbar uses.
+
+Note: TASK-145 (sample-browser-exit-button) was marked done but
+the user reports this is still missing — re-verify and reopen if
+needed.
+
+## Acceptance Criteria
+- [ ] Settings panel shows an X in its top-right corner
+- [ ] Sample Browser panel shows an X in its top-right corner
+- [ ] Pattern Presets panel shows an X in its top-right corner
+- [ ] Help (?) panel shows an X in its top-right corner
+- [ ] Clicking X toggles off the same flag as the toolbar
+- [ ] Apply same change to GTK frontend (frontend parity rule)
+
+## Test Plan
+- [ ] Open each panel via toolbar, close via X, verify state
+- [ ] Reopen via toolbar, verify panel restores cleanly
+- [ ] Verify no double-close issues if both X and toolbar toggled

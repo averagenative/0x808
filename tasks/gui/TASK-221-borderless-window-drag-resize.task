@@ -1,0 +1,42 @@
+status: pending
+priority: high
+depends: none
+agent: gui
+ref: TASK-221
+---
+Restore window drag and resize on Linux AppImage build.
+
+The SDL2 main window in src/gui/gui.cpp:286 is created with
+SDL_WINDOW_BORDERLESS. On Linux (X11/Wayland), borderless windows
+have no native title bar to grab and no resize handles, so the
+user cannot:
+1. Drag-resize the window from any edge/corner
+2. Drag the window around by its top bar
+
+Maximize/minimize still work because those are bound to ImGui
+toolbar buttons, not native chrome.
+
+Two options:
+A. Drop SDL_WINDOW_BORDERLESS — accept the OS-native title bar.
+   Simplest fix, breaks the custom-chrome aesthetic.
+B. Implement SDL_SetWindowHitTest to expose drag/resize regions
+   on the custom title bar and window edges. Keeps the look.
+
+Recommend B with a fallback to A if hit-testing proves flaky on
+Wayland. Match GTK frontend behavior (which uses native chrome).
+
+## Acceptance Criteria
+- [ ] Window can be dragged by clicking the top toolbar area
+      (excluding interactive controls)
+- [ ] Window can be resized by dragging any edge or corner
+- [ ] Maximize/minimize buttons still function
+- [ ] Cursor changes appropriately on resize edges
+- [ ] Behavior tested on Linux (AppImage), Windows installer,
+      and macOS .app
+- [ ] Frontend parity preserved with GTK build
+
+## Test Plan
+- [ ] Drag window around screen on each platform
+- [ ] Resize from each edge and corner
+- [ ] Verify minimum window size still enforced (TASK-194)
+- [ ] Verify no regression in toolbar button hover (TASK-146)

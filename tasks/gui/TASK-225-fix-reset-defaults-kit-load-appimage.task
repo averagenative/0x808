@@ -1,0 +1,93 @@
+status: done
+priority: critical
+depends: none
+agent: gui
+ref: TASK-225
+---
+Fix Reset-to-Defaults wiping the kit on Linux AppImage — diagnosis
+confirmed via stderr capture from v1.3.0 AppImage launched from Nautilus.
+
+## Root cause (confirmed)
+
+Autosave at ~/.local/share/0x808/autosave.sqproj contained:
+    "sample_paths": ["", "", "", "", "", "", "", ""]
+producing 8x "Rejected unsafe sample path:" warnings on next load.
+
+Failure cycle:
+1. An initial launch (likely first Nautilus double-click with CWD=$HOME)
+   triggered sq_kit_load (kits.c:134) which memsets the 8 sample slots
+   (kits.c:154-155) BEFORE attempting load. All loads failed, leaving
+   8 zeroed slots — filepath="" AND name="".
+2. project_save (project.c:316-322) wrote those empty strings to JSON
+   without guarding against filepath="" && name="".
+3. Subsequent project_load rejected every entry via path_is_safe (which
+   returns false for empty strings, project.c:39), leaving
+   engine->num_samples = 0 after load.
+4. Startup kit-restore in main_gui.c:624-635 only re-runs sq_kit_load
+   if `need_reload || sq_current_kit > 0`. With num_samples=0 the
+   need_reload loop doesn't execute, and if sq_current_kit==0 the
+   fallback is skipped — so the engine boots with zero samples.
+5. User clicks Reset to Defaults: settings_panel.cpp:486 reads
+   ns=engine->num_samples (=0), rebuilds each pattern with
+   num_tracks = 0 + 2 (synth tracks only, NO sampler rows). Then
+   sq_kit_load fills sample slots 0..7 successfully, but patterns
+   no longer have any sampler tracks pointing at them.
+   → Kit dropdown looks empty, every kit selection appears to do
+   nothing because there are no sampler rows in the grid.
+
+Manual recovery: delete ~/.local/share/0x808/{autosave.sqproj,session.json}.
+
+## Required fixes
+
+Three independent guards — all three should land:
+
+1. **Prevent the bad-state save** (project.c:316-322)
+   Skip serialising sample slots where both filepath and name are
+   empty. Better: if a slot has data == NULL, don't write it at all
+   (it was never loaded). This prevents the autosave from poisoning
+   future launches.
+
+2. **Self-heal on load** (project.c:695-804 and/or main_gui.c:624-635)
+   After project_load, if engine->num_samples ended up smaller than
+   the JSON's sample_paths array length (i.e. entries were rejected),
+   force a sq_kit_load(engine, sq_current_kit, base_dir) regardless
+   of sq_current_kit's value. Rationale: the autosave referenced
+   samples we couldn't restore, so fall back to the named kit.
+
+3. **Fix the Reset-to-Defaults order** (settings_panel.cpp:479-548)
+   Move `sq_kit_load(engine, 0, engine->base_dir)` BEFORE the
+   pattern rebuild loop, so `ns = engine->num_samples` reads the
+   freshly-loaded slot count. Today the order is reversed and a
+   zero-sample state propagates into the rebuilt patterns.
+
+Bonus: add a LOG_INFO at reset entry dumping engine->base_dir and
+engine->num_samples — would have caught this in one log line.
+
+## Acceptance Criteria
+- [ ] project_save no longer writes "" entries to sample_paths
+- [ ] project_load that rejects entries triggers a kit reload
+      so num_samples is non-zero on success
+- [ ] Reset-to-Defaults rebuilds patterns AFTER kit load
+- [ ] Reproduce: hand-craft an autosave with empty sample_paths,
+      launch app, verify samples are restored from default kit
+      instead of starting in the broken zero-sample state
+- [ ] Reset-to-Defaults from the broken state recovers the kit
+- [ ] Apply equivalent fixes to GTK frontend (frontend parity)
+
+## Test Plan
+- [ ] Reproduce the original cycle: write `"sample_paths":["","",...]`
+      to autosave.sqproj manually, launch AppImage, confirm pre-fix
+      shows zero kit and post-fix recovers
+- [ ] Verify normal launch (with valid autosave) is unaffected
+- [ ] Verify Windows installer + macOS .app reset still work
+- [ ] Add a project_load unit test: feed JSON with 8 empty
+      sample_paths and assert num_samples > 0 after load (via
+      kit fallback)
+
+## Notes
+- The original Nautilus-launch trigger that produced the empty
+  paths in the first place is a separate, lower-priority question.
+  It may have been a transient base_dir issue from before the
+  0ec71af project_load base_dir-preservation fix. The three guards
+  above prevent a single bad save from becoming a permanent
+  broken state regardless of how it occurred.

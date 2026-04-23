@@ -1,0 +1,46 @@
+status: pending
+priority: medium
+depends: none
+agent: gui
+ref: TASK-223
+---
+Add a "Random" feature for drum patterns and kits.
+
+Inspired by the "mystery rig" feature in 0xFX and the "random"
+preset in 0xSYNTH. The user wants a one-click way to discover
+new groove starting points.
+
+Scope (propose in two tiers — implement tier 1, gate tier 2 on
+feedback):
+
+Tier 1 — Random pattern only:
+- Toolbar button + keyboard shortcut (e.g. Ctrl+R)
+- Generates a musically plausible 16-step pattern across
+  current sampler tracks (kick on 1/9, snare on 5/13, hats
+  filled in with weighted velocity, percussion sparse)
+- Uses current kit; does not change the kit
+- Writes to current pattern slot, undoable
+
+Tier 2 — Random kit:
+- Optional checkbox / second button that also rolls the kit
+  (cycles through sq_kits[] or — once TASK-224 lands —
+  randomly picks from a wider auto-imported pool)
+
+Heuristics > pure RNG: hard-code per-track step probabilities
+and velocity distributions so output sounds intentional. See
+how 0xFX mystery-rig biases parameter ranges for reference.
+
+## Acceptance Criteria
+- [ ] "Random" button visible on toolbar (both ImGui + GTK)
+- [ ] Generates a 16-step pattern that plays without sounding
+      like white noise — kick/snare on the right beats
+- [ ] Action is undoable (uses existing sq_undo machinery)
+- [ ] Optional "Random Kit" toggle or secondary action
+- [ ] Keyboard shortcut wired up in src/app/sq_app.c key handler
+- [ ] Frontend parity (ImGui + GTK)
+
+## Test Plan
+- [ ] Click Random 10x, verify each pattern is distinct and
+      musically usable
+- [ ] Verify undo restores prior pattern
+- [ ] Verify RNG seeded so successive runs differ
