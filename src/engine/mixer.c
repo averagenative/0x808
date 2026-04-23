@@ -76,6 +76,20 @@ void mixer_process(sq_engine_t *engine, float *output, uint32_t num_frames)
                                  ? peak_r : engine->master_peak[1] * decay;
     }
 
+    /* Scope ring-buffer capture (mono downmix). Kept in the same pass so
+     * we don't do a second read of the output buffer. No malloc, no lock —
+     * real-time safe. */
+    {
+        const uint32_t bufsize = (uint32_t)(sizeof(engine->scope_buffer) /
+                                            sizeof(engine->scope_buffer[0]));
+        uint32_t w = engine->scope_write_pos;
+        for (uint32_t f = 0; f < num_frames; f++) {
+            engine->scope_buffer[w] = 0.5f * (output[f * 2] + output[f * 2 + 1]);
+            w = (w + 1) & (bufsize - 1);
+        }
+        engine->scope_write_pos = w;
+    }
+
     /* Step 6: Estimate per-track peak levels.
      * Since voices don't carry track indices, we approximate by checking
      * which tracks have active steps at the current playback position

@@ -709,7 +709,43 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
             draw_level_meter(dl, mst_base, 14.0f, mst_h, engine->master_peak[0]);
             draw_level_meter(dl, ImVec2(mst_base.x + 18.0f, mst_base.y),
                              14.0f, mst_h, engine->master_peak[1]);
-            ImGui::Dummy(ImVec2(34.0f, mst_h));
+
+            /* Oscilloscope — right of the VU meters, shows the master
+             * mix. Read from the engine's scope ring buffer. */
+            const uint32_t bufsize = (uint32_t)(sizeof(engine->scope_buffer) /
+                                                sizeof(engine->scope_buffer[0]));
+            uint32_t write = engine->scope_write_pos;   /* snapshot for this frame */
+            float scope_w = 180.0f;
+            float scope_x = mst_base.x + 40.0f;
+            float scope_y = mst_base.y;
+            dl->AddRectFilled(ImVec2(scope_x, scope_y),
+                              ImVec2(scope_x + scope_w, scope_y + mst_h),
+                              IM_COL32(18, 20, 24, 255), 3.0f);
+            /* Zero line */
+            float mid_y = scope_y + mst_h * 0.5f;
+            dl->AddLine(ImVec2(scope_x, mid_y),
+                        ImVec2(scope_x + scope_w, mid_y),
+                        IM_COL32(60, 60, 70, 200), 1.0f);
+            /* Trace: read last `samples_to_show` samples ending at write-1 */
+            int samples_to_show = 512;
+            if (samples_to_show > (int)bufsize) samples_to_show = (int)bufsize;
+            uint32_t start = (write + bufsize - (uint32_t)samples_to_show)
+                             & (bufsize - 1);
+            ImU32 trace_col = IM_COL32(120, 220, 120, 230);
+            float prev_x = scope_x, prev_y = mid_y;
+            for (int i = 0; i < samples_to_show; i++) {
+                uint32_t idx = (start + (uint32_t)i) & (bufsize - 1);
+                float v = engine->scope_buffer[idx];
+                if (v > 1.0f) v = 1.0f;
+                if (v < -1.0f) v = -1.0f;
+                float x = scope_x + (float)i * scope_w / (float)samples_to_show;
+                float y = mid_y - v * (mst_h * 0.48f);
+                if (i > 0) dl->AddLine(ImVec2(prev_x, prev_y),
+                                       ImVec2(x, y), trace_col, 1.2f);
+                prev_x = x; prev_y = y;
+            }
+
+            ImGui::Dummy(ImVec2(34.0f + scope_w + 4.0f, mst_h));
             ImGui::SetCursorPosX(track_area_w + 6.0f);
             ImGui::Text("L  R");
         }

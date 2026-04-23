@@ -469,6 +469,13 @@ typedef struct {
     float          track_peaks[SQ_MAX_TRACKS]; /* per-track peak (0.0 - 1.0+) */
     float          master_peak[2];             /* master L/R peak             */
 
+    /* Oscilloscope ring buffer — audio thread writes the master mix here
+     * (mono downmix) so the GUI can render a waveform each frame without
+     * touching the audio path. Reads may tear across the write position;
+     * that's fine for visualization. */
+    float          scope_buffer[2048];
+    uint32_t       scope_write_pos;
+
     /* Lock-free command queue: GUI pushes, audio thread pops */
     sq_command_queue_t cmd_queue;
 

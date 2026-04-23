@@ -85,6 +85,30 @@ int main(void) {
 
     free(res.data);
     free(res2.data);
+
+    /* TASK-202: oscilloscope ring buffer must get populated by the
+     * audio path. Trigger a kick and run one process block directly,
+     * then verify the scope buffer captured non-zero audio. */
+    {
+        memset(engine.scope_buffer, 0, sizeof(engine.scope_buffer));
+        engine.scope_write_pos = 0;
+        engine.transport.playing = true;
+        engine.transport.sample_position = 0;
+        engine.transport.current_step = 0;
+        engine.transport.step0_pending = true;
+        float buf[1024 * 2];
+        sq_engine_process(&engine, buf, 1024);
+
+        int nonzero = 0;
+        int bufsize = (int)(sizeof(engine.scope_buffer) /
+                            sizeof(engine.scope_buffer[0]));
+        for (int i = 0; i < bufsize; i++)
+            if (engine.scope_buffer[i] != 0.0f) nonzero++;
+        ASSERT(nonzero > 0, "scope_buffer should capture audio for oscilloscope");
+        printf("  PASS: scope_buffer captured %d/%d non-zero samples\n",
+               nonzero, bufsize);
+    }
+
     sq_engine_shutdown(&engine);
 
     printf("\n=== ALL SNAPSHOT REGRESSION TESTS PASSED ===\n");
