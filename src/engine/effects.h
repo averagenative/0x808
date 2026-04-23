@@ -32,6 +32,7 @@ typedef enum {
     EFFECT_RINGMOD,
     EFFECT_TAPE,
     EFFECT_SHIMMER,
+    EFFECT_EQ,
     EFFECT_TYPE_COUNT
 } sq_effect_type_t;
 
@@ -240,6 +241,34 @@ typedef struct {
     bool  allocated;
 } sq_efx_shimmer_t;
 
+/* ─── 3-band parametric EQ ──────────────────────────────────────────────── */
+
+typedef enum {
+    EQ_BAND_LOW_SHELF = 0,
+    EQ_BAND_PEAK,
+    EQ_BAND_HIGH_SHELF
+} sq_eq_band_type_t;
+
+typedef struct {
+    sq_eq_band_type_t type;
+    float frequency;       /* Hz (20-20000) */
+    float gain_db;         /* -12 to +12 */
+    float q;               /* 0.1 to 10 */
+    /* Computed biquad coefficients */
+    float b0, b1, b2, a1, a2;
+    /* Per-channel direct-form II transposed state */
+    float z1[2], z2[2];
+    /* Cached params for change detection (avoid recomputing every block) */
+    float last_freq, last_gain, last_q;
+    sq_eq_band_type_t last_type;
+} sq_eq_band_t;
+
+#define EQ_NUM_BANDS 3
+
+typedef struct {
+    sq_eq_band_t bands[EQ_NUM_BANDS];
+} sq_efx_eq_t;
+
 /* ─── Generic effect slot ────────────────────────────────────────────────── */
 
 #define MAX_TRACK_EFFECTS 3
@@ -262,6 +291,7 @@ typedef struct {
         sq_efx_ringmod_t   ringmod;
         sq_efx_tape_t      tape;
         sq_efx_shimmer_t   shimmer;
+        sq_efx_eq_t        eq;
     };
 } sq_effect_slot_t;
 

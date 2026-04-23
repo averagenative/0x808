@@ -38,7 +38,7 @@ static GtkWidget *s_fx_slots_box;
 static const char *s_effect_type_names[] = {
     "None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
     "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-    "Ring Mod", "Tape", "Shimmer", NULL
+    "Ring Mod", "Tape", "Shimmer", "EQ", NULL
 };
 static const char *s_filter_mode_names[] = { "LowPass", "HiPass", "BandPass", NULL };
 static const char *s_delay_sync_names[]  = { "1/1", "1/2", "1/4", "1/8", "1/16", NULL };

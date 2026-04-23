@@ -86,6 +86,103 @@ static void filter_process(sq_efx_filter_t *f, float *buf, uint32_t frames,
     }
 }
 
+/* ─── 3-band parametric EQ ──────────────────────────────────────────────────
+ *
+ * Robert Bristow-Johnson "Audio EQ Cookbook" coefficients. Each band is an
+ * independent stereo biquad. Bands are processed in series. Coefficients
+ * are recomputed only when the band's params actually change. */
+
+static void eq_band_compute_coeffs(sq_eq_band_t *b, uint32_t sample_rate)
+{
+    if (b->type == b->last_type &&
+        b->frequency == b->last_freq &&
+        b->gain_db == b->last_gain &&
+        b->q == b->last_q)
+        return;
+
+    float fc = b->frequency;
+    if (fc < 20.0f) fc = 20.0f;
+    if (fc > (float)sample_rate * 0.45f) fc = (float)sample_rate * 0.45f;
+
+    float Q = b->q;
+    if (Q < 0.1f) Q = 0.1f;
+    if (Q > 10.0f) Q = 10.0f;
+
+    float gain = b->gain_db;
+    if (gain < -24.0f) gain = -24.0f;
+    if (gain >  24.0f) gain =  24.0f;
+
+    float A    = powf(10.0f, gain / 40.0f);  /* sqrt of linear gain */
+    float w0   = 2.0f * (float)M_PI * fc / (float)sample_rate;
+    float cosw = cosf(w0);
+    float sinw = sinf(w0);
+    float alpha = sinw / (2.0f * Q);
+    float two_sqrtA_alpha = 2.0f * sqrtf(A) * alpha;
+
+    float b0, b1, b2, a0, a1, a2;
+    switch (b->type) {
+    case EQ_BAND_LOW_SHELF:
+        b0 =     A * ((A + 1) - (A - 1) * cosw + two_sqrtA_alpha);
+        b1 = 2 * A * ((A - 1) - (A + 1) * cosw);
+        b2 =     A * ((A + 1) - (A - 1) * cosw - two_sqrtA_alpha);
+        a0 =         (A + 1) + (A - 1) * cosw + two_sqrtA_alpha;
+        a1 =  -2 * ((A - 1) + (A + 1) * cosw);
+        a2 =         (A + 1) + (A - 1) * cosw - two_sqrtA_alpha;
+        break;
+    case EQ_BAND_HIGH_SHELF:
+        b0 =     A * ((A + 1) + (A - 1) * cosw + two_sqrtA_alpha);
+        b1 =-2 * A * ((A - 1) + (A + 1) * cosw);
+        b2 =     A * ((A + 1) + (A - 1) * cosw - two_sqrtA_alpha);
+        a0 =         (A + 1) - (A - 1) * cosw + two_sqrtA_alpha;
+        a1 =   2 * ((A - 1) - (A + 1) * cosw);
+        a2 =         (A + 1) - (A - 1) * cosw - two_sqrtA_alpha;
+        break;
+    default: /* EQ_BAND_PEAK */
+        b0 = 1 + alpha * A;
+        b1 = -2 * cosw;
+        b2 = 1 - alpha * A;
+        a0 = 1 + alpha / A;
+        a1 = -2 * cosw;
+        a2 = 1 - alpha / A;
+        break;
+    }
+
+    b->b0 = b0 / a0;
+    b->b1 = b1 / a0;
+    b->b2 = b2 / a0;
+    b->a1 = a1 / a0;
+    b->a2 = a2 / a0;
+
+    b->last_type = b->type;
+    b->last_freq = b->frequency;
+    b->last_gain = b->gain_db;
+    b->last_q    = b->q;
+}
+
+static void eq_process(sq_efx_eq_t *eq, float *buf, uint32_t frames,
+                       uint32_t sample_rate)
+{
+    for (int bi = 0; bi < EQ_NUM_BANDS; bi++) {
+        sq_eq_band_t *b = &eq->bands[bi];
+        /* 0 dB peak/shelf is a no-op — skip to keep flat = bit-perfect. */
+        if (b->gain_db == 0.0f && b->type != EQ_BAND_PEAK) continue;
+        if (b->gain_db == 0.0f && b->type == EQ_BAND_PEAK) continue;
+
+        eq_band_compute_coeffs(b, sample_rate);
+
+        for (uint32_t i = 0; i < frames; i++) {
+            for (int ch = 0; ch < 2; ch++) {
+                float in = buf[i * 2 + ch];
+                /* Transposed direct form II */
+                float y = b->b0 * in + b->z1[ch];
+                b->z1[ch] = b->b1 * in - b->a1 * y + b->z2[ch];
+                b->z2[ch] = b->b2 * in - b->a2 * y;
+                buf[i * 2 + ch] = y;
+            }
+        }
+    }
+}
+
 /* ─── Delay ──────────────────────────────────────────────────────────────── */
 
 static void delay_process(sq_efx_delay_t *d, float *buf, uint32_t frames,
@@ -775,6 +872,22 @@ void effect_init(sq_effect_slot_t *slot, sq_effect_type_t type, uint32_t sample_
         slot->shimmer.buffer = calloc(SHIMMER_BUF_SIZE * 2, sizeof(float));
         slot->shimmer.allocated = (slot->shimmer.buffer != NULL);
         break;
+    case EFFECT_EQ:
+        slot->eq.bands[0].type = EQ_BAND_LOW_SHELF;
+        slot->eq.bands[0].frequency = 250.0f;
+        slot->eq.bands[0].gain_db = 0.0f;
+        slot->eq.bands[0].q = 0.707f;
+
+        slot->eq.bands[1].type = EQ_BAND_PEAK;
+        slot->eq.bands[1].frequency = 1000.0f;
+        slot->eq.bands[1].gain_db = 0.0f;
+        slot->eq.bands[1].q = 1.0f;
+
+        slot->eq.bands[2].type = EQ_BAND_HIGH_SHELF;
+        slot->eq.bands[2].frequency = 5000.0f;
+        slot->eq.bands[2].gain_db = 0.0f;
+        slot->eq.bands[2].q = 0.707f;
+        break;
     default:
         break;
     }
@@ -827,6 +940,9 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
         break;
     case EFFECT_SHIMMER:
         shimmer_process(&slot->shimmer, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_EQ:
+        eq_process(&slot->eq, buffer, num_frames, sample_rate);
         break;
     default:
         break;

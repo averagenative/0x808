@@ -28,7 +28,7 @@ static int s_fx_tab = 0;
 
 static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
                                           "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-                                          "Ring Mod", "Tape", "Shimmer"};
+                                          "Ring Mod", "Tape", "Shimmer", "EQ"};
 static const char *filter_mode_names[] = {"LowPass", "HiPass", "BandPass"};
 static const char *delay_sync_names[]  = {"1/1", "1/2", "1/4", "1/8", "1/16"};
 
@@ -343,6 +343,27 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
             ImGui::Text("Mix: %.0f%%", slot->shimmer.mix * 100);
             ImGui::SetNextItemWidth(-1);
             ImGui::SliderFloat("##ShMix", &slot->shimmer.mix, 0.0f, 1.0f);
+            break;
+        }
+
+        case EFFECT_EQ: {
+            static const char *band_names[3] = {"Low", "Mid", "High"};
+            for (int bi = 0; bi < EQ_NUM_BANDS; bi++) {
+                sq_eq_band_t *band = &slot->eq.bands[bi];
+                ImGui::PushID(bi);
+                ImGui::Text("%s: %.0f Hz / %+.1f dB / Q %.2f",
+                            band_names[bi], band->frequency,
+                            band->gain_db, band->q);
+                ImGui::SetNextItemWidth(-1);
+                ImGui::SliderFloat("##EqFreq", &band->frequency, 20.0f, 20000.0f,
+                                   "%.0f Hz", ImGuiSliderFlags_Logarithmic);
+                ImGui::SetNextItemWidth(-1);
+                ImGui::SliderFloat("##EqGain", &band->gain_db, -12.0f, 12.0f,
+                                   "%+.1f dB");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::SliderFloat("##EqQ", &band->q, 0.1f, 10.0f, "Q %.2f");
+                ImGui::PopID();
+            }
             break;
         }
 

@@ -237,6 +237,19 @@ static cJSON *track_to_json(const sq_track_t *t)
             cJSON_AddNumberToObject(ej, "damping", t->effects[e].reverb.damping);
             cJSON_AddNumberToObject(ej, "wet", t->effects[e].reverb.wet);
             break;
+        case EFFECT_EQ: {
+            cJSON *bands = cJSON_CreateArray();
+            for (int bi = 0; bi < EQ_NUM_BANDS; bi++) {
+                cJSON *b = cJSON_CreateObject();
+                cJSON_AddNumberToObject(b, "type", t->effects[e].eq.bands[bi].type);
+                cJSON_AddNumberToObject(b, "freq", t->effects[e].eq.bands[bi].frequency);
+                cJSON_AddNumberToObject(b, "gain", t->effects[e].eq.bands[bi].gain_db);
+                cJSON_AddNumberToObject(b, "q",    t->effects[e].eq.bands[bi].q);
+                cJSON_AddItemToArray(bands, b);
+            }
+            cJSON_AddItemToObject(ej, "bands", bands);
+            break;
+        }
         default:
             break;
         }
@@ -272,6 +285,19 @@ static cJSON *effect_slot_to_json(const sq_effect_slot_t *slot)
         cJSON_AddNumberToObject(j, "damping", slot->reverb.damping);
         cJSON_AddNumberToObject(j, "wet", slot->reverb.wet);
         break;
+    case EFFECT_EQ: {
+        cJSON *bands = cJSON_CreateArray();
+        for (int bi = 0; bi < EQ_NUM_BANDS; bi++) {
+            cJSON *b = cJSON_CreateObject();
+            cJSON_AddNumberToObject(b, "type", slot->eq.bands[bi].type);
+            cJSON_AddNumberToObject(b, "freq", slot->eq.bands[bi].frequency);
+            cJSON_AddNumberToObject(b, "gain", slot->eq.bands[bi].gain_db);
+            cJSON_AddNumberToObject(b, "q",    slot->eq.bands[bi].q);
+            cJSON_AddItemToArray(bands, b);
+        }
+        cJSON_AddItemToObject(j, "bands", bands);
+        break;
+    }
     default:
         break;
     }
@@ -579,6 +605,30 @@ static void json_to_effect_slot(const cJSON *j, sq_effect_slot_t *slot, uint32_t
         v = cJSON_GetObjectItem(j, "damping");    if (v) slot->reverb.damping = clampf((float)v->valuedouble, 0.0f, 1.0f);
         v = cJSON_GetObjectItem(j, "wet");        if (v) slot->reverb.wet = clampf((float)v->valuedouble, 0.0f, 1.0f);
         break;
+    case EFFECT_EQ: {
+        cJSON *bands = cJSON_GetObjectItem(j, "bands");
+        if (bands && cJSON_IsArray(bands)) {
+            int n = cJSON_GetArraySize(bands);
+            if (n > EQ_NUM_BANDS) n = EQ_NUM_BANDS;
+            for (int bi = 0; bi < n; bi++) {
+                cJSON *band = cJSON_GetArrayItem(bands, bi);
+                if (!band) continue;
+                v = cJSON_GetObjectItem(band, "type");
+                if (v) slot->eq.bands[bi].type =
+                    (sq_eq_band_type_t)clampi((int)v->valuedouble, 0, 2);
+                v = cJSON_GetObjectItem(band, "freq");
+                if (v) slot->eq.bands[bi].frequency =
+                    clampf((float)v->valuedouble, 20.0f, 20000.0f);
+                v = cJSON_GetObjectItem(band, "gain");
+                if (v) slot->eq.bands[bi].gain_db =
+                    clampf((float)v->valuedouble, -24.0f, 24.0f);
+                v = cJSON_GetObjectItem(band, "q");
+                if (v) slot->eq.bands[bi].q =
+                    clampf((float)v->valuedouble, 0.1f, 10.0f);
+            }
+        }
+        break;
+    }
     default:
         break;
     }

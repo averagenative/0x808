@@ -176,7 +176,7 @@ int main(void) {
     {
         const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
                                      "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-                                     "Ring Mod", "Tape", "Shimmer"};
+                                     "Ring Mod", "Tape", "Shimmer", "EQ"};
         int name_count = (int)(sizeof(type_names) / sizeof(type_names[0]));
         ASSERT(name_count == EFFECT_TYPE_COUNT,
                "Effect type names array must match EFFECT_TYPE_COUNT — did you add a new effect?");
@@ -195,6 +195,82 @@ int main(void) {
             ASSERT(s.type == EFFECT_NONE, "Effect should be NONE after free");
             printf("  PASS: Effect type %d (%s) init/process/free OK\n", i, type_names[i]);
         }
+    }
+
+    /* Test 12: 3-band parametric EQ
+     *
+     * Three properties to verify:
+     *   a) Flat (all gains 0 dB) → near-passthrough (within rounding noise)
+     *   b) Boost a band → that frequency gets louder
+     *   c) Cut a band → that frequency gets quieter
+     */
+    {
+        sq_effect_slot_t eq;
+        memset(&eq, 0, sizeof(eq));
+        effect_init(&eq, EFFECT_EQ, SAMPLE_RATE);
+
+        /* a) flat = passthrough */
+        gen_sine(buf, NUM_FRAMES, 1000.0f);
+        float pre_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) pre_rms += buf[i] * buf[i];
+        pre_rms = sqrtf(pre_rms / (NUM_FRAMES * 2));
+
+        effect_process(&eq, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        float post_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) post_rms += buf[i] * buf[i];
+        post_rms = sqrtf(post_rms / (NUM_FRAMES * 2));
+
+        float ratio_db = 20.0f * log10f(post_rms / pre_rms);
+        ASSERT(fabsf(ratio_db) < 0.5f, "EQ flat should be near-passthrough (<0.5dB)");
+        printf("  PASS: EQ flat passthrough (%.3f dB delta)\n", ratio_db);
+
+        /* b) boost mid band by 12 dB at 1 kHz → ~12 dB louder */
+        effect_free(&eq);
+        effect_init(&eq, EFFECT_EQ, SAMPLE_RATE);
+        eq.eq.bands[1].gain_db = 12.0f;
+
+        gen_sine(buf, NUM_FRAMES, 1000.0f);
+        pre_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) pre_rms += buf[i] * buf[i];
+        pre_rms = sqrtf(pre_rms / (NUM_FRAMES * 2));
+
+        /* Run multiple blocks so the filter reaches steady state */
+        for (int it = 0; it < 4; it++) {
+            gen_sine(buf, NUM_FRAMES, 1000.0f);
+            effect_process(&eq, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        }
+        post_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) post_rms += buf[i] * buf[i];
+        post_rms = sqrtf(post_rms / (NUM_FRAMES * 2));
+
+        ratio_db = 20.0f * log10f(post_rms / pre_rms);
+        ASSERT(ratio_db > 8.0f && ratio_db < 14.0f,
+               "EQ +12dB peak at 1kHz should boost ~12dB (got out of [8,14])");
+        printf("  PASS: EQ +12dB peak at 1kHz boosts %.1f dB\n", ratio_db);
+
+        /* c) cut high shelf by 12 dB → 8 kHz signal much quieter */
+        effect_free(&eq);
+        effect_init(&eq, EFFECT_EQ, SAMPLE_RATE);
+        eq.eq.bands[2].gain_db = -12.0f;
+
+        for (int it = 0; it < 4; it++) {
+            gen_sine(buf, NUM_FRAMES, 8000.0f);
+            effect_process(&eq, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        }
+        post_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) post_rms += buf[i] * buf[i];
+        post_rms = sqrtf(post_rms / (NUM_FRAMES * 2));
+
+        gen_sine(buf, NUM_FRAMES, 8000.0f);
+        pre_rms = 0;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) pre_rms += buf[i] * buf[i];
+        pre_rms = sqrtf(pre_rms / (NUM_FRAMES * 2));
+
+        ratio_db = 20.0f * log10f(post_rms / pre_rms);
+        ASSERT(ratio_db < -6.0f, "EQ -12dB high shelf at 8kHz should cut at least 6dB");
+        printf("  PASS: EQ -12dB high shelf cuts 8kHz by %.1f dB\n", ratio_db);
+
+        effect_free(&eq);
     }
 
     free(buf);
