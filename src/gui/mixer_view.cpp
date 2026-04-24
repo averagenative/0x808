@@ -100,12 +100,22 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
     ImGui::Dummy(ImVec2(w, 24));
     ImGui::Separator();
 
-    /* Type selector */
+    /* Type selector — scroll wheel cycles when hovered */
     int t = (int)slot->type;
     ImGui::SetNextItemWidth(120.0f);
     if (ImGui::Combo("Type", &t, effect_type_names, EFFECT_TYPE_COUNT)) {
         if ((sq_effect_type_t)t != slot->type) {
             effect_init(slot, (sq_effect_type_t)t, sample_rate);
+        }
+    }
+    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+    if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+        int delta = (ImGui::GetIO().MouseWheel > 0) ? -1 : 1;
+        int next = t + delta;
+        if (next < 0) next = 0;
+        if (next >= EFFECT_TYPE_COUNT) next = EFFECT_TYPE_COUNT - 1;
+        if ((sq_effect_type_t)next != slot->type) {
+            effect_init(slot, (sq_effect_type_t)next, sample_rate);
         }
     }
 
@@ -122,6 +132,14 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
             ImGui::SetNextItemWidth(100.0f);
             if (ImGui::Combo("Mode", &m, filter_mode_names, 3)) {
                 slot->filter.mode = (sq_efx_filter_mode_t)m;
+            }
+            ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+            if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                int delta = (ImGui::GetIO().MouseWheel > 0) ? -1 : 1;
+                int nm = m + delta;
+                if (nm < 0) nm = 0;
+                if (nm > 2) nm = 2;
+                slot->filter.mode = (sq_efx_filter_mode_t)nm;
             }
 
             ImGui::Text("Cutoff: %.0f", slot->filter.cutoff);
@@ -430,135 +448,8 @@ extern "C" void mixer_view_draw(sq_engine_t *engine,
         num_tracks_g = pat_g->num_tracks;
     }
 
-    /* --- Top section: Effects browse + slots --- */
-    float total_h = ImGui::GetContentRegionAvail().y;
-    /* Give the FX area more screen time — it's the primary working area
-     * of this panel. Guarantee at least 280px so every slot's parameter
-     * sliders stay readable instead of collapsing to a thin strip. */
-    float top_h = total_h * 0.62f;
-    if (top_h < 280.0f) top_h = 280.0f;
-    if (top_h > total_h - 140.0f) top_h = total_h - 140.0f;
-    float bottom_h = total_h - top_h;
-    if (bottom_h < 100.0f) bottom_h = 100.0f;
-
-    /* Tinted header stripe so the FX section is visually distinct from
-     * the track-strip area below. */
-    ImVec2 fx_hdr_min = ImGui::GetCursorScreenPos();
-    ImGui::GetWindowDrawList()->AddRectFilled(
-        fx_hdr_min, ImVec2(fx_hdr_min.x + ImGui::GetContentRegionAvail().x,
-                           fx_hdr_min.y + top_h),
-        IM_COL32(30, 32, 38, 255));
-
-    if (ImGui::BeginChild("EffectsPanel", ImVec2(0, top_h),
-                          ImGuiChildFlags_Borders)) {
-        int &fx_tab = s_fx_tab;
-
-        int pat_idx2 = engine->transport.current_pattern;
-        uint32_t nt = 0;
-        if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns)
-            nt = engine->patterns[pat_idx2].num_tracks;
-
-        /* Clamp fx_tab if tracks changed */
-        if (fx_tab > (int)nt) fx_tab = 0;
-
-        /* Build display label: "Master" or "Trk N: Name (Type)" */
-        char fx_label[128];
-        if (fx_tab == 0) {
-            snprintf(fx_label, sizeof(fx_label), "Master Bus");
-        } else {
-            uint32_t ti = (uint32_t)(fx_tab - 1);
-            const char *tname = "(empty)";
-            const char *ttype = "Sampler";
-            if (ti < nt) {
-                sq_track_t *trk = &engine->patterns[pat_idx2].tracks[ti];
-                if (trk->type == TRACK_SYNTH) {
-                    ttype = "Synth";
-                    if (trk->synth_preset >= 0 &&
-                        (uint32_t)trk->synth_preset < engine->num_synth_presets)
-                        tname = engine->synth_presets[trk->synth_preset].name;
-                } else if (trk->type == TRACK_SF2) {
-                    ttype = "SF2";
-                    if (trk->sf2_preset >= 0 &&
-                        (uint32_t)trk->sf2_preset < engine->num_sf2_presets)
-                        tname = engine->sf2_presets[trk->sf2_preset].name;
-                } else {
-                    if (trk->sample_index >= 0 &&
-                        (uint32_t)trk->sample_index < engine->num_samples)
-                        tname = engine->samples[trk->sample_index].name;
-                }
-                snprintf(fx_label, sizeof(fx_label), "Trk %u: %s (%s)", ti + 1, tname, ttype);
-            } else {
-                snprintf(fx_label, sizeof(fx_label), "Trk %u", ti + 1);
-            }
-        }
-
-        /* Browse bar: [<] [label clipped] [>] — fixed layout using a table */
-        {
-            float btn_w = 30.0f;
-
-            if (ImGui::BeginTable("FXBrowse", 3, ImGuiTableFlags_SizingFixedFit)) {
-                ImGui::TableSetupColumn("prev", ImGuiTableColumnFlags_WidthFixed, btn_w);
-                ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("next", ImGuiTableColumnFlags_WidthFixed, btn_w);
-
-                ImGui::TableNextColumn();
-                if (ImGui::Button("<##fx_prev", ImVec2(btn_w, 0))) {
-                    if (fx_tab > 0)
-                        fx_tab--;
-                    else
-                        fx_tab = (int)nt; /* wrap: master → last track */
-                }
-
-                ImGui::TableNextColumn();
-                ImGui::TextUnformatted(fx_label);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", fx_label);
-
-                ImGui::TableNextColumn();
-                if (ImGui::Button(">##fx_next", ImVec2(btn_w, 0))) {
-                    if (fx_tab < (int)nt)
-                        fx_tab++;
-                    else
-                        fx_tab = 0; /* wrap: last track → master */
-                }
-
-                ImGui::EndTable();
-            }
-        }
-
-        ImGui::Separator();
-
-        /* Draw effect slots for selected tab */
-        sq_effect_slot_t *slots = NULL;
-        if (fx_tab == 0) {
-            slots = engine->master_effects;
-        } else {
-            int pat_idx2 = engine->transport.current_pattern;
-            if (pat_idx2 >= 0 && (uint32_t)pat_idx2 < engine->num_patterns) {
-                uint32_t ti = (uint32_t)(fx_tab - 1);
-                if (ti < engine->patterns[pat_idx2].num_tracks)
-                    slots = engine->patterns[pat_idx2].tracks[ti].effects;
-            }
-        }
-
-        if (slots) {
-            float slot_w = (ImGui::GetContentRegionAvail().x - 8.0f) / MAX_TRACK_EFFECTS;
-            float slot_h = ImGui::GetContentRegionAvail().y;
-            for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
-                if (i > 0) ImGui::SameLine(0, 4);
-                char child_id[32];
-                snprintf(child_id, sizeof(child_id), "FXSlot%d", i);
-                ImGui::BeginChild(child_id, ImVec2(slot_w, slot_h),
-                                  ImGuiChildFlags_Borders);
-                char slot_label[32];
-                snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
-                draw_effect_slot(&slots[i], slot_label,
-                                 engine->sample_rate, i + fx_tab * 10);
-                ImGui::EndChild();
-            }
-        }
-    }
-    ImGui::EndChild();
+    /* FX editor is now a separate floating window — see fx_window_draw()
+     * — so the mixer pane is dedicated to track strips and meters. */
 
     /*
      * Bottom section (vertical stack matching GTK):
@@ -784,4 +675,118 @@ void mixer_view_set_fx_track(int track_index)
 {
     /* -1 = master bus (fx_tab 0), 0+ = track (fx_tab = track_index + 1) */
     s_fx_tab = (track_index >= 0) ? track_index + 1 : 0;
+}
+
+/* --- FX window: floating, draggable, resizable -------------------------- */
+
+extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float default_y)
+{
+    if (!engine) return;
+
+    ImGui::SetNextWindowSize(ImVec2(780, 360), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(default_x, default_y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(420, 240), ImVec2(FLT_MAX, FLT_MAX));
+
+    if (!ImGui::Begin("FX", nullptr,
+                      ImGuiWindowFlags_NoCollapse |
+                      ImGuiWindowFlags_NoScrollbar)) {
+        ImGui::End();
+        return;
+    }
+
+    int pat_idx = engine->transport.current_pattern;
+    uint32_t nt = 0;
+    if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns)
+        nt = engine->patterns[pat_idx].num_tracks;
+
+    int &fx_tab = s_fx_tab;
+    if (fx_tab > (int)nt) fx_tab = 0;
+
+    /* Build display label */
+    char fx_label[128];
+    if (fx_tab == 0) {
+        snprintf(fx_label, sizeof(fx_label), "Master Bus");
+    } else {
+        uint32_t ti = (uint32_t)(fx_tab - 1);
+        const char *tname = "(empty)";
+        const char *ttype = "Sampler";
+        if (ti < nt) {
+            sq_track_t *trk = &engine->patterns[pat_idx].tracks[ti];
+            if (trk->type == TRACK_SYNTH) {
+                ttype = "Synth";
+                if (trk->synth_preset >= 0 &&
+                    (uint32_t)trk->synth_preset < engine->num_synth_presets)
+                    tname = engine->synth_presets[trk->synth_preset].name;
+            } else if (trk->type == TRACK_SF2) {
+                ttype = "SF2";
+                if (trk->sf2_preset >= 0 &&
+                    (uint32_t)trk->sf2_preset < engine->num_sf2_presets)
+                    tname = engine->sf2_presets[trk->sf2_preset].name;
+            } else {
+                if (trk->sample_index >= 0 &&
+                    (uint32_t)trk->sample_index < engine->num_samples)
+                    tname = engine->samples[trk->sample_index].name;
+            }
+            snprintf(fx_label, sizeof(fx_label), "Trk %u: %s (%s)", ti + 1, tname, ttype);
+        } else {
+            snprintf(fx_label, sizeof(fx_label), "Trk %u", ti + 1);
+        }
+    }
+
+    /* Browse bar: [<] [label] [>] */
+    {
+        float btn_w = 30.0f;
+        if (ImGui::BeginTable("FXBrowse", 3, ImGuiTableFlags_SizingFixedFit)) {
+            ImGui::TableSetupColumn("prev", ImGuiTableColumnFlags_WidthFixed, btn_w);
+            ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("next", ImGuiTableColumnFlags_WidthFixed, btn_w);
+
+            ImGui::TableNextColumn();
+            if (ImGui::Button("<##fx_prev", ImVec2(btn_w, 0))) {
+                if (fx_tab > 0) fx_tab--;
+                else fx_tab = (int)nt;
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(fx_label);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", fx_label);
+            ImGui::TableNextColumn();
+            if (ImGui::Button(">##fx_next", ImVec2(btn_w, 0))) {
+                if (fx_tab < (int)nt) fx_tab++;
+                else fx_tab = 0;
+            }
+            ImGui::EndTable();
+        }
+    }
+    ImGui::Separator();
+
+    /* Draw the 3 slots filling the remaining window area */
+    sq_effect_slot_t *slots = NULL;
+    if (fx_tab == 0) {
+        slots = engine->master_effects;
+    } else if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
+        uint32_t ti = (uint32_t)(fx_tab - 1);
+        if (ti < engine->patterns[pat_idx].num_tracks)
+            slots = engine->patterns[pat_idx].tracks[ti].effects;
+    }
+
+    if (slots) {
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float avail_h = ImGui::GetContentRegionAvail().y;
+        float slot_w = (avail_w - 8.0f) / MAX_TRACK_EFFECTS;
+        for (int i = 0; i < MAX_TRACK_EFFECTS; i++) {
+            if (i > 0) ImGui::SameLine(0, 4);
+            char child_id[32];
+            snprintf(child_id, sizeof(child_id), "FXSlot%d", i);
+            ImGui::BeginChild(child_id, ImVec2(slot_w, avail_h),
+                              ImGuiChildFlags_Borders);
+            char slot_label[32];
+            snprintf(slot_label, sizeof(slot_label), "Slot %d", i + 1);
+            draw_effect_slot(&slots[i], slot_label,
+                             engine->sample_rate, i + fx_tab * 10);
+            ImGui::EndChild();
+        }
+    }
+
+    ImGui::End();
 }

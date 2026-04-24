@@ -11,9 +11,14 @@
 extern "C" {
 #endif
 
-/* Draw the mixer/effects panel. */
+/* Draw the mixer/effects panel (track strips + VU meters + oscilloscope). */
 void mixer_view_draw(sq_engine_t *engine,
                      float x, float y, float w, float h);
+
+/* Draw the FX editor as an independent floating window the user can drag
+ * and resize. Shows the effect chain for the currently-selected track
+ * (or master). Safe to call every frame — remembers window state. */
+void fx_window_draw(sq_engine_t *engine, float default_x, float default_y);
 
 /* Set the FX tab to show a specific track's effects.
  * track_index: 0-based track index, or -1 for master bus. */
