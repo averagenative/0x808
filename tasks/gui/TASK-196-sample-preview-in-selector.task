@@ -1,4 +1,4 @@
-status: pending
+status: done
 priority: low
 depends: TASK-195
 agent: gui

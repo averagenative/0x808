@@ -28,6 +28,7 @@ extern "C" {
 #include "gui/theme.h"
 #include "gui/mixer_view.h"
 #include "engine/sampler.h"
+#include "engine/synth.h"
 #include "engine/sequencer.h"
 #include "engine/kits.h"
 }
@@ -492,6 +493,11 @@ void drum_grid_draw(sq_engine_t *engine,
                             bool is_selected = ((uint32_t)sel == si);
                             if (ImGui::Selectable(engine->samples[si].name, is_selected)) {
                                 track->sample_index = (int)si;
+                                /* TASK-196: preview the chosen sample.
+                                 * track_index = -1 so the audition voice
+                                 * skips the per-track FX chain. */
+                                sampler_trigger(engine, (int)si,
+                                                0.9f, 0, 1.0f, 0.0f, -1);
                             }
                             if (is_selected)
                                 ImGui::SetItemDefaultFocus();
@@ -504,7 +510,11 @@ void drum_grid_draw(sq_engine_t *engine,
                         int next = sel + delta;
                         if (next < 0) next = 0;
                         if (next >= (int)engine->num_samples) next = (int)engine->num_samples - 1;
-                        track->sample_index = next;
+                        if (next != sel) {
+                            track->sample_index = next;
+                            sampler_trigger(engine, next,
+                                            0.9f, 0, 1.0f, 0.0f, -1);
+                        }
                     }
                 } else if (track->type == TRACK_SYNTH && engine->num_synth_presets > 0) {
                     int sel = track->synth_preset;
@@ -517,6 +527,11 @@ void drum_grid_draw(sq_engine_t *engine,
                             bool is_selected = ((uint32_t)sel == pi);
                             if (ImGui::Selectable(engine->synth_presets[pi].name, is_selected)) {
                                 track->synth_preset = (int)pi;
+                                /* TASK-197: preview C4 with the chosen preset.
+                                 * track_index = -1 so the audition voice
+                                 * doesn't get caught by per-track FX. */
+                                synth_trigger(engine, (int)pi,
+                                              0.8f, 0, 0.7f, 0.0f, 60, -1);
                             }
                             if (is_selected)
                                 ImGui::SetItemDefaultFocus();
@@ -529,7 +544,11 @@ void drum_grid_draw(sq_engine_t *engine,
                         int next = sel + delta;
                         if (next < 0) next = 0;
                         if (next >= (int)engine->num_synth_presets) next = (int)engine->num_synth_presets - 1;
-                        track->synth_preset = next;
+                        if (next != sel) {
+                            track->synth_preset = next;
+                            synth_trigger(engine, next,
+                                          0.8f, 0, 0.7f, 0.0f, 60, -1);
+                        }
                     }
                 } else if (track->type == TRACK_SF2 && engine->num_sf2_presets > 0) {
                     int sel = track->sf2_preset;
