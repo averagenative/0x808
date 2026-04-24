@@ -338,10 +338,18 @@ static void reverb_process(sq_efx_reverb_t *r, float *buf, uint32_t frames)
     float wet = r->wet;
     float dry = 1.0f - wet;
 
+    /* Freeverb-style input gain compensation. 8 parallel comb filters
+     * with feedback up to ~0.98 sum to many multiples of the input over
+     * the decay time — without scaling the input into them, a single
+     * loud transient (kick hit at peak ~1.0) produces a wet tail that's
+     * several times louder than dry and sounds like overdrive instead
+     * of reverb. 0.015 is the canonical Freeverb value. */
+    const float fixedgain = 0.015f;
+
     for (uint32_t i = 0; i < frames; i++) {
         float inL = buf[i * 2];
         float inR = buf[i * 2 + 1];
-        float input = (inL + inR) * 0.5f; /* mono input to reverb */
+        float input = (inL + inR) * 0.5f * fixedgain;
 
         float outL = 0, outR = 0;
 

@@ -679,7 +679,8 @@ void mixer_view_set_fx_track(int track_index)
 
 /* --- FX window: floating, draggable, resizable -------------------------- */
 
-extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float default_y)
+extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float default_y,
+                               bool *open)
 {
     if (!engine) return;
 
@@ -687,7 +688,7 @@ extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float defau
     ImGui::SetNextWindowPos(ImVec2(default_x, default_y), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(420, 240), ImVec2(FLT_MAX, FLT_MAX));
 
-    if (!ImGui::Begin("FX", nullptr,
+    if (!ImGui::Begin("FX", open,
                       ImGuiWindowFlags_NoCollapse |
                       ImGuiWindowFlags_NoScrollbar)) {
         ImGui::End();

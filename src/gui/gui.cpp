@@ -712,9 +712,13 @@ int gui_frame(sq_engine_t *engine)
     /* FX editor is a floating, draggable, resizable window — shown whenever
      * the MIX/FX toggle is on. User can park it anywhere and size it large
      * enough to see every slider. Position/size is remembered via ImGui's
-     * built-in per-window state. */
+     * built-in per-window state. Clicking the window's native X close
+     * button toggles off the panel flag so the MIX/FX toolbar button
+     * stays in sync. */
     if (g_app.panels[SQ_PANEL_MIXER]) {
-        fx_window_draw(engine, 200.0f, 120.0f);
+        bool fx_open = true;
+        fx_window_draw(engine, 200.0f, 120.0f, &fx_open);
+        if (!fx_open) g_app.panels[SQ_PANEL_MIXER] = false;
     }
 
     if (g_app.panels[SQ_PANEL_BROWSER]) {

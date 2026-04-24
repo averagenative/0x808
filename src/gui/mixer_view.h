@@ -17,8 +17,11 @@ void mixer_view_draw(sq_engine_t *engine,
 
 /* Draw the FX editor as an independent floating window the user can drag
  * and resize. Shows the effect chain for the currently-selected track
- * (or master). Safe to call every frame — remembers window state. */
-void fx_window_draw(sq_engine_t *engine, float default_x, float default_y);
+ * (or master). Safe to call every frame — remembers window state.
+ * Writes false to *open when the user clicks the window's X close button
+ * so the caller can toggle off the panel flag. */
+void fx_window_draw(sq_engine_t *engine, float default_x, float default_y,
+                    bool *open);
 
 /* Set the FX tab to show a specific track's effects.
  * track_index: 0-based track index, or -1 for master bus. */
