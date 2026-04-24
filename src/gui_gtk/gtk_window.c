@@ -736,7 +736,7 @@ static gboolean qwerty_key_event(guint keyval, gboolean pressed)
         }
 
         /* Trigger note */
-        synth_trigger(engine, preset, 0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note);
+        synth_trigger(engine, preset, 0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note, -1);
 
         if (s_qwerty_held_count < MAX_QWERTY_HELD) {
             s_qwerty_held[s_qwerty_held_count].keyval = keyval;

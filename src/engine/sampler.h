@@ -29,7 +29,7 @@ extern "C" {
  */
 void sampler_trigger(sq_engine_t *engine, int sample_index,
                      float velocity, int pitch_offset,
-                     float volume, float pan);
+                     float volume, float pan, int track_index);
 
 /*
  * Render all active voices into the output buffer (additive).
@@ -37,8 +37,12 @@ void sampler_trigger(sq_engine_t *engine, int sample_index,
  *
  * output:     interleaved stereo float buffer (L,R,L,R,...)
  * num_frames: how many stereo frames to render
+ * track_filter: -1 = render all voices; 0..N = render only voices whose
+ *               source track index matches.
  */
 void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames);
+void sampler_render_track(sq_engine_t *engine, float *output,
+                          uint32_t num_frames, int track_filter);
 
 #ifdef __cplusplus
 }

@@ -15,42 +15,82 @@ void mixer_process(sq_engine_t *engine, float *output, uint32_t num_frames)
     /* Step 1: Clear the output buffer to silence (all zeros) */
     memset(output, 0, num_frames * 2 * sizeof(float));
 
-    /* Step 2: Render all active voices (additive into buffer) */
-    sampler_render(engine, output, num_frames);
-    synth_render(engine, output, num_frames);
+    /* Figure out which tracks have at least one active (non-bypassed)
+     * insert effect. Those tracks get rendered into the scratch buffer
+     * individually so their FX stay on that track; all other voices go
+     * straight to the master output. */
+    uint16_t fx_track_mask = 0;
+    int pat_idx = engine->transport.current_pattern;
+    sq_pattern_t *pat = NULL;
+    if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
+        pat = &engine->patterns[pat_idx];
+        for (uint32_t t = 0; t < pat->num_tracks && t < SQ_MAX_TRACKS; t++) {
+            for (int e = 0; e < MAX_TRACK_EFFECTS; e++) {
+                if (pat->tracks[t].effects[e].type != EFFECT_NONE &&
+                    !pat->tracks[t].effects[e].bypass) {
+                    fx_track_mask |= (uint16_t)(1u << t);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Step 2a: Per-track rendering for FX tracks (isolated mix + FX) */
+    if (pat && fx_track_mask) {
+        const uint32_t scratch_cap =
+            (uint32_t)(sizeof(engine->fx_scratch) / sizeof(float)) / 2;
+        uint32_t remaining = num_frames;
+        uint32_t offset = 0;
+        while (remaining > 0) {
+            uint32_t chunk = remaining < scratch_cap ? remaining : scratch_cap;
+            for (uint32_t t = 0; t < pat->num_tracks && t < SQ_MAX_TRACKS; t++) {
+                if (!(fx_track_mask & (1u << t))) continue;
+
+                memset(engine->fx_scratch, 0, chunk * 2 * sizeof(float));
+                sampler_render_track(engine, engine->fx_scratch, chunk, (int)t);
+                synth_render_track(engine, engine->fx_scratch, chunk, (int)t);
+
+                effects_chain_process(pat->tracks[t].effects, MAX_TRACK_EFFECTS,
+                                      engine->fx_scratch, chunk,
+                                      engine->sample_rate, engine->transport.bpm);
+
+                float *dst = output + offset * 2;
+                for (uint32_t i = 0; i < chunk * 2; i++)
+                    dst[i] += engine->fx_scratch[i];
+            }
+            offset += chunk;
+            remaining -= chunk;
+        }
+    }
+
+    /* Step 2b: Render voices that belong to NON-FX tracks (or are
+     * untracked) straight into output. Voices on FX tracks have
+     * already been rendered via fx_scratch above. */
+    if (fx_track_mask == 0) {
+        sampler_render(engine, output, num_frames);
+        synth_render(engine, output, num_frames);
+    } else {
+        /* Each non-FX track */
+        for (uint32_t t = 0; t < SQ_MAX_TRACKS; t++) {
+            if (fx_track_mask & (1u << t)) continue;
+            sampler_render_track(engine, output, num_frames, (int)t);
+            synth_render_track(engine, output, num_frames, (int)t);
+        }
+        /* Untracked voices (MIDI/API path, track_index == -1) */
+        sampler_render_track(engine, output, num_frames, -1);
+        synth_render_track(engine, output, num_frames, -1);
+    }
+
+    /* SF2 always goes to master (TSF manages its own voice pool and has
+     * no concept of our track index). */
     sf2_render(engine, output, num_frames);
 
     /* Step 3: Apply master volume to every sample in the buffer */
-    float vol = engine->master_volume;
-    uint32_t total_samples = num_frames * 2; /* stereo = 2 floats per frame */
-    for (uint32_t i = 0; i < total_samples; i++) {
-        output[i] *= vol;
-    }
-
-    /* Step 3.5: Per-track insert effects (applied to the mixed output).
-     * NOTE: True per-track processing would require separate render buffers
-     * per track. For now, we process per-track effects on the master bus
-     * when tracks are active — this is a simplification that applies effects
-     * to the whole mix, but it lets users assign effects per track in the UI. */
     {
-        int pat_idx = engine->transport.current_pattern;
-        if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
-            sq_pattern_t *pat = &engine->patterns[pat_idx];
-            for (uint32_t t = 0; t < pat->num_tracks && t < SQ_MAX_TRACKS; t++) {
-                sq_track_t *track = &pat->tracks[t];
-                bool has_fx = false;
-                for (int e = 0; e < MAX_TRACK_EFFECTS; e++) {
-                    if (track->effects[e].type != EFFECT_NONE && !track->effects[e].bypass) {
-                        has_fx = true;
-                        break;
-                    }
-                }
-                if (has_fx) {
-                    effects_chain_process(track->effects, MAX_TRACK_EFFECTS,
-                                          output, num_frames,
-                                          engine->sample_rate, engine->transport.bpm);
-                }
-            }
+        float vol = engine->master_volume;
+        uint32_t total_samples = num_frames * 2;
+        for (uint32_t i = 0; i < total_samples; i++) {
+            output[i] *= vol;
         }
     }
 
@@ -135,7 +175,10 @@ void mixer_process(sq_engine_t *engine, float *output, uint32_t num_frames)
     /* Step 7: Add inaudible DC offset to prevent PulseAudio/WSLg from
      * auto-suspending (corking) the stream during silence.
      * 1e-4 is ~-80 dBFS — inaudible but enough to keep the stream alive. */
-    for (uint32_t i = 0; i < total_samples; i++) {
-        output[i] += 1.0e-4f;
+    {
+        uint32_t total_samples = num_frames * 2;
+        for (uint32_t i = 0; i < total_samples; i++) {
+            output[i] += 1.0e-4f;
+        }
     }
 }

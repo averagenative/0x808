@@ -204,7 +204,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
         if (track->type == TRACK_SAMPLER && track->sample_index >= 0) {
             sampler_trigger(engine, track->sample_index,
                            vel, s->pitch_offset,
-                           track->volume, track->pan);
+                           track->volume, track->pan, (int)t);
             /* Apply sample clip start/end/reverse from track settings */
             if (track->sample_start > 0 || track->sample_end > 0 || track->sample_reverse) {
                 /* Find the voice we just triggered (most recently started) */
@@ -223,7 +223,8 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
         } else if (track->type == TRACK_SYNTH && track->synth_preset >= 0) {
             int vi = synth_trigger(engine, track->synth_preset,
                                    vel, s->pitch_offset,
-                                   track->volume, track->pan, s->note);
+                                   track->volume, track->pan, s->note,
+                                   (int)t);
 
             /* Apply parameter locks to the voice (not the preset).
              * param[0] = filter cutoff override (>0)

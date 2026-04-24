@@ -551,7 +551,7 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
                                       0, /* pitch_offset */
                                       engine->patterns[pat].tracks[t].volume,
                                       engine->patterns[pat].tracks[t].pan,
-                                      note);
+                                      note, (int)t);
                         break; /* only trigger on first synth track */
                     }
                 }

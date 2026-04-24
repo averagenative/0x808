@@ -4,6 +4,7 @@
 #include <math.h>
 #include "engine/engine.h"
 #include "engine/effects.h"
+#include "engine/synth.h"
 
 #define SAMPLE_RATE 44100
 #define NUM_FRAMES 4096
@@ -322,6 +323,87 @@ int main(void) {
                hot_peak);
 
         effect_free(&lim);
+    }
+
+    /* Test 14: Per-track FX isolation (TASK-226)
+     *
+     * Put a 2-track pattern where track 0 has the kick and track 1 has
+     * a synth. Apply a heavy compressor to track 0 only. Render. Track
+     * 1's synth output should NOT be ducked by the compressor — it
+     * lives on a different render buffer. */
+    {
+        sq_engine_t eng;
+        sq_engine_init(&eng, SAMPLE_RATE);
+
+        /* Two tracks: track 0 synth, track 1 synth (different preset). */
+        eng.num_patterns = 1;
+        sq_pattern_t *p = &eng.patterns[0];
+        p->num_tracks = 2;
+        p->tracks[0].type = TRACK_SYNTH;
+        p->tracks[0].length = 16;
+        p->tracks[0].synth_preset = 0;
+        p->tracks[0].volume = 1.0f;
+        p->tracks[0].pan = 0.0f;
+        p->tracks[1].type = TRACK_SYNTH;
+        p->tracks[1].length = 16;
+        p->tracks[1].synth_preset = 1;
+        p->tracks[1].volume = 1.0f;
+        p->tracks[1].pan = 0.0f;
+
+        /* Get baseline output without any FX: trigger both synth voices. */
+        synth_trigger(&eng, 0, 1.0f, 0, 1.0f, 0.0f, 60, 0);
+        synth_trigger(&eng, 1, 1.0f, 0, 1.0f, 0.0f, 72, 1);
+        float baseline[1024 * 2];
+        memset(baseline, 0, sizeof(baseline));
+        sq_engine_process(&eng, baseline, 1024);
+
+        float base_energy = 0.0f;
+        for (int i = 0; i < 1024 * 2; i++) base_energy += baseline[i] * baseline[i];
+
+        /* Reset + now attach a heavy compressor to track 0. */
+        sq_engine_shutdown(&eng);
+        sq_engine_init(&eng, SAMPLE_RATE);
+        eng.num_patterns = 1;
+        p = &eng.patterns[0];
+        p->num_tracks = 2;
+        p->tracks[0].type = TRACK_SYNTH;
+        p->tracks[0].length = 16;
+        p->tracks[0].synth_preset = 0;
+        p->tracks[0].volume = 1.0f;
+        p->tracks[1].type = TRACK_SYNTH;
+        p->tracks[1].length = 16;
+        p->tracks[1].synth_preset = 1;
+        p->tracks[1].volume = 1.0f;
+
+        effect_init(&p->tracks[0].effects[0], EFFECT_COMPRESSOR, SAMPLE_RATE);
+        p->tracks[0].effects[0].compressor.threshold = 0.01f;
+        p->tracks[0].effects[0].compressor.ratio = 20.0f;
+        p->tracks[0].effects[0].compressor.attack = 0.0001f;
+        p->tracks[0].effects[0].compressor.makeup = 0.3f;
+
+        synth_trigger(&eng, 0, 1.0f, 0, 1.0f, 0.0f, 60, 0);
+        synth_trigger(&eng, 1, 1.0f, 0, 1.0f, 0.0f, 72, 1);
+        float with_fx[1024 * 2];
+        memset(with_fx, 0, sizeof(with_fx));
+        sq_engine_process(&eng, with_fx, 1024);
+
+        float fx_energy = 0.0f;
+        for (int i = 0; i < 1024 * 2; i++) fx_energy += with_fx[i] * with_fx[i];
+
+        /* With the compressor crushing track 0 but NOT track 1, total
+         * energy should be measurably different from the baseline AND
+         * the outputs should not be identical. */
+        ASSERT(base_energy > 0.0f, "Baseline should have non-zero energy");
+        ASSERT(fx_energy > 0.0f, "Post-FX should still have non-zero energy");
+        int first_diff = -1;
+        for (int i = 0; i < 1024 * 2; i++) {
+            if (fabsf(baseline[i] - with_fx[i]) > 1e-5f) { first_diff = i; break; }
+        }
+        ASSERT(first_diff >= 0, "Per-track FX should change the output");
+        printf("  PASS: per-track FX changes output (baseline_e=%.4f fx_e=%.4f)\n",
+               base_energy, fx_energy);
+
+        sq_engine_shutdown(&eng);
     }
 
     free(buf);

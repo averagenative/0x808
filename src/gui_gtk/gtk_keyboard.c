@@ -97,7 +97,7 @@ static void trigger_note(int note)
     if (note != s_held_note) {
         int preset = sq_app_get_keyboard_preset(&g_gtk.app, engine);
         if (preset < 0) preset = 0;
-        synth_trigger(engine, preset, 0.8f, 0, 0.7f, 0.0f, (uint8_t)note);
+        synth_trigger(engine, preset, 0.8f, 0, 0.7f, 0.0f, (uint8_t)note, -1);
         s_held_note = note;
     }
 }

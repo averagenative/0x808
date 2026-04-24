@@ -1453,7 +1453,8 @@ static inline float smooth_param(float current, float target, float coeff)
 
 int synth_trigger(sq_engine_t *engine, int preset_index,
                   float velocity, int pitch_offset,
-                  float volume, float pan, uint8_t note)
+                  float volume, float pan, uint8_t note,
+                  int track_index)
 {
     if (preset_index < 0 || (uint32_t)preset_index >= engine->num_synth_presets)
         return -1;
@@ -1486,6 +1487,7 @@ int synth_trigger(sq_engine_t *engine, int preset_index,
 
     v->active = true;
     v->preset_index = preset_index;
+    v->track_index = (int8_t)track_index;
     v->osc1_phase = 0.0;
     v->osc2_phase = 0.0;
     v->velocity = velocity;
@@ -1871,6 +1873,12 @@ void synth_release_all(sq_engine_t *engine)
 
 void synth_render(sq_engine_t *engine, float *output, uint32_t num_frames)
 {
+    synth_render_track(engine, output, num_frames, -9999);
+}
+
+void synth_render_track(sq_engine_t *engine, float *output,
+                        uint32_t num_frames, int track_filter)
+{
     if (!engine->wavetables.initialized) return;
 
     float sr = (float)engine->sample_rate;
@@ -1880,6 +1888,14 @@ void synth_render(sq_engine_t *engine, float *output, uint32_t num_frames)
     for (int vi = 0; vi < SQ_MAX_SYNTH_VOICES; vi++) {
         sq_synth_voice_t *v = &engine->synth_voices[vi];
         if (!v->active) continue;
+        /* Filter: -9999 = all, >=0 = specific track, -1 = untracked only */
+        if (track_filter == -9999) {
+            /* accept */
+        } else if (track_filter >= 0) {
+            if ((int)v->track_index != track_filter) continue;
+        } else {
+            if ((int)v->track_index != -1) continue;
+        }
 
         sq_synth_preset_t *p = &engine->synth_presets[v->preset_index];
 

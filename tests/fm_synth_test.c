@@ -38,7 +38,7 @@ int main(void)
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
 
         /* Trigger a note (C4 = MIDI 60) */
-        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60);
+        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60, -1);
 
         /* Render audio */
         float *buf = calloc(NUM_FRAMES * 2, sizeof(float));
@@ -83,7 +83,7 @@ int main(void)
                pi, p->name, p->synth_mode, p->wt_bank_index);
 
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60);
+        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60, -1);
 
         float *buf = calloc(NUM_FRAMES * 2, sizeof(float));
         synth_render(&engine, buf, NUM_FRAMES);
@@ -119,7 +119,7 @@ int main(void)
                pi, p->name, p->synth_mode);
 
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60);
+        synth_trigger(&engine, pi, 0.8f, 0, 1.0f, 0.0f, 60, -1);
 
         float *buf = calloc(NUM_FRAMES * 2, sizeof(float));
         synth_render(&engine, buf, NUM_FRAMES);
@@ -151,7 +151,7 @@ int main(void)
     float *out = calloc(total_frames * 2, sizeof(float));
 
     for (int n = 0; n < 4; n++) {
-        synth_trigger(&engine, 5, 0.7f, 0, 0.8f, 0.0f, notes[n]);
+        synth_trigger(&engine, 5, 0.7f, 0, 0.8f, 0.0f, notes[n], -1);
         synth_render(&engine, out + n * note_frames * 2, note_frames);
     }
 

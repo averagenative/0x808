@@ -66,6 +66,7 @@ typedef struct {
 typedef struct {
     bool     active;            /* is this voice currently producing audio?   */
     int      sample_index;      /* which sample in the engine's sample array  */
+    int8_t   track_index;       /* source pattern track (-1 = no track / API) */
     double   position;          /* fractional playback position (in frames)   */
     double   rate;              /* playback rate (1.0 = normal, 2.0 = +12st) */
     float    velocity;          /* amplitude scale from step velocity (0-1)  */
@@ -308,6 +309,7 @@ typedef struct {
 typedef struct {
     bool active;
     int  preset_index;          /* which preset to use                      */
+    int8_t track_index;         /* source pattern track (-1 = no track)     */
     float frequency;            /* base frequency in Hz                     */
     double osc1_phase;          /* oscillator 1 phase (0.0 - 1.0)          */
     double osc2_phase;          /* oscillator 2 phase (0.0 - 1.0)          */
@@ -475,6 +477,12 @@ typedef struct {
      * that's fine for visualization. */
     float          scope_buffer[2048];
     uint32_t       scope_write_pos;
+
+    /* Per-track scratch buffer for applying track-isolated FX without
+     * touching the master mix. Sized to the largest plausible audio
+     * block (4096 stereo frames = 32KB). Audio thread only — no GUI
+     * touches this. */
+    float          fx_scratch[4096 * 2];
 
     /* Lock-free command queue: GUI pushes, audio thread pops */
     sq_command_queue_t cmd_queue;

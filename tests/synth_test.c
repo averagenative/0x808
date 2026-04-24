@@ -21,7 +21,7 @@ int main(void) {
 
         /* Clear voices and trigger a note (MIDI 69 = A4) */
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, p, 0.8f, 0, 0.8f, 0.0f, 69);
+        synth_trigger(&engine, p, 0.8f, 0, 0.8f, 0.0f, 69, -1);
 
         /* Render some audio */
         float buf[512 * 2];
@@ -42,7 +42,7 @@ int main(void) {
         engine.synth_presets[0].osc1_wave = (sq_waveform_t)w;
         engine.synth_presets[0].osc_mix = 0.0f; /* only osc1 */
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, 0, 1.0f, 0, 0.8f, 0.0f, 69);
+        synth_trigger(&engine, 0, 1.0f, 0, 0.8f, 0.0f, 69, -1);
         float buf[256 * 2];
         memset(buf, 0, sizeof(buf));
         synth_render(&engine, buf, 256);

@@ -291,7 +291,8 @@ void virtual_keyboard_draw(sq_engine_t *engine,
                               0,    /* pitch_offset */
                               0.7f, /* volume */
                               0.0f, /* pan */
-                              (uint8_t)hover_note);
+                              (uint8_t)hover_note,
+                              -1);  /* no track binding (UI keyboard) */
             }
             s_held_note = hover_note;
         }
@@ -419,7 +420,7 @@ int virtual_keyboard_key_event(sq_engine_t *engine, int synth_preset,
 
         /* Trigger note */
         synth_trigger(engine, synth_preset,
-                      0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note);
+                      0.8f, 0, 0.7f, 0.0f, (uint8_t)midi_note, -1);
 
         if (s_kb_held_count < MAX_KB_HELD) {
             s_kb_held[s_kb_held_count].keycode = sdl_keycode;

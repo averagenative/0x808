@@ -255,14 +255,14 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
                     if (track_idx >= 0 && (uint32_t)track_idx < engine->num_samples) {
                         sampler_trigger(engine, track_idx,
                                         cmd.note.velocity, 0,
-                                        cmd.note.volume, cmd.note.pan);
+                                        cmd.note.volume, cmd.note.pan, -1);
                     }
                 } else {
-                    /* Synth mode: trigger synth voice */
+                    /* Synth mode: trigger synth voice (no track binding — API path) */
                     synth_trigger(engine, cmd.note.preset,
                                   cmd.note.velocity, 0,
                                   cmd.note.volume, cmd.note.pan,
-                                  cmd.note.midi_note);
+                                  cmd.note.midi_note, -1);
                 }
                 break;
             }
@@ -514,11 +514,12 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
                     if (trk->type == TRACK_SAMPLER && trk->sample_index >= 0) {
                         sampler_trigger(engine, trk->sample_index,
                                         rt->velocity, rt->pitch_offset,
-                                        trk->volume, trk->pan);
+                                        trk->volume, trk->pan, (int)rt->track);
                     } else if (trk->type == TRACK_SYNTH && trk->synth_preset >= 0) {
                         synth_trigger(engine, trk->synth_preset,
                                       rt->velocity, rt->pitch_offset,
-                                      trk->volume, trk->pan, rt->note);
+                                      trk->volume, trk->pan, rt->note,
+                                      (int)rt->track);
                     }
                 }
                 rt->count--;

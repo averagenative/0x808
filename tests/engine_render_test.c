@@ -170,7 +170,7 @@ int main(void)
         sq_engine_init(&test_eng, 44100);
 
         /* Trigger a 440Hz note on preset 0 (subtractive Bass) */
-        synth_trigger(&test_eng, 0, 0.8f, 0, 0.7f, 0.0f, 69); /* A4 = MIDI 69 = 440Hz */
+        synth_trigger(&test_eng, 0, 0.8f, 0, 0.7f, 0.0f, 69, -1); /* A4 = MIDI 69 = 440Hz */
 
         uint32_t test_frames = 4096;
         float *buf = calloc(test_frames * 2, sizeof(float));
@@ -203,7 +203,7 @@ int main(void)
         sq_engine_init(&test_eng, 44100);
 
         /* Trigger and render a short chunk so envelope is active */
-        synth_trigger(&test_eng, 0, 0.8f, 0, 0.7f, 0.0f, 69);
+        synth_trigger(&test_eng, 0, 0.8f, 0, 0.7f, 0.0f, 69, -1);
         uint32_t warmup = 1024;
         float *buf = calloc(warmup * 2, sizeof(float));
         synth_render(&test_eng, buf, warmup);
@@ -255,7 +255,7 @@ int main(void)
             sq_engine_t test_eng;
             sq_engine_init(&test_eng, 44100);
 
-            synth_trigger(&test_eng, modes[m].preset, 0.8f, 0, 0.7f, 0.0f, 60); /* C4 */
+            synth_trigger(&test_eng, modes[m].preset, 0.8f, 0, 0.7f, 0.0f, 60, -1); /* C4 */
 
             uint32_t test_frames = 4096;
             float *buf = calloc(test_frames * 2, sizeof(float));
@@ -294,7 +294,7 @@ int main(void)
         uint8_t midi_note = 64; /* E4 */
 
         /* Simulate note-on (what virtual_keyboard.c does) */
-        synth_trigger(&test_eng, preset, 0.8f, 0, 0.7f, 0.0f, midi_note);
+        synth_trigger(&test_eng, preset, 0.8f, 0, 0.7f, 0.0f, midi_note, -1);
 
         /* Render while note is held */
         uint32_t hold_frames = 4096;

@@ -212,19 +212,19 @@ int main(int argc, char *argv[])
         case '5': case '6': case '7': case '8': case '9': {
             int idx = ch - '1';
             if ((uint32_t)idx < g_engine.num_samples) {
-                sampler_trigger(&g_engine, idx, 1.0f, 0, 0.8f, 0.0f);
+                sampler_trigger(&g_engine, idx, 1.0f, 0, 0.8f, 0.0f, -1);
             }
             break;
         }
 
         case '-': /* Pitch kick down one octave */
             if (g_engine.num_samples > 0)
-                sampler_trigger(&g_engine, 0, 1.0f, -12, 0.8f, 0.0f);
+                sampler_trigger(&g_engine, 0, 1.0f, -12, 0.8f, 0.0f, -1);
             break;
 
         case '=': /* Pitch kick up one octave */
             if (g_engine.num_samples > 0)
-                sampler_trigger(&g_engine, 0, 1.0f, 12, 0.8f, 0.0f);
+                sampler_trigger(&g_engine, 0, 1.0f, 12, 0.8f, 0.0f, -1);
             break;
 
         case '[': /* BPM down */

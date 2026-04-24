@@ -29,7 +29,7 @@ int main(void) {
         if (engine.synth_presets[p].synth_mode != SYNTH_WAVETABLE) continue;
 
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, (int)p, 0.8f, 0, 0.8f, 0.0f, 69);
+        synth_trigger(&engine, (int)p, 0.8f, 0, 0.8f, 0.0f, 69, -1);
         float buf[512 * 2];
         memset(buf, 0, sizeof(buf));
         synth_render(&engine, buf, 512);
@@ -53,7 +53,7 @@ int main(void) {
         /* Position = 0.0 */
         engine.synth_presets[wt_preset].wt_position = 0.0f;
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69);
+        synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69, -1);
         float buf[256*2];
         memset(buf, 0, sizeof(buf));
         synth_render(&engine, buf, 256);
@@ -62,7 +62,7 @@ int main(void) {
         /* Position = 1.0 */
         engine.synth_presets[wt_preset].wt_position = 1.0f;
         memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-        synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69);
+        synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69, -1);
         memset(buf, 0, sizeof(buf));
         synth_render(&engine, buf, 256);
         for (int i = 0; i < 256*2; i++) { float v = fabsf(buf[i]); if (v > peak_high) peak_high = v; }
@@ -83,7 +83,7 @@ int main(void) {
             engine.synth_presets[wt_preset].wt_bank_index = 0;
             engine.synth_presets[wt_preset].wt_position = 0.5f;
             memset(engine.synth_voices, 0, sizeof(engine.synth_voices));
-            synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69);
+            synth_trigger(&engine, wt_preset, 0.8f, 0, 0.8f, 0.0f, 69, -1);
             float buf[128*2]; memset(buf,0,sizeof(buf));
             synth_render(&engine, buf, 128);
             /* Should not crash */

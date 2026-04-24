@@ -63,7 +63,7 @@ static int find_voice(sq_engine_t *engine)
 
 void sampler_trigger(sq_engine_t *engine, int sample_index,
                      float velocity, int pitch_offset,
-                     float volume, float pan)
+                     float volume, float pan, int track_index)
 {
     /* Bounds check: make sure sample exists */
     if (sample_index < 0 || (uint32_t)sample_index >= engine->num_samples)
@@ -76,6 +76,7 @@ void sampler_trigger(sq_engine_t *engine, int sample_index,
 
     v->active       = true;
     v->sample_index = sample_index;
+    v->track_index  = (int8_t)track_index;
     v->velocity     = velocity;
     v->volume       = volume;
     v->pan          = pan;
@@ -98,9 +99,28 @@ void sampler_trigger(sq_engine_t *engine, int sample_index,
 
 void sampler_render(sq_engine_t *engine, float *output, uint32_t num_frames)
 {
+    /* Sentinel INT_MIN = no filter, render every active voice. */
+    sampler_render_track(engine, output, num_frames, -9999);
+}
+
+void sampler_render_track(sq_engine_t *engine, float *output,
+                          uint32_t num_frames, int track_filter)
+{
     for (int vi = 0; vi < SQ_MAX_VOICES; vi++) {
         sq_voice_t *v = &engine->voices[vi];
         if (!v->active) continue;
+        /* Filter semantics:
+         *   -9999 = no filter (render all)
+         *   >= 0  = render only this track's voices
+         *   -1    = render only voices with no track binding (API/MIDI)
+         */
+        if (track_filter == -9999) {
+            /* accept */
+        } else if (track_filter >= 0) {
+            if ((int)v->track_index != track_filter) continue;
+        } else { /* -1 */
+            if ((int)v->track_index != -1) continue;
+        }
 
         sq_sample_t *s = &engine->samples[v->sample_index];
         if (!s->data) {

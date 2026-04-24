@@ -30,13 +30,18 @@ void synth_init_presets(sq_engine_t *engine);
 /* Trigger a new synth voice. Returns voice index (0-15), or -1 on failure. */
 int synth_trigger(sq_engine_t *engine, int preset_index,
                   float velocity, int pitch_offset,
-                  float volume, float pan, uint8_t note);
+                  float volume, float pan, uint8_t note,
+                  int track_index);
 
 /* Release all active synth voices (enter release phase) */
 void synth_release_all(sq_engine_t *engine);
 
-/* Render all active synth voices into the output buffer (additive) */
+/* Render all active synth voices into the output buffer (additive).
+ * track_filter: -1 = all voices; 0..N = only voices whose source track
+ *               matches. */
 void synth_render(sq_engine_t *engine, float *output, uint32_t num_frames);
+void synth_render_track(sq_engine_t *engine, float *output,
+                        uint32_t num_frames, int track_filter);
 
 #ifdef __cplusplus
 }

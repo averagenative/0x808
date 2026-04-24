@@ -51,7 +51,7 @@ int main(void) {
     printf("  PASS: Rapid start/stop\n");
 
     /* Test 6: Synth note on/off during processing */
-    synth_trigger(&engine, 0, 0.8f, 0, 0.8f, 0.0f, 69);
+    synth_trigger(&engine, 0, 0.8f, 0, 0.8f, 0.0f, 69, -1);
     sq_engine_process(&engine, buf, 256);
     synth_release_all(&engine);
     sq_engine_process(&engine, buf, 256);
