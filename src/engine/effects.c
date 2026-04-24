@@ -336,16 +336,20 @@ static void reverb_process(sq_efx_reverb_t *r, float *buf, uint32_t frames)
     float feedback = r->room_size * 0.28f + 0.7f;  /* scale to 0.7-0.98 */
     float damp = r->damping;
     float wet = r->wet;
-    float dry = 1.0f - wet;
 
     /* Freeverb-style input gain compensation. 8 parallel comb filters
      * with feedback up to ~0.98 sum to many multiples of the input over
-     * the decay time — without scaling the input into them, a single
-     * loud transient (kick hit at peak ~1.0) produces a wet tail that's
-     * several times louder than dry and sounds like overdrive instead
-     * of reverb. 0.015 is the canonical Freeverb value. */
-    const float fixedgain = 0.015f;
+     * the decay time — without input attenuation a single loud transient
+     * produces a wet tail several times louder than dry and clips the
+     * output. 0.05 keeps it safe while still producing an audible tail
+     * when wet is cranked. */
+    const float fixedgain = 0.05f;
 
+    /* Wet is treated as a SEND: dry is always passed through, wet adds
+     * the reverb tail on top. This avoids the awkward "wet=1 silences
+     * the transient" problem (combs need ~25ms to fill before producing
+     * any output, so killing dry on a kick gives silence-then-tail).
+     * Matches the typical drum-machine reverb model. */
     for (uint32_t i = 0; i < frames; i++) {
         float inL = buf[i * 2];
         float inR = buf[i * 2 + 1];
@@ -365,8 +369,8 @@ static void reverb_process(sq_efx_reverb_t *r, float *buf, uint32_t frames)
             outR = allpass_process(&r->allpasses[REVERB_NUM_ALLPASS + a], outR);
         }
 
-        buf[i * 2]     = inL * dry + outL * wet;
-        buf[i * 2 + 1] = inR * dry + outR * wet;
+        buf[i * 2]     = inL + outL * wet;
+        buf[i * 2 + 1] = inR + outR * wet;
     }
 }
 
