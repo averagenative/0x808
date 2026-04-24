@@ -464,14 +464,63 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
     if (ImGui::IsItemHovered()) SQ_TOOLTIP("Pattern Presets");
     ImGui::SameLine();
 
-    /* RND — randomize current pattern (Ctrl+R) */
-    if (ColoredButton("RND", false, ImVec4(0.55f, 0.30f, 0.65f, 1.0f),
-                      ImVec2(45.0f, btn_h))) {
-        sq_pattern_t *cur = &p->engine->patterns[p->engine->transport.current_pattern];
-        undo_push(p->engine);
-        sq_pattern_randomize(cur, 0);
+    /* RND — randomize current pattern (Ctrl+R, right-click for options) */
+    {
+        sq_app_t *ta = (sq_app_t *)gui_get_app();
+        if (ColoredButton("RND", false, ImVec4(0.55f, 0.30f, 0.65f, 1.0f),
+                          ImVec2(45.0f, btn_h))) {
+            sq_pattern_t *cur = &p->engine->patterns[p->engine->transport.current_pattern];
+            undo_push(p->engine);
+            if (ta) {
+                ta->random_options.seed = 0;
+                sq_pattern_randomize_opts(cur, &ta->random_options);
+            } else {
+                sq_pattern_randomize(cur, 0);
+            }
+        }
+        if (ImGui::IsItemHovered())
+            SQ_TOOLTIP("Randomize pattern (Ctrl+R, right-click for options)");
+
+        /* Right-click → settings popover */
+        if (ta) ImGui::OpenPopupOnItemClick("##rnd_settings",
+                                             ImGuiPopupFlags_MouseButtonRight);
+
+        if (ta && ImGui::BeginPopup("##rnd_settings")) {
+            sq_random_options_t *r = &ta->random_options;
+            ImGui::TextUnformatted("Randomize options");
+            ImGui::Separator();
+            ImGui::Checkbox("Steps (on/off + velocity)", &r->steps);
+            ImGui::Checkbox("Velocity spread (existing hits)", &r->velocity);
+            ImGui::Checkbox("Synth notes (pentatonic)", &r->notes);
+            ImGui::Checkbox("Pitch offsets (\xc2\xb1""2 semitones)", &r->pitch);
+            ImGui::Checkbox("Micro-timing (humanize)", &r->micro);
+
+            ImGui::Spacing();
+            static const char *style_names[] = {
+                "Any", "Four-on-floor", "Boom-bap", "Trap", "Breakbeat"
+            };
+            int style_idx = r->style + 1;  /* -1 (Any) → 0 */
+            if (style_idx < 0) style_idx = 0;
+            if (style_idx > 4) style_idx = 0;
+            ImGui::SetNextItemWidth(140.0f);
+            if (ImGui::Combo("Style", &style_idx, style_names, 5)) {
+                r->style = style_idx - 1;
+            }
+            ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+
+            ImGui::Spacing();
+            if (ImGui::Button("Apply", ImVec2(120, 0))) {
+                sq_pattern_t *cur = &p->engine->patterns[p->engine->transport.current_pattern];
+                undo_push(p->engine);
+                r->seed = 0;
+                sq_pattern_randomize_opts(cur, r);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("Ctrl+R uses these too");
+
+            ImGui::EndPopup();
+        }
     }
-    if (ImGui::IsItemHovered()) SQ_TOOLTIP("Randomize pattern (Ctrl+R)");
     ImGui::SameLine();
 
     /* Panel toggles differ: plugin has PNO + KEY, standalone has just PIANO */

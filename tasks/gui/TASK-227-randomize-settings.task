@@ -1,4 +1,4 @@
-status: pending
+status: done
 priority: medium
 depends: TASK-223
 agent: gui

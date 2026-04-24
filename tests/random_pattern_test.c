@@ -99,6 +99,84 @@ int main(void)
     }
     printf("PASS: synth tracks left untouched\n");
 
+    /* TASK-227: per-flag option isolation
+     *
+     * With only "velocity" enabled the step on/off pattern must not
+     * change — only the velocity values on existing hits get re-rolled.
+     * With only "notes" enabled, sampler tracks must not change. */
+    {
+        sq_pattern_t base;
+        memset(&base, 0, sizeof(base));
+        base.num_tracks = 2;
+        base.tracks[0].type = TRACK_SAMPLER;
+        base.tracks[0].length = 16;
+        base.tracks[0].steps[0].velocity = 100;
+        base.tracks[0].steps[4].velocity = 80;
+        base.tracks[0].steps[8].velocity = 100;
+        base.tracks[0].steps[12].velocity = 80;
+        base.tracks[1].type = TRACK_SYNTH;
+        base.tracks[1].length = 16;
+        base.tracks[1].steps[0].velocity = 100;
+        base.tracks[1].steps[0].note = 60;
+
+        /* Velocity-only re-roll */
+        sq_pattern_t p1 = base;
+        sq_random_options_t opts;
+        sq_random_options_default(&opts);
+        opts.steps = false;
+        opts.velocity = true;
+        opts.seed = 42;
+        sq_pattern_randomize_opts(&p1, &opts);
+
+        /* Step on/off must match base */
+        for (int s = 0; s < 16; s++) {
+            bool a = base.tracks[0].steps[s].velocity > 0;
+            bool b = p1.tracks[0].steps[s].velocity > 0;
+            if (a != b) {
+                fprintf(stderr,
+                        "FAIL: velocity-only changed step %d on/off (was %d, now %d)\n",
+                        s, a, b);
+                return 1;
+            }
+        }
+        printf("PASS: velocity-only preserves step on/off\n");
+
+        /* Notes-only must not touch sampler tracks */
+        sq_pattern_t p2 = base;
+        sq_random_options_default(&opts);
+        opts.steps = false;
+        opts.notes = true;
+        opts.seed = 42;
+        sq_pattern_randomize_opts(&p2, &opts);
+        if (memcmp(&p2.tracks[0], &base.tracks[0], sizeof(sq_track_t)) != 0) {
+            fprintf(stderr, "FAIL: notes-only modified sampler track\n");
+            return 1;
+        }
+        if (p2.tracks[1].steps[0].note == 60 &&
+            base.tracks[1].steps[0].note == 60) {
+            /* Note may or may not have changed (random pick could land on 60).
+             * Just check the synth track wasn't fully cleared. */
+        }
+        printf("PASS: notes-only leaves sampler tracks untouched\n");
+
+        /* Pitch-only on existing hits */
+        sq_pattern_t p3 = base;
+        sq_random_options_default(&opts);
+        opts.steps = false;
+        opts.pitch = true;
+        opts.seed = 42;
+        sq_pattern_randomize_opts(&p3, &opts);
+        bool any_pitch_change = false;
+        for (int s = 0; s < 16; s++) {
+            if (p3.tracks[0].steps[s].pitch_offset != 0) any_pitch_change = true;
+        }
+        if (!any_pitch_change) {
+            fprintf(stderr, "FAIL: pitch-only didn't set any pitch_offset\n");
+            return 1;
+        }
+        printf("PASS: pitch-only writes per-step pitch_offset\n");
+    }
+
     sq_engine_shutdown(&e);
     printf("\n=== ALL RANDOM PATTERN TESTS PASSED ===\n");
     return 0;

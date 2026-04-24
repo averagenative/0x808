@@ -19,6 +19,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "engine/engine.h"
+#include "engine/random_pattern.h"
 
 /* ─── Frontend-agnostic key constants ─────────────────────────────────────── */
 
@@ -132,6 +133,9 @@ typedef struct {
 
     /* UI preferences */
     bool     show_tooltips; /* show hover tooltips (default: true) */
+
+    /* Last-applied randomize options (TASK-227) — persisted in session */
+    sq_random_options_t random_options;
 
 } sq_app_t;
 

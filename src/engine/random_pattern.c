@@ -123,36 +123,123 @@ static const role_profile_t *profile_for_slot(int sampler_slot,
 
 void sq_pattern_randomize(sq_pattern_t *pat, uint32_t seed)
 {
-    if (!pat) return;
+    sq_random_options_t opts;
+    sq_random_options_default(&opts);
+    opts.seed = seed;
+    sq_pattern_randomize_opts(pat, &opts);
+}
 
-    s_rng = seed ? seed : (uint32_t)time(NULL);
-    /* Stir a few times so consecutive calls with similar time seeds diverge */
+void sq_random_options_default(sq_random_options_t *opts)
+{
+    if (!opts) return;
+    memset(opts, 0, sizeof(*opts));
+    opts->steps = true;            /* legacy default behaviour */
+    opts->style = SQ_RND_STYLE_ANY;
+    opts->seed  = 0;
+}
+
+/* Pick a random MIDI note in the C-minor pentatonic across two octaves
+ * (a safe scale that sounds musical with most synth presets). Returns
+ * a MIDI note number in roughly [36..72]. */
+static uint8_t random_pentatonic_note(void)
+{
+    /* C minor pentatonic: C, Eb, F, G, Bb */
+    static const int8_t scale[] = {0, 3, 5, 7, 10};
+    int octave = rng_range(2, 4);  /* 2 = C2 (MIDI 36), 4 = C4 (MIDI 60) */
+    int degree = (int)(rng_next() % (uint32_t)(sizeof(scale)/sizeof(scale[0])));
+    return (uint8_t)(12 * octave + scale[degree]);
+}
+
+void sq_pattern_randomize_opts(sq_pattern_t *pat, const sq_random_options_t *opts)
+{
+    if (!pat || !opts) return;
+
+    s_rng = opts->seed ? opts->seed : (uint32_t)time(NULL);
     rng_next(); rng_next(); rng_next();
 
-    pattern_style_t style = (pattern_style_t)(rng_next() % NUM_STYLES);
-    LOG_INFO("Randomizing pattern '%s' (style=%d, %u tracks)",
-             pat->name, (int)style, pat->num_tracks);
+    pattern_style_t style;
+    if (opts->style >= 0 && opts->style < (int)NUM_STYLES) {
+        style = (pattern_style_t)opts->style;
+    } else {
+        style = (pattern_style_t)(rng_next() % NUM_STYLES);
+    }
+
+    LOG_INFO("Randomizing pattern '%s' (style=%d, steps=%d vel=%d micro=%d "
+             "pitch=%d notes=%d, %u tracks)",
+             pat->name, (int)style,
+             opts->steps, opts->velocity, opts->micro, opts->pitch, opts->notes,
+             pat->num_tracks);
 
     int sampler_slot = 0;
     for (uint32_t t = 0; t < pat->num_tracks; t++) {
         sq_track_t *track = &pat->tracks[t];
-        if (track->type != TRACK_SAMPLER) continue;
-
-        const role_profile_t *prof = profile_for_slot(sampler_slot, style);
-
-        /* Wipe step data; keep the rest of the track config. */
-        memset(track->steps, 0, sizeof(track->steps));
-
         uint32_t len = track->length ? track->length : 16;
-        if (len > 16) len = 16;  /* heuristic only covers 16 steps */
+        if (len > 16) len = 16;
 
-        for (uint32_t s = 0; s < len; s++) {
-            if (rng_chance(prof->step_prob[s])) {
-                track->steps[s].velocity =
-                    (uint8_t)rng_range(prof->vel_lo, prof->vel_hi);
-                track->steps[s].probability = 100;
+        if (track->type == TRACK_SAMPLER) {
+            const role_profile_t *prof = profile_for_slot(sampler_slot, style);
+
+            if (opts->steps) {
+                /* Full re-roll of step on/off + velocity. */
+                memset(track->steps, 0, sizeof(track->steps));
+                for (uint32_t s = 0; s < len; s++) {
+                    if (rng_chance(prof->step_prob[s])) {
+                        track->steps[s].velocity =
+                            (uint8_t)rng_range(prof->vel_lo, prof->vel_hi);
+                        track->steps[s].probability = 100;
+                    }
+                }
+            } else if (opts->velocity) {
+                /* Re-roll velocities only on EXISTING hits. */
+                for (uint32_t s = 0; s < len; s++) {
+                    if (track->steps[s].velocity > 0) {
+                        track->steps[s].velocity =
+                            (uint8_t)rng_range(prof->vel_lo, prof->vel_hi);
+                    }
+                }
+            }
+            sampler_slot++;
+        } else if (track->type == TRACK_SYNTH && opts->notes) {
+            /* Pick fresh notes for each existing hit; if no hits, place
+             * a few sparse ones so the synth track isn't silent. */
+            bool any = false;
+            for (uint32_t s = 0; s < len; s++) {
+                if (track->steps[s].velocity > 0) {
+                    track->steps[s].note = random_pentatonic_note();
+                    any = true;
+                }
+            }
+            if (!any) {
+                for (uint32_t s = 0; s < len; s++) {
+                    if ((s % 4) == 0 && rng_chance(60)) {
+                        track->steps[s].velocity = (uint8_t)rng_range(70, 110);
+                        track->steps[s].note = random_pentatonic_note();
+                        track->steps[s].length = 1.0f;
+                        track->steps[s].probability = 100;
+                    }
+                }
             }
         }
-        sampler_slot++;
+
+        /* Per-step modulation rolls — apply to whatever steps now exist
+         * (whether they came from this run or were already there). */
+        if (opts->micro || opts->pitch) {
+            for (uint32_t s = 0; s < len; s++) {
+                if (track->steps[s].velocity == 0) continue;
+                if (opts->micro) {
+                    /* ±0.05 step humanize, sub-frame timing nudge. */
+                    int n = rng_range(-50, 50);
+                    track->steps[s].micro_offset = (float)n * 0.001f;
+                }
+                if (opts->pitch) {
+                    /* Sample tracks: ±2 semitones for variation.
+                     * Synth tracks: leave alone if notes were already
+                     * randomized to avoid double-rolling pitch. */
+                    if (track->type == TRACK_SAMPLER || !opts->notes) {
+                        track->steps[s].pitch_offset = (int8_t)rng_range(-2, 2);
+                    }
+                }
+            }
+        }
     }
 }

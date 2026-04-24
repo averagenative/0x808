@@ -142,6 +142,18 @@ int sq_session_save(const sq_app_t *app, const sq_engine_t *engine,
     /* UI preferences */
     cJSON_AddBoolToObject(root, "show_tooltips", app->show_tooltips);
 
+    /* Random options (TASK-227) — last-applied randomize settings. */
+    {
+        cJSON *r = cJSON_CreateObject();
+        cJSON_AddBoolToObject(r, "steps",    app->random_options.steps);
+        cJSON_AddBoolToObject(r, "velocity", app->random_options.velocity);
+        cJSON_AddBoolToObject(r, "micro",    app->random_options.micro);
+        cJSON_AddBoolToObject(r, "pitch",    app->random_options.pitch);
+        cJSON_AddBoolToObject(r, "notes",    app->random_options.notes);
+        cJSON_AddNumberToObject(r, "style",  app->random_options.style);
+        cJSON_AddItemToObject(root, "random_options", r);
+    }
+
     /* Current pattern + kit */
     cJSON_AddNumberToObject(root, "current_pattern", engine->transport.current_pattern);
     cJSON_AddNumberToObject(root, "current_kit", sq_current_kit);
@@ -277,6 +289,23 @@ int sq_session_load(sq_app_t *app, sq_engine_t *engine,
     /* UI preferences */
     v = cJSON_GetObjectItem(root, "show_tooltips");
     if (v) app->show_tooltips = cJSON_IsTrue(v);
+
+    /* Random options */
+    cJSON *ropts = cJSON_GetObjectItem(root, "random_options");
+    if (ropts) {
+        v = cJSON_GetObjectItem(ropts, "steps");
+        if (v) app->random_options.steps = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "velocity");
+        if (v) app->random_options.velocity = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "micro");
+        if (v) app->random_options.micro = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "pitch");
+        if (v) app->random_options.pitch = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "notes");
+        if (v) app->random_options.notes = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "style");
+        if (v) app->random_options.style = (int)v->valuedouble;
+    }
 
     /* Current pattern + kit */
     v = cJSON_GetObjectItem(root, "current_pattern");

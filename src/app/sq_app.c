@@ -35,6 +35,9 @@ void sq_app_init(sq_app_t *app)
 
     /* UI preferences */
     app->show_tooltips = true;
+
+    /* Random options default to legacy "steps only, any style" */
+    sq_random_options_default(&app->random_options);
 }
 
 void sq_app_init_rec_config(sq_rec_config_t *cfg)
@@ -161,7 +164,11 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
             int pi = engine->transport.current_pattern;
             if (pi >= 0 && (uint32_t)pi < engine->num_patterns) {
                 undo_push(engine);
-                sq_pattern_randomize(&engine->patterns[pi], 0);
+                /* seed=0 each time so successive Ctrl+R presses give
+                 * different patterns even with identical option flags. */
+                app->random_options.seed = 0;
+                sq_pattern_randomize_opts(&engine->patterns[pi],
+                                           &app->random_options);
                 sq_app_set_status(app, "Randomized pattern", 90);
             }
             return SQ_ACTION_NONE;

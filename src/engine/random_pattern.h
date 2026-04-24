@@ -25,6 +25,38 @@ extern "C" {
  */
 void sq_pattern_randomize(sq_pattern_t *pat, uint32_t seed);
 
+/* ─── Configurable randomize (TASK-227) ─────────────────────────────────── */
+
+typedef enum {
+    SQ_RND_STYLE_ANY = -1,        /* pick a style at random per call */
+    SQ_RND_STYLE_FOUR_ON_FLOOR = 0,
+    SQ_RND_STYLE_BOOM_BAP,
+    SQ_RND_STYLE_TRAP,
+    SQ_RND_STYLE_BREAKBEAT,
+    SQ_RND_STYLE_COUNT
+} sq_rnd_style_t;
+
+typedef struct {
+    /* What to roll. Each independent — leave the rest of the pattern
+     * untouched.  Default profile is (steps=true, others=false). */
+    bool steps;       /* re-roll which sampler steps are on/off */
+    bool velocity;    /* re-roll velocities on EXISTING hits only */
+    bool micro;       /* per-step micro-timing offsets (humanize feel) */
+    bool pitch;       /* per-step pitch_offset (±2 semitones) */
+    bool notes;       /* synth-track piano-roll notes within key/octave */
+
+    int  style;       /* sq_rnd_style_t — bias the step distribution */
+    uint32_t seed;    /* 0 = time-based */
+} sq_random_options_t;
+
+/* Default option set — only "steps" enabled, style picked at random. */
+void sq_random_options_default(sq_random_options_t *opts);
+
+/* Apply a configurable randomize. Wraps the legacy steps-only path
+ * when only opts->steps is true so the existing test still passes. */
+void sq_pattern_randomize_opts(sq_pattern_t *pat,
+                                const sq_random_options_t *opts);
+
 #ifdef __cplusplus
 }
 #endif
