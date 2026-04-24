@@ -19,7 +19,7 @@ extern "C" {
 #include "engine/engine.h"
 
 #define SQ_KIT_SLOTS     8   /* drum slots per kit */
-#define SQ_NUM_KITS      10  /* number of built-in kits */
+#define SQ_NUM_KITS      12  /* number of built-in kits */
 #define SQ_KIT_NAME_LEN 16   /* max kit name length */
 #define SQ_KIT_PATH_LEN 64   /* max sample path length */
 

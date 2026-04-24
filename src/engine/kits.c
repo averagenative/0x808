@@ -154,21 +154,21 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
         8
     },
 
-    /* Acoustic — built from the standalone /kicks /snares /hihats
-     * /percussion folders that have a less synthetic character than
-     * the drum-machine-derived kits above. Toms come from 909 to
-     * round it out. */
+    /* Acoustic — Pearl Master Studio Pack 1 by enoe (CC-BY 3.0).
+     * Real recorded acoustic kit; the pack has no dedicated handclap,
+     * so snare-03 (a softer snare hit) sits in the clap slot. Crash
+     * fills the percussion slot. */
     {
         "Acoustic",
         {
-            "samples/kicks/kick.wav",
-            "samples/snares/snare.wav",
-            "samples/hihats/hihat.wav",
-            "samples/percussion/clap.wav",
-            "samples/909/hihat-open-1.wav",
-            "samples/percussion/tambourine.wav",
-            "samples/percussion/rimshot.wav",
-            "samples/909/tom-h.wav",
+            "samples/pearl/kick-01.wav",
+            "samples/pearl/snare-01.wav",
+            "samples/pearl/hihat-closed.wav",
+            "samples/pearl/snare-03.wav",
+            "samples/pearl/hihat-open.wav",
+            "samples/pearl/crash-01.wav",
+            "samples/pearl/snare-02.wav",
+            "samples/pearl/tom-01.wav",
         },
         8
     },
@@ -204,6 +204,42 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
             "samples/505/tr505-cowb-l.wav",
             "samples/505/tr505-cowb-h.wav",
             "samples/505/tr505-conga-h.wav",
+        },
+        8
+    },
+
+    /* Sub 808 — Mailbox Badger PD/CC-BY hybrid. Deep sub-bass kick,
+     * sine/noise snare, tight analog hats. Re-pitch the kick in the
+     * engine for melodic 808 lines. */
+    {
+        "Sub 808",
+        {
+            "samples/trap-808/kick.wav",
+            "samples/trap-808/snare.wav",
+            "samples/trap-808/hihat-closed.wav",
+            "samples/trap-808/clap.wav",
+            "samples/trap-808/hihat-open.wav",
+            "samples/trap-808/perc-sub.wav",
+            "samples/trap-808/rim.wav",
+            "samples/trap-808/tom-sub.wav",
+        },
+        8
+    },
+
+    /* Cassette 808 — Chris Beckstrom's TR-808 reamped through a
+     * cassette boombox (CC-BY 4.0). Saturated, hissy, wobbly — the
+     * dedicated lo-fi character kit. */
+    {
+        "Cassette",
+        {
+            "samples/cassette/cassette_808_BD.wav",
+            "samples/cassette/cassette_808_SD.wav",
+            "samples/cassette/cassette_808_HH.wav",
+            "samples/cassette/cassette_808_CP.wav",
+            "samples/cassette/cassette_808_OHH.wav",
+            "samples/cassette/cassette_808_CB.wav",
+            "samples/cassette/cassette_808_RIM.wav",
+            "samples/cassette/cassette_808_TOM1.wav",
         },
         8
     },
