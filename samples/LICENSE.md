@@ -55,14 +55,37 @@ Cassette).
   - https://archive.org/details/mailboxbadgerdrumsamplesvolume2 (Vol 2)
 - Used by the "Sub 808" kit.
 
-### `cassette/` — Beckstrom's Weird TR-808 Sample Pack
+### `cassette/`, `tube-808/`, `paint-can-808/` — Beckstrom's Weird TR-808 Sample Pack
 
 - Author: **Chris Beckstrom**
 - License: **Creative Commons Attribution 4.0 (CC-BY 4.0)**
 - Source: https://archive.org/details/808_variations
-- Used by the "Cassette" kit. Files transcoded from 32-bit stereo to
-  16-bit mono to match the project sample format; original character
-  preserved.
+- Used by the "Cassette" (cassette boombox), "Tube 808" (vacuum tube
+  preamp), and "Paint Can" (paint can resonator) kits — three
+  distinct character variations from the same archive. Files
+  transcoded from 32-bit stereo to 16-bit mono to match the project
+  format; original character preserved. The same archive contains
+  ~25 more variation folders (microcassette, megaphone, casioSK-1,
+  goto, mod-Env-Fol, etc.) ripe for future kits.
+
+### `volca-modular/` — Beckstrom Korg Volca Modular Drum Samples
+
+- Author: **Chris Beckstrom**
+- License: **Creative Commons Attribution 4.0 (CC-BY 4.0)**
+- Source: https://archive.org/details/beckstrom-volca-modular-drum-samples-1
+- Used by the "Volca Mod" kit. Tonal/inharmonic textures synthesized
+  on the Korg Volca Modular; useful as IDM/glitch percussion. The
+  pack has no white-noise generator, so NoisyHit + CymbalHH1.10
+  substitute for closed/open hat slots.
+
+### `sc8850/` — Roland Sound Canvas SC-8850 (Public Domain)
+
+- License: **Public Domain Mark 1.0** (no attribution required;
+  credit "Paisley Computer" as a courtesy)
+- Source: https://archive.org/details/SC8850DrumSamples
+- Used by the "SC-8850" kit. The Roland GM-era ROMpler — clean,
+  slightly synthetic 90s digital character. Pack has no rim/sidestick;
+  Agogo Low fills the slot as a tight metallic accent.
 
 ## Disclaimer
 

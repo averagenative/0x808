@@ -248,6 +248,81 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
         },
         8
     },
+
+    /* Sound Canvas SC-8850 — Roland's GM-era ROMpler (PD Mark 1.0,
+     * Paisley Computer). Clean, slightly synthetic 90s digital
+     * character; sits between the analog 808/909 and the acoustic
+     * Pearl kit. SC-8850 has no rim/sidestick — Agogo Low fills
+     * the slot as a tight metallic accent. */
+    {
+        "SC-8850",
+        {
+            "samples/sc8850/kick.wav",
+            "samples/sc8850/snare.wav",
+            "samples/sc8850/hihat-closed.wav",
+            "samples/sc8850/clap.wav",
+            "samples/sc8850/hihat-open.wav",
+            "samples/sc8850/cowbell.wav",
+            "samples/sc8850/rim.wav",
+            "samples/sc8850/tom.wav",
+        },
+        8
+    },
+
+    /* Tube 808 — same TR-808 as Cassette but reamped through a vacuum
+     * tube preamp (CC-BY 4.0, Beckstrom). Warm and saturated rather
+     * than wobbly. Use when you want grit without the hiss. */
+    {
+        "Tube 808",
+        {
+            "samples/tube-808/tube_808_BD.wav",
+            "samples/tube-808/tube_808_SD.wav",
+            "samples/tube-808/tube_808_HH.wav",
+            "samples/tube-808/tube_808_CP.wav",
+            "samples/tube-808/tube_808_OHH.wav",
+            "samples/tube-808/tube_808_CB.wav",
+            "samples/tube-808/tube_808_RIM.wav",
+            "samples/tube-808/tube_808_TOM1.wav",
+        },
+        8
+    },
+
+    /* Paint Can 808 — TR-808 played through a paint can resonator
+     * (CC-BY 4.0, Beckstrom). Aggressive metallic texture for
+     * industrial/IDM. */
+    {
+        "Paint Can",
+        {
+            "samples/paint-can-808/808_BD.wav",
+            "samples/paint-can-808/808_SD.wav",
+            "samples/paint-can-808/808_HH.wav",
+            "samples/paint-can-808/808_CP.wav",
+            "samples/paint-can-808/808_OHH.wav",
+            "samples/paint-can-808/808_CB.wav",
+            "samples/paint-can-808/808_RIM.wav",
+            "samples/paint-can-808/808_TOM1.wav",
+        },
+        8
+    },
+
+    /* Volca Modular — drum/percussion patches synthesized on a Korg
+     * Volca Modular (CC-BY 4.0, Beckstrom). Tonal, often inharmonic;
+     * IDM/glitch/electroacoustic textures. The pack has no white-noise
+     * generator — NoisyHit + CymbalHH substitute for the hat slots. */
+    {
+        "Volca Mod",
+        {
+            "samples/volca-modular/kick.wav",
+            "samples/volca-modular/snare.wav",
+            "samples/volca-modular/hihat-closed.wav",
+            "samples/volca-modular/clap.wav",
+            "samples/volca-modular/hihat-open.wav",
+            "samples/volca-modular/cowbell.wav",
+            "samples/volca-modular/rim.wav",
+            "samples/volca-modular/tom.wav",
+        },
+        8
+    },
 };
 
 int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
