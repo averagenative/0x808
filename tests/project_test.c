@@ -113,12 +113,18 @@ static void setup_engine(sq_engine_t *e) {
 } while(0)
 
 int main(void) {
-    sq_engine_t orig, loaded;
+    /* sq_engine_t is ~3 MB — heap-allocate so we don't overflow an 8 MB stack. */
+    sq_engine_t *orig = calloc(1, sizeof(*orig));
+    sq_engine_t *loaded = calloc(1, sizeof(*loaded));
+    if (!orig || !loaded) {
+        fprintf(stderr, "FAIL: calloc sq_engine_t\n");
+        return 1;
+    }
 
     /* Setup and save */
-    setup_engine(&orig);
+    setup_engine(orig);
     printf("Saving project to %s...\n", TEST_FILE);
-    int rc = project_save(&orig, TEST_FILE);
+    int rc = project_save(orig, TEST_FILE);
     if (rc != 0) {
         fprintf(stderr, "FAIL: project_save returned %d\n", rc);
         return 1;
@@ -126,9 +132,9 @@ int main(void) {
     printf("Save OK.\n");
 
     /* Load into fresh engine */
-    sq_engine_init(&loaded, 44100);
+    sq_engine_init(loaded, 44100);
     printf("Loading project from %s...\n", TEST_FILE);
-    rc = project_load(&loaded, TEST_FILE);
+    rc = project_load(loaded, TEST_FILE);
     if (rc != 0) {
         fprintf(stderr, "FAIL: project_load returned %d\n", rc);
         return 1;
@@ -136,18 +142,18 @@ int main(void) {
     printf("Load OK.\n");
 
     /* Verify transport */
-    ASSERT_EQ_FLOAT((float)loaded.transport.bpm, 140.0f, "bpm");
-    ASSERT_EQ_INT(loaded.transport.mode, MODE_SONG, "play_mode");
+    ASSERT_EQ_FLOAT((float)loaded->transport.bpm, 140.0f, "bpm");
+    ASSERT_EQ_INT(loaded->transport.mode, MODE_SONG, "play_mode");
 
     /* Verify patterns */
-    ASSERT_EQ_INT(loaded.num_patterns, 2, "num_patterns");
-    ASSERT_EQ_STR(loaded.patterns[0].name, "Verse", "pattern0 name");
-    ASSERT_EQ_STR(loaded.patterns[1].name, "Chorus", "pattern1 name");
-    ASSERT_EQ_INT(loaded.patterns[0].num_tracks, 2, "pat0 num_tracks");
-    ASSERT_EQ_INT(loaded.patterns[1].num_tracks, 1, "pat1 num_tracks");
+    ASSERT_EQ_INT(loaded->num_patterns, 2, "num_patterns");
+    ASSERT_EQ_STR(loaded->patterns[0].name, "Verse", "pattern0 name");
+    ASSERT_EQ_STR(loaded->patterns[1].name, "Chorus", "pattern1 name");
+    ASSERT_EQ_INT(loaded->patterns[0].num_tracks, 2, "pat0 num_tracks");
+    ASSERT_EQ_INT(loaded->patterns[1].num_tracks, 1, "pat1 num_tracks");
 
     /* Verify track 0 */
-    sq_track_t *lt0 = &loaded.patterns[0].tracks[0];
+    sq_track_t *lt0 = &loaded->patterns[0].tracks[0];
     ASSERT_EQ_INT(lt0->type, TRACK_SAMPLER, "t0 type");
     ASSERT_EQ_INT(lt0->length, 16, "t0 length");
     ASSERT_EQ_INT(lt0->sample_index, 0, "t0 sample_index");
@@ -159,7 +165,7 @@ int main(void) {
     ASSERT_EQ_INT(lt0->steps[1].velocity, 0, "t0 step1 vel (empty)");
 
     /* Verify track 1 (synth) */
-    sq_track_t *lt1 = &loaded.patterns[0].tracks[1];
+    sq_track_t *lt1 = &loaded->patterns[0].tracks[1];
     ASSERT_EQ_INT(lt1->type, TRACK_SYNTH, "t1 type");
     ASSERT_EQ_INT(lt1->synth_preset, 1, "t1 synth_preset");
     ASSERT_EQ_FLOAT(lt1->volume, 0.6f, "t1 volume");
@@ -169,7 +175,7 @@ int main(void) {
     ASSERT_EQ_FLOAT(lt1->steps[0].length, 2.0f, "t1 step0 length");
 
     /* Verify synth preset */
-    sq_synth_preset_t *lsp = &loaded.synth_presets[1];
+    sq_synth_preset_t *lsp = &loaded->synth_presets[1];
     ASSERT_EQ_INT(lsp->osc1_wave, WAVE_SAW, "preset1 osc1_wave");
     ASSERT_EQ_FLOAT(lsp->filter_cutoff, 2000.0f, "preset1 cutoff");
     ASSERT_EQ_FLOAT(lsp->filter_resonance, 0.7f, "preset1 reso");
@@ -179,20 +185,20 @@ int main(void) {
     ASSERT_EQ_FLOAT(lsp->amp_env.release, 0.3f, "preset1 release");
 
     /* Verify arrangement */
-    ASSERT_EQ_INT(loaded.arrangement.num_sections, 3, "num_sections");
-    ASSERT_EQ_INT(loaded.arrangement.sections[0].pattern_index, 0, "sec0 pat");
-    ASSERT_EQ_INT(loaded.arrangement.sections[0].repeat_count, 2, "sec0 repeat");
-    ASSERT_EQ_INT(loaded.arrangement.sections[1].pattern_index, 1, "sec1 pat");
-    ASSERT_EQ_INT(loaded.arrangement.sections[1].repeat_count, 4, "sec1 repeat");
-    ASSERT_EQ_INT(loaded.arrangement.sections[2].pattern_index, 0, "sec2 pat");
-    ASSERT_EQ_INT(loaded.arrangement.sections[2].repeat_count, 1, "sec2 repeat");
+    ASSERT_EQ_INT(loaded->arrangement.num_sections, 3, "num_sections");
+    ASSERT_EQ_INT(loaded->arrangement.sections[0].pattern_index, 0, "sec0 pat");
+    ASSERT_EQ_INT(loaded->arrangement.sections[0].repeat_count, 2, "sec0 repeat");
+    ASSERT_EQ_INT(loaded->arrangement.sections[1].pattern_index, 1, "sec1 pat");
+    ASSERT_EQ_INT(loaded->arrangement.sections[1].repeat_count, 4, "sec1 repeat");
+    ASSERT_EQ_INT(loaded->arrangement.sections[2].pattern_index, 0, "sec2 pat");
+    ASSERT_EQ_INT(loaded->arrangement.sections[2].repeat_count, 1, "sec2 repeat");
 
     /* Verify master effects */
-    ASSERT_EQ_INT(loaded.master_effects[0].type, EFFECT_REVERB, "master fx0 type");
-    ASSERT_EQ_INT(loaded.master_effects[0].bypass, 0, "master fx0 bypass");
-    ASSERT_EQ_FLOAT(loaded.master_effects[0].reverb.room_size, 0.8f, "master fx0 room");
-    ASSERT_EQ_FLOAT(loaded.master_effects[0].reverb.damping, 0.5f, "master fx0 damp");
-    ASSERT_EQ_FLOAT(loaded.master_effects[0].reverb.wet, 0.3f, "master fx0 wet");
+    ASSERT_EQ_INT(loaded->master_effects[0].type, EFFECT_REVERB, "master fx0 type");
+    ASSERT_EQ_INT(loaded->master_effects[0].bypass, 0, "master fx0 bypass");
+    ASSERT_EQ_FLOAT(loaded->master_effects[0].reverb.room_size, 0.8f, "master fx0 room");
+    ASSERT_EQ_FLOAT(loaded->master_effects[0].reverb.damping, 0.5f, "master fx0 damp");
+    ASSERT_EQ_FLOAT(loaded->master_effects[0].reverb.wet, 0.3f, "master fx0 wet");
 
     /* Cleanup */
     remove(TEST_FILE);
@@ -291,5 +297,9 @@ int main(void) {
     }
 
     printf("\n=== ALL PROJECT SAVE/LOAD TESTS PASSED ===\n");
+    sq_engine_shutdown(orig);
+    sq_engine_shutdown(loaded);
+    free(orig);
+    free(loaded);
     return 0;
 }
