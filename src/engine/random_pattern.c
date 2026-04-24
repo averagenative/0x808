@@ -24,6 +24,17 @@ static uint32_t rng_next(void) {
     s_rng = s_rng * 1664525u + 1013904223u;
     return s_rng;
 }
+
+/* Higher-resolution time seed than time(NULL). Without this, two RND
+ * clicks within the same second land on identical seeds → kit picks
+ * repeat. CLOCK_MONOTONIC gives nanosecond resolution; we fold the
+ * sec + nsec halves together so the low bits actually move. */
+static uint32_t time_seed(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint32_t)(ts.tv_sec * 1000000003u + ts.tv_nsec);
+}
 static int rng_chance(int percent) {
     return (int)(rng_next() % 100u) < percent;
 }
@@ -142,7 +153,7 @@ int sq_random_pick_kit(int current_kit, int num_kits)
 {
     if (num_kits <= 1) return 0;
     /* Seed from time if not already stirred (caller may have set s_rng) */
-    if (s_rng == 1) s_rng = (uint32_t)time(NULL);
+    if (s_rng == 1) s_rng = time_seed();
     int next;
     /* Pick distinct from current — bounded loop, fall through after 8 tries */
     for (int tries = 0; tries < 8; tries++) {
@@ -168,7 +179,7 @@ void sq_pattern_randomize_opts(sq_pattern_t *pat, const sq_random_options_t *opt
 {
     if (!pat || !opts) return;
 
-    s_rng = opts->seed ? opts->seed : (uint32_t)time(NULL);
+    s_rng = opts->seed ? opts->seed : time_seed();
     rng_next(); rng_next(); rng_next();
 
     pattern_style_t style;
@@ -179,10 +190,10 @@ void sq_pattern_randomize_opts(sq_pattern_t *pat, const sq_random_options_t *opt
     }
 
     LOG_INFO("Randomizing pattern '%s' (style=%d, steps=%d vel=%d micro=%d "
-             "pitch=%d notes=%d, %u tracks)",
+             "pitch=%d notes=%d kit=%d, %u tracks)",
              pat->name, (int)style,
-             opts->steps, opts->velocity, opts->micro, opts->pitch, opts->notes,
-             pat->num_tracks);
+             opts->steps, opts->velocity, opts->micro, opts->pitch,
+             opts->notes, opts->kit, pat->num_tracks);
 
     int sampler_slot = 0;
     for (uint32_t t = 0; t < pat->num_tracks; t++) {
