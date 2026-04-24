@@ -1,22 +1,15 @@
-status: pending
+status: deleted
 priority: medium
 depends: none
 agent: infra
 ref: TASK-150
 ---
-Set up CI matrix build verification.
+CI matrix builds — REJECTED.
 
-GitHub Actions workflow that builds on multiple platforms and compilers.
+User has a hard preference: zero GitHub Actions on this repo.
+Cross-platform build verification stays manual / local. If desired
+later, a local `scripts/build_all.sh` could exercise every cmake
+target on the dev box, including the MinGW cross-compile path
+already in cmake/mingw-w64.cmake.
 
-## Acceptance Criteria
-- [ ] CI builds on Ubuntu (GCC, Clang)
-- [ ] CI builds on macOS (Apple Clang)
-- [ ] CI builds on Windows (MSVC or MinGW)
-- [ ] All build targets compile without errors
-- [ ] Tests run and pass on all platforms
-- [ ] Build matrix defined in .github/workflows/
-
-## Test Plan
-- [ ] Push to PR branch, verify all matrix jobs pass
-- [ ] Verify each platform produces working executables
-- [ ] Verify test results reported correctly
+Do not reintroduce as a workflow.

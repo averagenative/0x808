@@ -1,20 +1,15 @@
-status: pending
+status: deleted
 priority: medium
 depends: none
 agent: infra
 ref: TASK-176
 ---
-Add SAST (Static Application Security Testing) to GitHub Actions.
+SAST via GitHub Actions — REJECTED.
 
-Integrate a static analysis tool into CI to catch security issues automatically.
+User has a hard preference: zero GitHub Actions on this repo. The
+local cppcheck pass shipped via TASK-171 (./scripts/lint.sh) covers
+the main SAST need.
 
-## Acceptance Criteria
-- [ ] SAST tool runs on every PR (CodeQL, Semgrep, or cppcheck)
-- [ ] Findings reported as PR annotations or comments
-- [ ] No critical/high findings in current codebase (or documented exceptions)
-- [ ] Workflow defined in .github/workflows/
-
-## Test Plan
-- [ ] Push PR, verify SAST job runs
-- [ ] Introduce a known issue (buffer overflow), verify it's flagged
-- [ ] Verify no false positives blocking PRs
+If deeper SAST is wanted, the following all run as local CLI tools:
+clang-tidy, clang-analyzer (scan-build), infer, semgrep. None
+require a hosted workflow.

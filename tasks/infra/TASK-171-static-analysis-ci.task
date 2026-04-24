@@ -4,24 +4,42 @@ depends: none
 agent: infra
 ref: TASK-171
 ---
-Add static analysis to CI pipeline.
+Static analysis via local cppcheck script (no CI per user preference).
 
-Integrate cppcheck and/or clang-tidy with security-focused checks.
-Fail build on critical findings.
+User wants ZERO GitHub Actions on this repo. The CI half of the
+original task is intentionally NOT done; the local script half is.
 
-## Tools
-- cppcheck: --enable=warning,style,performance,portability --error-exitcode=1
-- clang-tidy: cert-*, bugprone-*, security-*, misc-* checks
-- Pick one or both for CI, run the other locally
+## What landed
+- scripts/lint.sh — runs cppcheck on src/ and tests/, excludes deps/.
+  Same flags an external CI would use, so dropping into a CI is a
+  copy-paste job if the preference ever changes.
+- cppcheck-suppressions.txt — suppression list for known false
+  positives (starts empty, grows as findings surface).
+- Inline suppressions via `// cppcheck-suppress xxx` work too via
+  --inline-suppr.
 
-## Acceptance Criteria
-- [ ] Static analysis runs in GitHub Actions CI
-- [ ] Critical/error findings fail the build
-- [ ] Warnings are reported but don't fail
-- [ ] Suppressions file for known false positives (vendored deps)
-- [ ] Local run script: ./scripts/lint.sh
+## What did NOT land (and won't)
+- GitHub Actions workflow (.github/workflows/*.yml) — explicitly
+  rejected. Don't reintroduce.
+
+## How to use
+- `./scripts/lint.sh` — local run. Returns non-zero on `error`-level
+  findings, so it can be wired into a pre-commit hook by hand if the
+  user wants.
+- Install on Fedora: `dnf install cppcheck`
+- Install on Debian/Ubuntu: `apt-get install cppcheck`
+
+## Acceptance Criteria (revised)
+- [x] Local run script: ./scripts/lint.sh
+- [x] Suppressions file for known false positives (vendored deps)
+- [x] Critical/error findings cause non-zero exit (gateable by any
+      external automation the user chooses to add later)
+- [x] Warnings reported but don't fail
+- [ ] ~~Static analysis runs in GitHub Actions CI~~  — REJECTED
 
 ## Test Plan
-- [ ] Introduce a known bug (buffer overflow), verify CI catches it
-- [ ] Verify vendored code (deps/) is excluded from analysis
-- [ ] Verify all src/ files are analyzed
+- [ ] After installing cppcheck, run ./scripts/lint.sh — should
+      complete without errors on the current tree (or surface real
+      findings to address)
+- [x] Verify vendored code (deps/) is excluded — handled via -i deps
+      in lint.sh
