@@ -183,6 +183,53 @@ static void eq_process(sq_efx_eq_t *eq, float *buf, uint32_t frames,
     }
 }
 
+/* ─── Foldback distortion ─────────────────────────────────────────────────
+ * Wave-folding nonlinearity. Input is gained then reflected at ±threshold:
+ *   x = x_in * drive
+ *   while |x| > threshold:
+ *     x = sign(x) * (2*threshold - |x|)
+ *
+ * This produces aliasing-rich harmonics distinct from soft/hard clipping —
+ * the classic "west-coast" synth sound. Tone control is a one-pole LP to
+ * tame the high-frequency artifacts. */
+
+static void foldback_process(sq_efx_foldback_t *fb, float *buf, uint32_t frames,
+                             uint32_t sample_rate)
+{
+    float drive = 1.0f + fb->drive * 9.0f;     /* 1x .. 10x */
+    float th = fb->threshold;
+    if (th < 0.05f) th = 0.05f;
+    if (th > 1.0f) th = 1.0f;
+    float mix = fb->mix;
+
+    /* Tone: one-pole LP, 800 Hz → 12 kHz */
+    float fc = 800.0f + fb->tone * 11200.0f;
+    float rc = 1.0f / (2.0f * (float)M_PI * fc / (float)sample_rate + 1.0f);
+
+    /* Triangle-wave reduction: |x| modulo 2*threshold, mirrored about
+     * threshold. Equivalent to repeatedly reflecting at ±threshold but
+     * runs in O(1) regardless of input magnitude. Output is always in
+     * [-threshold, threshold]. */
+    float two_th = 2.0f * th;
+
+    for (uint32_t i = 0; i < frames; i++) {
+        for (int ch = 0; ch < 2; ch++) {
+            float in = buf[i * 2 + ch];
+            float x = in * drive;
+            float ax = fabsf(x);
+            float folded = ax - two_th * floorf(ax / two_th);  /* in [0, 2*th) */
+            if (folded > th) folded = two_th - folded;
+            float fold_out = (x >= 0.0f) ? folded : -folded;
+
+            /* Tone filter (one-pole LP) */
+            fb->tone_z1[ch] += rc * (fold_out - fb->tone_z1[ch]);
+            float wet_out = fb->tone_z1[ch];
+
+            buf[i * 2 + ch] = in * (1.0f - mix) + wet_out * mix;
+        }
+    }
+}
+
 /* ─── Brickwall limiter ─────────────────────────────────────────────────────
  *
  * Lookahead peak limiter. Inputs are written to a circular delay line; the
@@ -962,6 +1009,12 @@ void effect_init(sq_effect_slot_t *slot, sq_effect_type_t type, uint32_t sample_
         slot->shimmer.buffer = calloc(SHIMMER_BUF_SIZE * 2, sizeof(float));
         slot->shimmer.allocated = (slot->shimmer.buffer != NULL);
         break;
+    case EFFECT_FOLDBACK:
+        slot->foldback.drive = 0.3f;
+        slot->foldback.threshold = 0.5f;
+        slot->foldback.tone = 0.5f;
+        slot->foldback.mix = 0.5f;
+        break;
     case EFFECT_LIMITER:
         slot->limiter.ceiling = 0.97f;       /* ~-0.3 dBFS */
         slot->limiter.release_ms = 50.0f;
@@ -1045,6 +1098,9 @@ void effect_process(sq_effect_slot_t *slot, float *buffer, uint32_t num_frames,
         break;
     case EFFECT_LIMITER:
         limiter_process(&slot->limiter, buffer, num_frames, sample_rate);
+        break;
+    case EFFECT_FOLDBACK:
+        foldback_process(&slot->foldback, buffer, num_frames, sample_rate);
         break;
     default:
         break;

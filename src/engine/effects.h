@@ -34,6 +34,7 @@ typedef enum {
     EFFECT_SHIMMER,
     EFFECT_EQ,
     EFFECT_LIMITER,
+    EFFECT_FOLDBACK,
     EFFECT_TYPE_COUNT
 } sq_effect_type_t;
 
@@ -256,6 +257,20 @@ typedef struct {
     bool   allocated;
 } sq_efx_limiter_t;
 
+/* ─── Foldback distortion ────────────────────────────────────────────────
+ * Aliasing-rich distortion: input above a threshold reflects back into
+ * range, repeatedly, producing the harmonically-dense fold sound used
+ * in west-coast synth voices and lo-fi processing. */
+
+typedef struct {
+    float drive;           /* input gain (0-10, default 1.0) */
+    float threshold;       /* fold threshold (0.05-1.0, default 0.5) */
+    float tone;            /* post-fold LP filter (0-1, default 0.5) */
+    float mix;             /* wet/dry mix (0-1, default 0.5) */
+    /* State */
+    float tone_z1[2];      /* one-pole LP state [L,R] */
+} sq_efx_foldback_t;
+
 /* ─── 3-band parametric EQ ──────────────────────────────────────────────── */
 
 typedef enum {
@@ -308,6 +323,7 @@ typedef struct {
         sq_efx_shimmer_t   shimmer;
         sq_efx_eq_t        eq;
         sq_efx_limiter_t   limiter;
+        sq_efx_foldback_t  foldback;
     };
 } sq_effect_slot_t;
 

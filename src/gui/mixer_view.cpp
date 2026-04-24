@@ -28,7 +28,7 @@ static int s_fx_tab = 0;
 
 static const char *effect_type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
                                           "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-                                          "Ring Mod", "Tape", "Shimmer", "EQ", "Limiter"};
+                                          "Ring Mod", "Tape", "Shimmer", "EQ", "Limiter", "Foldback"};
 static const char *filter_mode_names[] = {"LowPass", "HiPass", "BandPass"};
 static const char *delay_sync_names[]  = {"1/1", "1/2", "1/4", "1/8", "1/16"};
 
@@ -396,6 +396,22 @@ static void draw_effect_slot(sq_effect_slot_t *slot, const char *label,
                 ImGui::SliderFloat("##EqQ", &band->q, 0.1f, 10.0f, "Q %.2f");
                 ImGui::PopID();
             }
+            break;
+        }
+
+        case EFFECT_FOLDBACK: {
+            ImGui::Text("Drive: %.0f%%", slot->foldback.drive * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FbDrive", &slot->foldback.drive, 0.0f, 1.0f);
+            ImGui::Text("Fold @ %.2f", slot->foldback.threshold);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FbTh", &slot->foldback.threshold, 0.05f, 1.0f);
+            ImGui::Text("Tone: %.0f%%", slot->foldback.tone * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FbTone", &slot->foldback.tone, 0.0f, 1.0f);
+            ImGui::Text("Mix: %.0f%%", slot->foldback.mix * 100);
+            ImGui::SetNextItemWidth(-1);
+            ImGui::SliderFloat("##FbMix", &slot->foldback.mix, 0.0f, 1.0f);
             break;
         }
 

@@ -1,0 +1,53 @@
+status: pending
+priority: medium
+depends: TASK-224
+agent: infra
+ref: TASK-228
+---
+LM-2 and CR-78 kit definitions are 808-sample aliases, not real recordings.
+
+Surfaced by the TASK-224 research report. Looking at
+src/engine/kits.c:
+
+  - "CR-78" (rows 105-117): all 8 slot paths point at
+    samples/808/03.* and samples/808/01.CB/RS/MT.*  — these
+    are 808 samples, not Roland CR-78 recordings.
+
+  - "LM-2"  (rows 119-131): all 8 slot paths point at
+    samples/808/05.* and samples/808/01.LC/MC/LT.*  — 808 again,
+    not LinnDrum LM-2.
+
+The kit *names* in the dropdown are misleading — users picking
+"LinnDrum" expect that distinctive 80s pop sound, not a tweaked
+808.
+
+## Two paths to resolve
+
+### Quick: rename the aliases honestly
+Rename the entries to "808 alt 03" and "808 alt 05" (or similar)
+so the names match what's playing. No new samples needed; binary
+size unchanged.
+
+### Better: ship real samples
+Replace with actual public-domain LinnDrum LM-2 and CR-78 recordings
+from the Oramics `sampled` repo (verified MIT-licensed code, PD
+audio per the report). Adds ~1.5 MB to the install. See
+docs/research/kit-expansion.md sections "1. LinnDrum LM-2 (proper)"
+and "4. Roland CR-78 (real samples)" for source URLs.
+
+The "Better" path is the recommended one — it's the actual fix.
+
+## Acceptance Criteria
+- [ ] LM-2 kit slots load real LinnDrum samples (or rename to match
+      what's playing)
+- [ ] CR-78 kit slots load real CR-78 samples (or rename)
+- [ ] samples/LICENSE.md updated to credit added sources
+- [ ] Existing project files don't break (kit_load uses base_dir +
+      relative paths, so renaming files is safe; renaming the kit
+      *name* string only affects the dropdown label)
+
+## Test Plan
+- [ ] Switch to LM-2 in the kit dropdown, hit play — should sound
+      like the LinnDrum, not the 808
+- [ ] Switch to CR-78 — should sound like the CR-78
+- [ ] Reset to Defaults still works (kit 0 = 808 unchanged)

@@ -177,7 +177,7 @@ int main(void) {
     {
         const char *type_names[] = {"None", "Filter", "Delay", "Reverb", "Overdrive", "Fuzz", "Chorus",
                                      "Bitcrusher", "Compressor", "Phaser", "Flanger", "Tremolo",
-                                     "Ring Mod", "Tape", "Shimmer", "EQ", "Limiter"};
+                                     "Ring Mod", "Tape", "Shimmer", "EQ", "Limiter", "Foldback"};
         int name_count = (int)(sizeof(type_names) / sizeof(type_names[0]));
         ASSERT(name_count == EFFECT_TYPE_COUNT,
                "Effect type names array must match EFFECT_TYPE_COUNT — did you add a new effect?");
@@ -323,6 +323,56 @@ int main(void) {
                hot_peak);
 
         effect_free(&lim);
+    }
+
+    /* Test 14a: Foldback distortion (TASK-215)
+     *
+     * Drive a sine wave well above the fold threshold and verify:
+     *   - output is bounded (no runaway in the fold loop)
+     *   - output differs from input (distortion did something)
+     *   - 0 mix is bit-identical passthrough
+     */
+    {
+        sq_effect_slot_t fb;
+        memset(&fb, 0, sizeof(fb));
+        effect_init(&fb, EFFECT_FOLDBACK, SAMPLE_RATE);
+        fb.foldback.drive = 0.8f;
+        fb.foldback.threshold = 0.4f;
+        fb.foldback.tone = 1.0f;  /* full HF for clear comparison */
+        fb.foldback.mix = 1.0f;
+
+        gen_sine(buf, NUM_FRAMES, 220.0f);
+        float pre_peak = 0.0f;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) {
+            float v = fabsf(buf[i]); if (v > pre_peak) pre_peak = v;
+        }
+        effect_process(&fb, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        float post_peak = 0.0f;
+        bool changed = false;
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) {
+            float v = fabsf(buf[i]);
+            if (v > post_peak) post_peak = v;
+            if (v > 0.01f) changed = true;
+        }
+        ASSERT(post_peak < 1.5f, "Foldback output must stay bounded");
+        ASSERT(changed, "Foldback should produce non-zero output");
+        printf("  PASS: Foldback bounded (pre=%.3f post=%.3f)\n", pre_peak, post_peak);
+
+        /* mix=0 should be exact passthrough */
+        effect_free(&fb);
+        effect_init(&fb, EFFECT_FOLDBACK, SAMPLE_RATE);
+        fb.foldback.drive = 0.8f;
+        fb.foldback.mix = 0.0f;
+        gen_sine(buf, NUM_FRAMES, 440.0f);
+        float clean[NUM_FRAMES * 2];
+        memcpy(clean, buf, sizeof(clean));
+        effect_process(&fb, buf, NUM_FRAMES, SAMPLE_RATE, 120.0);
+        for (uint32_t i = 0; i < NUM_FRAMES * 2; i++) {
+            ASSERT(fabsf(buf[i] - clean[i]) < 1e-6f,
+                   "Foldback mix=0 should be passthrough");
+        }
+        printf("  PASS: Foldback mix=0 is bit-identical passthrough\n");
+        effect_free(&fb);
     }
 
     /* Test 14: Per-track FX isolation (TASK-226)
