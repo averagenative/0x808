@@ -177,23 +177,16 @@ void drum_grid_draw(sq_engine_t *engine,
             }
             ImGui::EndCombo();
         }
-        /* TASK-213: scroll-wheel on the closed combo cycles kits. Uses
-         * manual rect test because ImGui::IsItemHovered() on a combo
-         * preview returns false when the dropdown popup isn't open. */
-        {
-            ImVec2 rmin = ImGui::GetItemRectMin();
-            ImVec2 rmax = ImGui::GetItemRectMax();
-            ImVec2 mp = ImGui::GetIO().MousePos;
-            float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0.0f && sel_kit >= 0 &&
-                mp.x >= rmin.x && mp.x <= rmax.x &&
-                mp.y >= rmin.y && mp.y <= rmax.y) {
-                int delta = (wheel > 0) ? -1 : 1;
-                int next = sel_kit + delta;
-                if (next < 0) next = 0;
-                if (next >= SQ_NUM_KITS) next = SQ_NUM_KITS - 1;
-                if (next != sel_kit) sq_kit_load(engine, next, engine->base_dir);
-            }
+        /* TASK-213: scroll-wheel on the closed combo cycles kits.
+         * SetItemKeyOwner claims MouseWheelY when the combo is hovered
+         * so the parent DrumGrid window doesn't scroll instead. */
+        ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+        if (ImGui::IsItemHovered() && io.MouseWheel != 0.0f && sel_kit >= 0) {
+            int delta = (io.MouseWheel > 0) ? -1 : 1;
+            int next = sel_kit + delta;
+            if (next < 0) next = 0;
+            if (next >= SQ_NUM_KITS) next = SQ_NUM_KITS - 1;
+            if (next != sel_kit) sq_kit_load(engine, next, engine->base_dir);
         }
         ImGui::PopItemWidth();
         ImGui::SameLine();
@@ -505,20 +498,13 @@ void drum_grid_draw(sq_engine_t *engine,
                         }
                         ImGui::EndCombo();
                     }
-                    {
-                        ImVec2 rmin = ImGui::GetItemRectMin();
-                        ImVec2 rmax = ImGui::GetItemRectMax();
-                        ImVec2 mp = ImGui::GetIO().MousePos;
-                        float wheel = ImGui::GetIO().MouseWheel;
-                        if (wheel != 0.0f &&
-                            mp.x >= rmin.x && mp.x <= rmax.x &&
-                            mp.y >= rmin.y && mp.y <= rmax.y) {
-                            int delta = (wheel > 0) ? -1 : 1;
-                            int next = sel + delta;
-                            if (next < 0) next = 0;
-                            if (next >= (int)engine->num_samples) next = (int)engine->num_samples - 1;
-                            track->sample_index = next;
-                        }
+                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+                    if (ImGui::IsItemHovered() && io.MouseWheel != 0.0f) {
+                        int delta = (io.MouseWheel > 0) ? -1 : 1;
+                        int next = sel + delta;
+                        if (next < 0) next = 0;
+                        if (next >= (int)engine->num_samples) next = (int)engine->num_samples - 1;
+                        track->sample_index = next;
                     }
                 } else if (track->type == TRACK_SYNTH && engine->num_synth_presets > 0) {
                     int sel = track->synth_preset;
@@ -537,20 +523,13 @@ void drum_grid_draw(sq_engine_t *engine,
                         }
                         ImGui::EndCombo();
                     }
-                    {
-                        ImVec2 rmin = ImGui::GetItemRectMin();
-                        ImVec2 rmax = ImGui::GetItemRectMax();
-                        ImVec2 mp = ImGui::GetIO().MousePos;
-                        float wheel = ImGui::GetIO().MouseWheel;
-                        if (wheel != 0.0f &&
-                            mp.x >= rmin.x && mp.x <= rmax.x &&
-                            mp.y >= rmin.y && mp.y <= rmax.y) {
-                            int delta = (wheel > 0) ? -1 : 1;
-                            int next = sel + delta;
-                            if (next < 0) next = 0;
-                            if (next >= (int)engine->num_synth_presets) next = (int)engine->num_synth_presets - 1;
-                            track->synth_preset = next;
-                        }
+                    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+                    if (ImGui::IsItemHovered() && io.MouseWheel != 0.0f) {
+                        int delta = (io.MouseWheel > 0) ? -1 : 1;
+                        int next = sel + delta;
+                        if (next < 0) next = 0;
+                        if (next >= (int)engine->num_synth_presets) next = (int)engine->num_synth_presets - 1;
+                        track->synth_preset = next;
                     }
                 } else if (track->type == TRACK_SF2 && engine->num_sf2_presets > 0) {
                     int sel = track->sf2_preset;

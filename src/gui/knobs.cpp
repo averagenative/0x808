@@ -154,7 +154,9 @@ static int knob_core(const char *id_str,
         *value = default_val;
     }
 
-    /* Mouse wheel on hover: ±2% of range per click, ±0.2% with Shift */
+    /* Mouse wheel on hover: ±2% of range per click, ±0.2% with Shift.
+     * Claim MouseWheelY so the parent window doesn't scroll instead. */
+    ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
     if (is_hovered && io.MouseWheel != 0.0f) {
         float range = max - min;
         float wstep = (range > 0.0f) ? range * 0.02f : actual_step;
