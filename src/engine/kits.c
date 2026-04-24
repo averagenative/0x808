@@ -101,35 +101,40 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
         },
         8
     },
-    /* "CR-78" and "LM-2" used to live here as misleading aliases that
-     * actually loaded the 808's 03.* and 05.* sample variants. Renamed
-     * to "808 Mk2" / "808 Mk3" to match what's actually playing — see
-     * TASK-228 if real LinnDrum/CR-78 samples ever land. */
+    /* CR-78 — real Roland CompuRythm samples from the Oramics `sampled`
+     * repo (Public Domain, sourced from boxedear.com). Replaces the
+     * misleading 808-alias that was here. Slot mapping picks the
+     * closest CR-78 element where the original drum-machine had no
+     * direct equivalent (e.g. bongo for the rim-shot slot). */
     {
-        "808 Mk2",
+        "CR-78",
         {
-            "samples/808/03.BD.808.wav",
-            "samples/808/03.SD5.808.wav",
-            "samples/808/03.CH.808.wav",
-            "samples/808/03.CP.808.wav",
-            "samples/808/03.OH.808.wav",
-            "samples/808/01.CB.808.wav",
-            "samples/808/01.RS.808.wav",
-            "samples/808/01.MT.808.wav",
+            "samples/cr-78-real/kick.wav",
+            "samples/cr-78-real/snare.wav",
+            "samples/cr-78-real/hihat.wav",
+            "samples/cr-78-real/rim.wav",
+            "samples/cr-78-real/hihat-metal.wav",
+            "samples/cr-78-real/cowbell.wav",
+            "samples/cr-78-real/bongo-h.wav",
+            "samples/cr-78-real/conga-l.wav",
         },
         8
     },
+
+    /* LinnDrum — real LinnDrum LM-2 samples from Oramics (Public Domain,
+     * sourced from machines.hyperreal.org). The pop-rock workhorse of
+     * the 80s. Replaces the misleading 808-alias that was here. */
     {
-        "808 Mk3",
+        "LinnDrum",
         {
-            "samples/808/05.BD.808.wav",
-            "samples/808/05.SD5.808.wav",
-            "samples/808/05.CH.808.wav",
-            "samples/808/05.CP.808.wav",
-            "samples/808/05.OH.808.wav",
-            "samples/808/01.LC.808.wav",
-            "samples/808/01.MC.808.wav",
-            "samples/808/01.LT.808.wav",
+            "samples/linndrum/kick.wav",
+            "samples/linndrum/snare-h.wav",
+            "samples/linndrum/hihat-closed.wav",
+            "samples/linndrum/clap.wav",
+            "samples/linndrum/hihat-open.wav",
+            "samples/linndrum/cowb.wav",
+            "samples/linndrum/stick-h.wav",
+            "samples/linndrum/tom-h.wav",
         },
         8
     },

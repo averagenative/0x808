@@ -19,7 +19,25 @@ Cassette).
 | `mrk2/`       | Assorted drum kit samples      |
 | `808-synth/`  | 808-style synthesized one-shots |
 
-## Externally-sourced kits (attribution required)
+## Externally-sourced kits
+
+### `cr-78-real/` — Roland CompuRythm CR-78 (Public Domain)
+
+- License: **Public Domain** (no attribution required)
+- Source: Oramics `sampled` repo `DM/CR-78/`, originally from
+  http://www.boxedear.com/free.html
+- URL: https://oramics.github.io/sampled/DM/CR-78/
+- Used by the "CR-78" kit.
+
+### `linndrum/` — LinnDrum LM-2 (Public Domain)
+
+- License: **Public Domain** (no attribution required)
+- Source: Oramics `sampled` repo `DM/LM-2/`, originally from
+  http://machines.hyperreal.org/manufacturers/Linn/LinnDrum/
+- URL: https://oramics.github.io/sampled/DM/LM-2/
+- Used by the "LinnDrum" kit.
+
+## Attribution-required kits
 
 ### `pearl/` — Pearl Master Studio Pack 1
 
