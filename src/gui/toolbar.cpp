@@ -488,6 +488,17 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         if (ta && ImGui::BeginPopup("##rnd_settings")) {
             sq_random_options_t *r = &ta->random_options;
             ImGui::TextUnformatted("Randomize options");
+            {
+                const float btn_sz = 20.0f;
+                ImGui::SameLine(ImGui::GetWindowWidth() - btn_sz - 8.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.78f, 0.27f, 0.27f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.86f, 0.35f, 0.35f, 1.0f));
+                if (ImGui::Button("X##rnd_close", ImVec2(btn_sz, btn_sz))) {
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::PopStyleColor(3);
+            }
             ImGui::Separator();
             ImGui::Checkbox("Steps (on/off + velocity)", &r->steps);
             ImGui::Checkbox("Velocity spread (existing hits)", &r->velocity);
