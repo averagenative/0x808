@@ -1,0 +1,14 @@
+# cppcheck suppression list for 0x808
+#
+# Format: <id>:<file>:<line>     (line and file are optional)
+# Or:     <id>                   (suppress globally — use sparingly)
+#
+# Add an entry here when cppcheck flags a real false positive that
+# can't be silenced with an inline `// cppcheck-suppress XYZ` comment
+# (for instance, findings inside header-only template instantiations).
+
+# Vendored dependencies are excluded via -i in scripts/lint.sh; this
+# file is for findings within our own src/ and tests/ that we've
+# audited and consider safe.
+
+# Add file-specific suppressions below as they come up.
