@@ -101,8 +101,12 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
         },
         8
     },
+    /* "CR-78" and "LM-2" used to live here as misleading aliases that
+     * actually loaded the 808's 03.* and 05.* sample variants. Renamed
+     * to "808 Mk2" / "808 Mk3" to match what's actually playing — see
+     * TASK-228 if real LinnDrum/CR-78 samples ever land. */
     {
-        "CR-78",
+        "808 Mk2",
         {
             "samples/808/03.BD.808.wav",
             "samples/808/03.SD5.808.wav",
@@ -116,7 +120,7 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
         8
     },
     {
-        "LM-2",
+        "808 Mk3",
         {
             "samples/808/05.BD.808.wav",
             "samples/808/05.SD5.808.wav",
@@ -126,6 +130,80 @@ const sq_kit_def_t sq_kits[SQ_NUM_KITS] = {
             "samples/808/01.LC.808.wav",
             "samples/808/01.MC.808.wav",
             "samples/808/01.LT.808.wav",
+        },
+        8
+    },
+
+    /* ── New kits built from existing samples (no downloads needed) ──── */
+
+    /* Modern Trap — deep 808 sub-kicks + 808 snap/clap layer + closed
+     * hat from 808/01.CH for that trap-style ride. Tom slot uses the
+     * 808-synth tom-low for sub thump. */
+    {
+        "Trap",
+        {
+            "samples/808-synth/808-sub-kick.wav",
+            "samples/808/01.SD5.808.wav",
+            "samples/808/01.CH.808.wav",
+            "samples/808-synth/808-clap.wav",
+            "samples/808/01.OH.808.wav",
+            "samples/808/01.CB.808.wav",
+            "samples/808-synth/808-snap.wav",
+            "samples/808-synth/808-tom-low.wav",
+        },
+        8
+    },
+
+    /* Acoustic — built from the standalone /kicks /snares /hihats
+     * /percussion folders that have a less synthetic character than
+     * the drum-machine-derived kits above. Toms come from 909 to
+     * round it out. */
+    {
+        "Acoustic",
+        {
+            "samples/kicks/kick.wav",
+            "samples/snares/snare.wav",
+            "samples/hihats/hihat.wav",
+            "samples/percussion/clap.wav",
+            "samples/909/hihat-open-1.wav",
+            "samples/percussion/tambourine.wav",
+            "samples/percussion/rimshot.wav",
+            "samples/909/tom-h.wav",
+        },
+        8
+    },
+
+    /* Lo-Fi — the secondary / dustier 909 samples paired with
+     * percussion folder textures. Snare-short + clap2 are the
+     * usable lo-fi-flavored variants we already have. */
+    {
+        "Lo-Fi",
+        {
+            "samples/909/kick-2.wav",
+            "samples/909/snare-short.wav",
+            "samples/909/hihat-closed-2.wav",
+            "samples/909/clap2.wav",
+            "samples/909/hihat-open-2.wav",
+            "samples/percussion/shaker.wav",
+            "samples/909/rim.wav",
+            "samples/909/tom-l.wav",
+        },
+        8
+    },
+
+    /* Percussion — for users who want hand-percussion / latin-flavored
+     * patterns. Bongo/clave/cowbells front-and-centre. */
+    {
+        "Percussion",
+        {
+            "samples/mrk2/bongo.wav",
+            "samples/505/tr505-timbal.wav",
+            "samples/percussion/clave.wav",
+            "samples/percussion/clap.wav",
+            "samples/percussion/shaker-long.wav",
+            "samples/505/tr505-cowb-l.wav",
+            "samples/505/tr505-cowb-h.wav",
+            "samples/505/tr505-conga-h.wav",
         },
         8
     },
