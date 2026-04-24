@@ -8,6 +8,7 @@
 #include "app/sq_app.h"
 #include "gui/undo.h"
 #include "engine/random_pattern.h"
+#include "engine/kits.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -167,6 +168,11 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
                 /* seed=0 each time so successive Ctrl+R presses give
                  * different patterns even with identical option flags. */
                 app->random_options.seed = 0;
+                if (app->random_options.kit) {
+                    int next_kit = sq_random_pick_kit(sq_current_kit,
+                                                       SQ_NUM_KITS);
+                    sq_kit_load(engine, next_kit, engine->base_dir);
+                }
                 sq_pattern_randomize_opts(&engine->patterns[pi],
                                            &app->random_options);
                 sq_app_set_status(app, "Randomized pattern", 90);

@@ -44,6 +44,7 @@ typedef struct {
     bool micro;       /* per-step micro-timing offsets (humanize feel) */
     bool pitch;       /* per-step pitch_offset (±2 semitones) */
     bool notes;       /* synth-track piano-roll notes within key/octave */
+    bool kit;         /* pick a random kit from sq_kits[] (engine reload) */
 
     int  style;       /* sq_rnd_style_t — bias the step distribution */
     uint32_t seed;    /* 0 = time-based */
@@ -56,6 +57,10 @@ void sq_random_options_default(sq_random_options_t *opts);
  * when only opts->steps is true so the existing test still passes. */
 void sq_pattern_randomize_opts(sq_pattern_t *pat,
                                 const sq_random_options_t *opts);
+
+/* Pick a random kit index distinct from the current one, in [0, num_kits).
+ * Returns the chosen index. Caller is responsible for sq_kit_load. */
+int sq_random_pick_kit(int current_kit, int num_kits);
 
 #ifdef __cplusplus
 }

@@ -27,6 +27,7 @@ extern "C" {
 #include "engine/synth.h"
 #include "engine/sq_midi.h"
 #include "engine/random_pattern.h"
+#include "engine/kits.h"
 #include "formats/project.h"
 #include "app/sq_app.h"
 #define LOG_TAG "toolbar"
@@ -473,6 +474,10 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             undo_push(p->engine);
             if (ta) {
                 ta->random_options.seed = 0;
+                if (ta->random_options.kit) {
+                    int next_kit = sq_random_pick_kit(sq_current_kit, SQ_NUM_KITS);
+                    sq_kit_load(p->engine, next_kit, p->engine->base_dir);
+                }
                 sq_pattern_randomize_opts(cur, &ta->random_options);
             } else {
                 sq_pattern_randomize(cur, 0);
@@ -505,6 +510,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             ImGui::Checkbox("Synth notes (pentatonic)", &r->notes);
             ImGui::Checkbox("Pitch offsets (\xc2\xb1""2 semitones)", &r->pitch);
             ImGui::Checkbox("Micro-timing (humanize)", &r->micro);
+            ImGui::Checkbox("Kit (pick a random sq_kits[] entry)", &r->kit);
 
             ImGui::Spacing();
             static const char *style_names[] = {
@@ -524,6 +530,10 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                 sq_pattern_t *cur = &p->engine->patterns[p->engine->transport.current_pattern];
                 undo_push(p->engine);
                 r->seed = 0;
+                if (r->kit) {
+                    int next_kit = sq_random_pick_kit(sq_current_kit, SQ_NUM_KITS);
+                    sq_kit_load(p->engine, next_kit, p->engine->base_dir);
+                }
                 sq_pattern_randomize_opts(cur, r);
             }
             ImGui::SameLine();

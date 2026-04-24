@@ -150,6 +150,7 @@ int sq_session_save(const sq_app_t *app, const sq_engine_t *engine,
         cJSON_AddBoolToObject(r, "micro",    app->random_options.micro);
         cJSON_AddBoolToObject(r, "pitch",    app->random_options.pitch);
         cJSON_AddBoolToObject(r, "notes",    app->random_options.notes);
+        cJSON_AddBoolToObject(r, "kit",      app->random_options.kit);
         cJSON_AddNumberToObject(r, "style",  app->random_options.style);
         cJSON_AddItemToObject(root, "random_options", r);
     }
@@ -303,6 +304,8 @@ int sq_session_load(sq_app_t *app, sq_engine_t *engine,
         if (v) app->random_options.pitch = cJSON_IsTrue(v);
         v = cJSON_GetObjectItem(ropts, "notes");
         if (v) app->random_options.notes = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(ropts, "kit");
+        if (v) app->random_options.kit = cJSON_IsTrue(v);
         v = cJSON_GetObjectItem(ropts, "style");
         if (v) app->random_options.style = (int)v->valuedouble;
     }

@@ -138,6 +138,20 @@ void sq_random_options_default(sq_random_options_t *opts)
     opts->seed  = 0;
 }
 
+int sq_random_pick_kit(int current_kit, int num_kits)
+{
+    if (num_kits <= 1) return 0;
+    /* Seed from time if not already stirred (caller may have set s_rng) */
+    if (s_rng == 1) s_rng = (uint32_t)time(NULL);
+    int next;
+    /* Pick distinct from current — bounded loop, fall through after 8 tries */
+    for (int tries = 0; tries < 8; tries++) {
+        next = (int)(rng_next() % (uint32_t)num_kits);
+        if (next != current_kit) return next;
+    }
+    return next;
+}
+
 /* Pick a random MIDI note in the C-minor pentatonic across two octaves
  * (a safe scale that sounds musical with most synth presets). Returns
  * a MIDI note number in roughly [36..72]. */
