@@ -19,7 +19,7 @@
 # Outputs to release/ directory.
 #
 
-set -e
+set -eo pipefail  # a failed build must stop the script, even piped through tail
 
 VERSION="${1:-dev}"
 RELEASE_DIR="release/0x808-${VERSION}"

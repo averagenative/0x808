@@ -310,7 +310,6 @@ static void load_ui_font(ImGuiIO &io)
 }
 /* g_midi is now in gui_globals.cpp via gui_get_midi() */
 
-void *gui_get_app(void) { return &g_app; }
 static char g_project_path[512] = "";
 static bool g_project_path_init = false;
 
@@ -334,6 +333,7 @@ int gui_init(int width, int height, const char *title)
     g_win_width  = width;
     g_win_height = height;
     sq_app_init(&g_app);
+    gui_set_app(&g_app);
 
     LOG_INFO("gui_init: starting (w=%d h=%d)", width, height);
 

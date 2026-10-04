@@ -54,7 +54,10 @@ void gui_set_audio_restart(void (*fn)(void *), void *userdata);
 const char *gui_get_audio_device_name(void);
 int gui_get_audio_device_index(void);
 
-/* Get the app state (for session save). Returns sq_app_t*. */
+/* App state (sq_app_t*) for session save and toolbar options. Set by the
+ * standalone gui.cpp; NULL in the plugin, so callers must handle NULL.
+ * Defined in gui_globals.cpp (linked into both targets). */
+void gui_set_app(void *app);
 void *gui_get_app(void);
 
 /* Get/set the current project file path. */
