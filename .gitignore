@@ -32,6 +32,7 @@ Thumbs.db
 # Screenshots / temp images (allow repo screenshot)
 *.png
 !0x808_demo.png
+!resources/0x808.png
 
 # Claude Code
 .claude/
