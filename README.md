@@ -16,7 +16,9 @@ Pre-built binaries are available on the [Releases](https://github.com/averagenat
 |----------|-------|
 | **Windows** | Installer (`.exe`) or portable zip (standalone + VST3 + CLAP) |
 | **Linux** | Tarball (ImGui + GTK + plugins) or AppImage |
-| **macOS** | DMG (standalone .app) or zip (standalone + VST3 + CLAP) |
+| **macOS** | DMG (standalone .app) or zip (standalone + VST3 + CLAP), v1.3.0 and earlier |
+
+> **macOS:** We don't have a working Mac right now, so releases after v1.3.0 don't include macOS builds. For a prebuilt macOS app, download [v1.3.0](https://github.com/averagenative/0x808/releases/tag/v1.3.0), or [build from source](#macos).
 
 ## Screenshots
 

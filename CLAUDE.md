@@ -49,7 +49,7 @@
 
 ### Release Packaging
 - **CRITICAL**: After ANY code fix, `git pull` first, THEN run `scripts/package_macos.sh` / package scripts, THEN upload. Never upload stale artifacts — the packaging scripts do a full cmake build from the current tree, so they must run against the final committed code.
-- macOS: `scripts/package_macos.sh 1.x.0` → DMG + zip in `release/`
+- macOS: `scripts/package_macos.sh 1.x.0` → DMG + zip in `release/`. **No working Mac right now:** releases after v1.3.0 ship Linux + Windows only, so don't block a release on macOS assets. Keep the macOS code paths compiling.
 - Linux + Windows: `scripts/package_release.sh 1.x.0` (from Linux) → Linux tarball + AppImage, Windows zip + NSIS installer in `release/`. Needs `appimagetool` (PATH, `~/tools/appimagetool`, or `APPIMAGETOOL=`) and `makensis`. The script starts with `rm -rf release`.
 - Upload: `gh release upload v1.x.0 release/artifact --clobber`
 - Verify after upload: download the release artifact and test it — don't assume the upload matches your local build
