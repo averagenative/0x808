@@ -205,6 +205,13 @@ static void on_dialog_destroy(GtkWidget *w, gpointer data)
 
 /* ─── Public API ──────────────────────────────────────────────────────────── */
 
+gboolean gtk_presets_close(void)
+{
+    if (!s_dialog) return FALSE;
+    gtk_window_destroy(GTK_WINDOW(s_dialog));
+    return TRUE;
+}
+
 void gtk_presets_show_save(GtkWidget *parent)
 {
     /* Toggle: if open, close it */
@@ -215,6 +222,7 @@ void gtk_presets_show_save(GtkWidget *parent)
 
     s_dialog = gtk_window_new();
     gtk_window_set_title(GTK_WINDOW(s_dialog), "Pattern Presets");
+    sq_close_on_escape(s_dialog);
     gtk_window_set_default_size(GTK_WINDOW(s_dialog), 450, 380);
     gtk_window_set_transient_for(GTK_WINDOW(s_dialog), GTK_WINDOW(parent));
     gtk_window_set_modal(GTK_WINDOW(s_dialog), FALSE);

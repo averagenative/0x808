@@ -15,13 +15,11 @@ extern "C" {
 void mixer_view_draw(sq_engine_t *engine,
                      float x, float y, float w, float h);
 
-/* Draw the FX editor as an independent floating window the user can drag
- * and resize. Shows the effect chain for the currently-selected track
- * (or master). Safe to call every frame — remembers window state.
- * Writes false to *open when the user clicks the window's X close button
- * so the caller can toggle off the panel flag. */
-void fx_window_draw(sq_engine_t *engine, float default_x, float default_y,
-                    bool *open);
+/* Draw the FX editor contents (browse bar + effect slots) into the current
+ * ImGui window, filling the remaining content region. Shows the effect
+ * chain for the currently-selected track (or master). The standalone hosts
+ * this in its own OS window — see the FX pop-out section in gui.cpp. */
+void fx_panel_draw(sq_engine_t *engine);
 
 /* Set the FX tab to show a specific track's effects.
  * track_index: 0-based track index, or -1 for master bus. */

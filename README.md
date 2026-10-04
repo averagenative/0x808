@@ -105,7 +105,7 @@ Custom mappings can be created via **MIDI Learn**: right-click any synth knob, t
 | Ctrl+Shift+Z | Redo |
 | Ctrl+T | Tap tempo |
 | Ctrl+G | Cycle theme |
-| Escape | Quit |
+| Escape | Close the frontmost dialog (never quits) |
 
 ## Mouse Controls
 

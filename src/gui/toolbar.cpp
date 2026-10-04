@@ -675,7 +675,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             ImGui::Text("Ctrl+T         Cycle themes");
             ImGui::Text("Ctrl+S         Save project");
             ImGui::Text("Ctrl+O         Open project");
-            ImGui::Text("Escape         Quit");
+            ImGui::Text("Escape         Close dialog");
 
             ImGui::Text("Ctrl+C         Copy pattern");
             ImGui::Text("Ctrl+V         Paste pattern");

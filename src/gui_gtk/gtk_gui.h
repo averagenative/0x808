@@ -124,9 +124,21 @@ GtkWidget *gtk_arrangement_new(void);
 /* gtk_presets.c */
 void gtk_presets_show_save(GtkWidget *parent);
 void gtk_presets_show_load(GtkWidget *parent);
+gboolean gtk_presets_close(void);  /* TRUE if the dialog was open */
 
 /* gtk_export.c */
 void gtk_export_show(GtkWidget *parent);
+gboolean gtk_export_close(void);   /* TRUE if the dialog was open */
+
+/* Escape closes this window (via GtkWindow's built-in window.close action). */
+static inline void sq_close_on_escape(GtkWidget *window)
+{
+    GtkEventController *sc = gtk_shortcut_controller_new();
+    gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(sc),
+        gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Escape, 0),
+                         gtk_named_action_new("window.close")));
+    gtk_widget_add_controller(window, sc);
+}
 
 /* ─── GDK keyval → SQ_KEY translation ────────────────────────────────────── */
 

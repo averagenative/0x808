@@ -13,6 +13,7 @@
  */
 
 #include "imgui.h"
+#include "imgui_internal.h"  /* ClosePopupToLevel */
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 
@@ -280,7 +281,33 @@ static int sdl_to_sq_mod(int sdl_mod)
 
 static SDL_Window    *g_window = NULL;
 static SDL_GLContext  g_gl_ctx = NULL;
+static ImGuiContext  *g_imgui_ctx = NULL;
 static sq_app_t       g_app;
+
+/* FX editor pop-out: a separate native OS window (own GL + ImGui context)
+ * so it can be dragged anywhere, outside the main window's bounds. Created
+ * on first open, hidden (not destroyed) when closed so it reopens where the
+ * user left it. */
+static SDL_Window    *g_fx_window = NULL;
+static SDL_GLContext  g_fx_gl_ctx = NULL;
+static ImGuiContext  *g_fx_imgui_ctx = NULL;
+static bool           g_fx_shown = false;
+
+/* Embedded DejaVu Sans Mono Bold. Static storage: the font atlas keeps a
+ * pointer to this data (FontDataOwnedByAtlas = false) and builds lazily on
+ * the first frame, so it must outlive gui_init(). */
+namespace {
+#include "font_dejavu_mono_bold.h"
+}
+
+static void load_ui_font(ImGuiIO &io)
+{
+    ImFontConfig fc;
+    fc.FontDataOwnedByAtlas = false; /* data is static, don't free */
+    io.Fonts->AddFontFromMemoryTTF(
+        DejaVuSansMono_Bold_ttf, (int)DejaVuSansMono_Bold_ttf_len,
+        15.0f, &fc);
+}
 /* g_midi is now in gui_globals.cpp via gui_get_midi() */
 
 void *gui_get_app(void) { return &g_app; }
@@ -361,7 +388,7 @@ int gui_init(int width, int height, const char *title)
     /* Initialize Dear ImGui */
     LOG_INFO("gui_init: ImGui init...");
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    g_imgui_ctx = ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     /* Disable imgui.ini file — we manage layout ourselves */
@@ -371,15 +398,8 @@ int gui_init(int width, int height, const char *title)
     ImGui_ImplOpenGL3_Init("#version 330 core");
 
     /* Load embedded DejaVu Sans Mono Bold — open source console font */
-    {
-        #include "font_dejavu_mono_bold.h"
-        ImFontConfig fc;
-        fc.FontDataOwnedByAtlas = false; /* data is static, don't free */
-        io.Fonts->AddFontFromMemoryTTF(
-            DejaVuSansMono_Bold_ttf, DejaVuSansMono_Bold_ttf_len,
-            15.0f, &fc);
-        LOG_INFO("Loaded embedded font: DejaVu Sans Mono Bold (15px)");
-    }
+    load_ui_font(io);
+    LOG_INFO("Loaded embedded font: DejaVu Sans Mono Bold (15px)");
 
     LOG_INFO("gui_init: ImGui init OK");
 
@@ -388,6 +408,165 @@ int gui_init(int width, int height, const char *title)
 
     LOG_INFO("GUI initialized: %dx%d, OpenGL 3.3, Dear ImGui", width, height);
     return 0;
+}
+
+/* ─── FX pop-out window ───────────────────────────────────────────────────── */
+
+static bool g_fx_create_failed = false;
+
+static void fx_popout_destroy(void)
+{
+    if (g_fx_imgui_ctx) {
+        ImGui::SetCurrentContext(g_fx_imgui_ctx);
+        SDL_GL_MakeCurrent(g_fx_window, g_fx_gl_ctx);
+        if (ImGui::GetIO().BackendRendererUserData) ImGui_ImplOpenGL3_Shutdown();
+        if (ImGui::GetIO().BackendPlatformUserData) ImGui_ImplSDL2_Shutdown();
+        ImGui::DestroyContext(g_fx_imgui_ctx);
+        g_fx_imgui_ctx = NULL;
+        ImGui::SetCurrentContext(g_imgui_ctx);
+    }
+    if (g_fx_gl_ctx) SDL_GL_DeleteContext(g_fx_gl_ctx);
+    if (g_fx_window) SDL_DestroyWindow(g_fx_window);
+    g_fx_gl_ctx = NULL;
+    g_fx_window = NULL;
+    g_fx_shown = false;
+    SDL_GL_MakeCurrent(g_window, g_gl_ctx);
+}
+
+static bool fx_popout_create(void)
+{
+    /* Native decorations (not borderless): the window manager / Wayland
+     * compositor owns moving it, so it isn't confined to the main window. */
+    int mx = 0, my = 0;
+    SDL_GetWindowPosition(g_window, &mx, &my);
+    g_fx_window = SDL_CreateWindow("0x808 FX", mx + 200, my + 120, 780, 360,
+                                   SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+                                   SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_HIDDEN);
+    if (!g_fx_window) {
+        LOG_ERROR("FX window: SDL_CreateWindow failed: %s", SDL_GetError());
+        return false;
+    }
+    SDL_SetWindowMinimumSize(g_fx_window, 420, 240);
+
+    g_fx_gl_ctx = SDL_GL_CreateContext(g_fx_window);  /* becomes current */
+    if (!g_fx_gl_ctx) {
+        LOG_ERROR("FX window: SDL_GL_CreateContext failed: %s", SDL_GetError());
+        fx_popout_destroy();
+        return false;
+    }
+    /* Only the main window waits for vsync — two blocking swaps per frame
+     * would halve the frame rate. */
+    SDL_GL_SetSwapInterval(0);
+
+    g_fx_imgui_ctx = ImGui::CreateContext();
+    ImGui::SetCurrentContext(g_fx_imgui_ctx);
+    ImGuiIO &io = ImGui::GetIO();
+    io.IniFilename = NULL;
+    /* No keyboard nav here: Space must keep toggling transport rather than
+     * activating whichever FX widget has nav focus. */
+    load_ui_font(io);
+    if (!ImGui_ImplSDL2_InitForOpenGL(g_fx_window, g_fx_gl_ctx) ||
+        !ImGui_ImplOpenGL3_Init("#version 330 core")) {
+        LOG_ERROR("FX window: ImGui backend init failed");
+        fx_popout_destroy();
+        return false;
+    }
+
+    ImGui::SetCurrentContext(g_imgui_ctx);
+    SDL_GL_MakeCurrent(g_window, g_gl_ctx);
+    LOG_INFO("FX window created");
+    return true;
+}
+
+static bool fx_popout_owns_window(Uint32 window_id)
+{
+    return g_fx_window && window_id == SDL_GetWindowID(g_fx_window);
+}
+
+static bool fx_popout_wants_keyboard(void)
+{
+    ImGui::SetCurrentContext(g_fx_imgui_ctx);
+    bool wants = ImGui::GetIO().WantCaptureKeyboard;
+    ImGui::SetCurrentContext(g_imgui_ctx);
+    return wants;
+}
+
+/* Escape in the FX window closes an open dropdown first, otherwise the
+ * window. Keyboard nav is off in this context, so ImGui won't close its
+ * popups on Escape by itself. */
+static void fx_popout_escape(void)
+{
+    ImGui::SetCurrentContext(g_fx_imgui_ctx);
+    bool popup_open = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId |
+                                             ImGuiPopupFlags_AnyPopupLevel);
+    if (popup_open)
+        ImGui::ClosePopupToLevel(0, true);
+    ImGui::SetCurrentContext(g_imgui_ctx);
+    if (!popup_open)
+        g_app.panels[SQ_PANEL_MIXER] = false;
+}
+
+/* Show/hide the FX window to match the MIX/FX toggle and render a frame.
+ * Must run after the main window has rendered; restores the main GL and
+ * ImGui contexts before returning. */
+static void fx_popout_frame(sq_engine_t *engine)
+{
+    bool want = g_app.panels[SQ_PANEL_MIXER];
+    if (want && !g_fx_window && !g_fx_create_failed) {
+        if (!fx_popout_create()) {
+            g_fx_create_failed = true;
+            sq_app_set_status(&g_app, "FX window failed to open (see log)", 240);
+        }
+    }
+    if (!g_fx_window) return;
+
+    if (want != g_fx_shown) {
+        if (want) {
+            SDL_ShowWindow(g_fx_window);
+            SDL_RaiseWindow(g_fx_window);
+        } else {
+            SDL_HideWindow(g_fx_window);
+        }
+        g_fx_shown = want;
+    }
+    if (!want || (SDL_GetWindowFlags(g_fx_window) & SDL_WINDOW_MINIMIZED))
+        return;
+
+    ImGuiStyle style = ImGui::GetStyle();  /* follow theme changes live */
+    ImGui::SetCurrentContext(g_fx_imgui_ctx);
+    SDL_GL_MakeCurrent(g_fx_window, g_fx_gl_ctx);
+    ImGui::GetStyle() = style;
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
+    const ImGuiViewport *vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->Pos);
+    ImGui::SetNextWindowSize(vp->Size);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::Begin("FX", NULL,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                 ImGuiWindowFlags_NoSavedSettings |
+                 ImGuiWindowFlags_NoBringToFrontOnFocus);
+    ImGui::PopStyleVar(2);
+    fx_panel_draw(engine);
+    ImGui::End();
+
+    ImGui::Render();
+    int fb_w = 0, fb_h = 0;
+    SDL_GL_GetDrawableSize(g_fx_window, &fb_w, &fb_h);
+    float bg[4];
+    theme_get_clear_color(bg);
+    glViewport(0, 0, fb_w, fb_h);
+    glClearColor(bg[0], bg[1], bg[2], bg[3]);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(g_fx_window);
+
+    ImGui::SetCurrentContext(g_imgui_ctx);
+    SDL_GL_MakeCurrent(g_window, g_gl_ctx);
 }
 
 int gui_frame(sq_engine_t *engine)
@@ -468,13 +647,31 @@ int gui_frame(sq_engine_t *engine)
     SDL_Event evt;
     while (SDL_PollEvent(&evt)) {
         ImGui_ImplSDL2_ProcessEvent(&evt);
+        /* The FX window's context gets every event too — each SDL backend
+         * ignores events addressed to other windows. */
+        if (g_fx_imgui_ctx) {
+            ImGui::SetCurrentContext(g_fx_imgui_ctx);
+            ImGui_ImplSDL2_ProcessEvent(&evt);
+            ImGui::SetCurrentContext(g_imgui_ctx);
+        }
         if (evt.type == SDL_QUIT)
             quit = 1;
+
+        /* SDL only sends SDL_QUIT when the last window closes, and the FX
+         * window (even hidden) counts — so handle close per window. */
+        if (evt.type == SDL_WINDOWEVENT &&
+            evt.window.event == SDL_WINDOWEVENT_CLOSE) {
+            if (fx_popout_owns_window(evt.window.windowID))
+                g_app.panels[SQ_PANEL_MIXER] = false;
+            else
+                quit = 1;
+        }
 
         /* Double-click in the toolbar drag zone toggles maximize.
          * Only fires when ImGui doesn't own the pointer (i.e. user
          * is on blank toolbar area, not clicking a button). */
         if (evt.type == SDL_MOUSEBUTTONDOWN &&
+            evt.button.windowID == SDL_GetWindowID(g_window) &&
             evt.button.button == SDL_BUTTON_LEFT &&
             evt.button.clicks == 2 &&
             evt.button.y < DRAG_AREA_HEIGHT &&
@@ -509,7 +706,9 @@ int gui_frame(sq_engine_t *engine)
 
             /* Transport + pattern keys always active; Ctrl combos always active;
              * other keys only when ImGui doesn't want keyboard */
-            bool imgui_wants_kb = ImGui::GetIO().WantCaptureKeyboard;
+            bool imgui_wants_kb = fx_popout_owns_window(evt.key.windowID)
+                                      ? fx_popout_wants_keyboard()
+                                      : ImGui::GetIO().WantCaptureKeyboard;
             bool is_transport = (sq_key == SQ_KEY_SPACE || sq_key == SQ_KEY_ESCAPE);
             bool is_pattern_key = (!is_ctrl && sq_key >= SQ_KEY_1 && sq_key <= SQ_KEY_9);
             if (is_transport || is_pattern_key || is_ctrl || !imgui_wants_kb) {
@@ -523,6 +722,21 @@ int gui_frame(sq_engine_t *engine)
                 switch (action) {
                 case SQ_ACTION_QUIT:
                     quit = 1;
+                    break;
+                case SQ_ACTION_CLOSE_DIALOG:
+                    if (fx_popout_owns_window(evt.key.windowID))
+                        fx_popout_escape();
+                    /* Main window: leave Esc to ImGui while one of its
+                     * popups is open (keyboard nav closes it) */
+                    else if (ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId |
+                                                    ImGuiPopupFlags_AnyPopupLevel))
+                        break;
+                    else if (export_dialog_visible())
+                        export_dialog_hide();
+                    else if (*pattern_presets_visible_ptr())
+                        *pattern_presets_visible_ptr() = 0;
+                    else if (g_app.panels[SQ_PANEL_SETTINGS])
+                        g_app.panels[SQ_PANEL_SETTINGS] = false;
                     break;
                 case SQ_ACTION_SAVE: {
                     char save_path[512];
@@ -709,17 +923,8 @@ int gui_frame(sq_engine_t *engine)
         }
     }
 
-    /* FX editor is a floating, draggable, resizable window — shown whenever
-     * the MIX/FX toggle is on. User can park it anywhere and size it large
-     * enough to see every slider. Position/size is remembered via ImGui's
-     * built-in per-window state. Clicking the window's native X close
-     * button toggles off the panel flag so the MIX/FX toolbar button
-     * stays in sync. */
-    if (g_app.panels[SQ_PANEL_MIXER]) {
-        bool fx_open = true;
-        fx_window_draw(engine, 200.0f, 120.0f, &fx_open);
-        if (!fx_open) g_app.panels[SQ_PANEL_MIXER] = false;
-    }
+    /* The FX editor lives in its own OS window — rendered after this frame
+     * by fx_popout_frame(). */
 
     if (g_app.panels[SQ_PANEL_BROWSER]) {
         sample_browser_draw(engine, main_w, grid_y, browser_w, total_h);
@@ -783,6 +988,10 @@ int gui_frame(sq_engine_t *engine)
      * so dragging the toolbar still defers to buttons/dropdowns under it. */
     g_imgui_blocks_drag = ImGui::IsAnyItemHovered() || ImGui::IsAnyItemActive();
 
+    /* FX editor window: shown while the MIX/FX toggle is on; its title-bar
+     * close button toggles the panel off (handled in the event loop). */
+    fx_popout_frame(engine);
+
     return quit;
 }
 
@@ -806,6 +1015,7 @@ int gui_get_audio_device_index(void)
 
 void gui_shutdown(void)
 {
+    fx_popout_destroy();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();

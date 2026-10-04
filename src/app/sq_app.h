@@ -55,6 +55,7 @@ typedef enum {
     SQ_ACTION_LOAD,
     SQ_ACTION_TOGGLE_THEME,
     SQ_ACTION_TAP_TEMPO,
+    SQ_ACTION_CLOSE_DIALOG,  /* Escape: close the frontmost dialog, never quit */
 } sq_app_action_t;
 
 /* ─── Panel identifiers ──────────────────────────────────────────────────── */

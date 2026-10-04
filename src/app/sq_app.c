@@ -97,9 +97,9 @@ sq_app_action_t sq_app_handle_key(sq_app_t *app, sq_engine_t *engine,
         return SQ_ACTION_NONE;
     }
 
-    /* Escape */
+    /* Escape closes dialogs; it never quits (too easy to hit by accident) */
     if (key == SQ_KEY_ESCAPE)
-        return SQ_ACTION_QUIT;
+        return SQ_ACTION_CLOSE_DIALOG;
 
     /* Pattern select 1-9 (no modifiers) */
     if (!ctrl && key >= SQ_KEY_1 && key <= SQ_KEY_9) {

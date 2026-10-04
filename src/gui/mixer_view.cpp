@@ -693,23 +693,11 @@ void mixer_view_set_fx_track(int track_index)
     s_fx_tab = (track_index >= 0) ? track_index + 1 : 0;
 }
 
-/* --- FX window: floating, draggable, resizable -------------------------- */
+/* --- FX editor contents (hosted in its own OS window by gui.cpp) -------- */
 
-extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float default_y,
-                               bool *open)
+extern "C" void fx_panel_draw(sq_engine_t *engine)
 {
     if (!engine) return;
-
-    ImGui::SetNextWindowSize(ImVec2(780, 360), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(ImVec2(default_x, default_y), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(420, 240), ImVec2(FLT_MAX, FLT_MAX));
-
-    if (!ImGui::Begin("FX", open,
-                      ImGuiWindowFlags_NoCollapse |
-                      ImGuiWindowFlags_NoScrollbar)) {
-        ImGui::End();
-        return;
-    }
 
     int pat_idx = engine->transport.current_pattern;
     uint32_t nt = 0;
@@ -804,6 +792,4 @@ extern "C" void fx_window_draw(sq_engine_t *engine, float default_x, float defau
             ImGui::EndChild();
         }
     }
-
-    ImGui::End();
 }

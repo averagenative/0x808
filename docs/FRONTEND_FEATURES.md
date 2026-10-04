@@ -155,6 +155,7 @@ Each section describes what a compliant frontend MUST implement.
 - [ ] Track number labels below
 
 ### 6.2 Effects Panel
+- [ ] Placement: ImGui opens the FX editor in its own OS window (native title bar, can be dragged outside the main window); GTK shows it inline in the mixer pane
 - [ ] Browse bar with Prev/Next navigation (Master Bus + per-track)
 - [ ] 3 effect slots per bus
 - [ ] Effect type selector: None, Filter, Delay, Reverb, Overdrive, Fuzz, Chorus
@@ -251,7 +252,7 @@ Each section describes what a compliant frontend MUST implement.
 ## 13. Keyboard Shortcuts
 
 - [ ] Space: Play/Stop toggle
-- [ ] Escape: Quit
+- [ ] Escape: Close the frontmost dialog/panel (FX window, export, presets, settings) — never quits
 - [ ] 1-9: Pattern select (always active)
 - [ ] Ctrl+S: Save project
 - [ ] Ctrl+O: Open project

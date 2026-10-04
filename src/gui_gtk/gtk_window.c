@@ -493,7 +493,7 @@ static void on_help_clicked(GtkWidget *btn, gpointer data)
     HELP_ROW("Ctrl+T",         "Cycle themes");
     HELP_ROW("Ctrl+S",         "Save project");
     HELP_ROW("Ctrl+O",         "Open project");
-    HELP_ROW("Escape",         "Quit");
+    HELP_ROW("Escape",         "Close dialog");
 
     HELP_HEADER("QWERTY Piano (when KEYS panel open)");
     HELP_ROW("Z/X/C/V/B/N/M",  "Lower octave white keys");
@@ -803,6 +803,14 @@ static gboolean on_key_pressed(GtkEventControllerKey *ctrl,
     switch (action) {
     case SQ_ACTION_QUIT:
         gtk_window_close(GTK_WINDOW(g_gtk.window));
+        return TRUE;
+    case SQ_ACTION_CLOSE_DIALOG:
+        /* Escape never quits — it closes the frontmost dialog/panel.
+         * GTK popovers close themselves; the export and presets dialogs
+         * also close on Escape when they have focus (sq_close_on_escape). */
+        if (!gtk_export_close() && !gtk_presets_close() &&
+            g_gtk.app.panels[SQ_PANEL_SETTINGS])
+            on_panel_toggled(NULL, GINT_TO_POINTER(SQ_PANEL_SETTINGS));
         return TRUE;
     case SQ_ACTION_SAVE: {
         char path[512];
