@@ -27,6 +27,21 @@ if(ENABLE_UBSAN)
     add_link_options(-fsanitize=undefined)
 endif()
 
+# ─── Runtime resources for dev builds ─────────────────────────────────────────
+# Kits, default samples and user themes are looked up next to the executable
+# (base_dir) and then in the CWD. Symlink them into the build dir so binaries
+# run from here find them. Release packaging copies from the source tree.
+foreach(res samples themes)
+    if(NOT EXISTS ${CMAKE_BINARY_DIR}/${res})
+        file(CREATE_LINK ${CMAKE_SOURCE_DIR}/${res} ${CMAKE_BINARY_DIR}/${res}
+             RESULT link_result SYMBOLIC)
+        if(NOT link_result EQUAL 0)
+            message(WARNING "Could not link ${res}/ into the build dir "
+                            "(${link_result}) — run binaries from the source root")
+        endif()
+    endif()
+endforeach()
+
 # Platform-specific link libraries
 if(MSVC)
     set(PLATFORM_LIBS "")
