@@ -34,8 +34,11 @@ Thumbs.db
 !0x808_demo.png
 !resources/0x808.png
 
-# Claude Code
-.claude/
+# Claude Code (except the run-0x808 skill)
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/run-0x808/
 
 # Debug / troubleshooting
 troubleshoot/
