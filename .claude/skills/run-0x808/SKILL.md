@@ -55,7 +55,8 @@ $D stop
   - `--user-data` copies the user's real `~/.local/share/0x808/{autosave.sqproj,session.json}` (read-only) into the sandbox.
   - With neither flag, you get the built-in demo pattern (808 kit, Trap 808 bass on track 9).
 - **Other commands:** `drag X1 Y1 X2 Y2`, `rclick X Y`, `type TEXT`,
-  `crop NAME X Y W H [SCALE%]` (zoom a region), `windows`, `log`, `status`.
+  `crop NAME X Y W H [SCALE%]` (zoom a region of the existing shot NAME into
+  `NAME_crop.png`; default 200%), `windows`, `log`, `status`.
   Run `driver.sh` with no arguments for usage.
 - **State:** everything lives in `/tmp/run-0x808-$UID/` (`app.log`, `shots/`, and the sandboxed `home/`).
   Override with `RUN_0X808_DIR`, `RUN_0X808_DISPLAY` (default `:97`) and
@@ -113,9 +114,9 @@ for t in $(grep -oE '"\$\{BUILD_DIR\}/[a-z_]+"' scripts/test_all.sh | sed 's/.*\
 - **GTK "Pattern Presets" is a separate toplevel at 0,0.**
   - It overlaps the main window, which is also at 0,0, so the same coordinates work for both.
   - Its dropdown lists scroll with `scroll X Y down N`.
-- **GTK piano roll:** a plain click on an empty cell places a note and then
-  deletes it on release, so nothing happens (an app bug as of 2026-10). Use
-  `drag` to place notes.
+- **Piano roll clicks differ by frontend.** In both, a left click on an
+  empty cell places a note and a drag extends it. In GTK, a plain left click
+  on an existing note also deletes it; ImGui deletes only with a right click.
 - **Tracks are monophonic.** Placing a note on an occupied step replaces that
   step's note.
 - **`pkill -f 0x808` (or `-f "Xvfb :97"`) can kill your own shell,** because the

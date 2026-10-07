@@ -23,6 +23,7 @@ static int  s_drag_step     = -1;  /* step index of note being length-dragged */
 static int  s_drag_note     = -1;  /* pitch of note being dragged */
 static int  s_dragging      = 0;   /* nonzero when left-drag is active */
 static int  s_drag_did_move = 0;   /* nonzero if drag moved at least 1 cell */
+static int  s_drag_placed   = 0;   /* nonzero if this press placed the note */
 
 /* Right-drag erase state */
 static int  s_right_dragging   = 0;
@@ -345,6 +346,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
         s_drag_note    = note;
         s_dragging     = 1;
         s_drag_did_move = 0;
+        s_drag_placed  = 0;
         /* Do NOT toggle the note here; release handler decides */
     } else {
         /* Empty cell — place a new note and start drag-to-extend */
@@ -357,6 +359,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
         s_drag_note    = note;
         s_dragging     = 1;
         s_drag_did_move = 0;
+        s_drag_placed  = 1;
 
         gtk_widget_queue_draw(g_gtk.piano_roll_area);
     }
@@ -397,13 +400,14 @@ static void on_drag_update(GtkGestureDrag *gesture, double offset_x,
     }
 }
 
-/* Left-button release — if no drag movement on an existing note, delete it */
+/* Left-button release — if no drag movement on an existing note, delete it.
+ * A note this press just placed stays. */
 static void on_drag_end(GtkGestureDrag *gesture, double offset_x,
                         double offset_y, gpointer user_data)
 {
     (void)gesture; (void)offset_x; (void)offset_y; (void)user_data;
 
-    if (s_dragging && !s_drag_did_move && s_drag_step >= 0) {
+    if (s_dragging && !s_drag_did_move && !s_drag_placed && s_drag_step >= 0) {
         /* Click without drag on an existing note — delete it */
         sq_track_t *track = get_current_track();
         if (track && (uint32_t)s_drag_step < track->length) {
@@ -422,6 +426,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double offset_x,
     s_drag_step    = -1;
     s_drag_note    = -1;
     s_drag_did_move = 0;
+    s_drag_placed  = 0;
 }
 
 /* ─── Right-click + drag to erase ─────────────────────────────────────────── */
