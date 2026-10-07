@@ -12,8 +12,8 @@
 #include <stdio.h>
 
 #define PIANO_KEY_W  45.0
-#define NOTE_RANGE   48   /* C2 to B5 */
-#define BASE_NOTE    36   /* C2 = MIDI 36 */
+#define NOTE_RANGE   73   /* C0 to C6 */
+#define BASE_NOTE    12   /* C0 = MIDI 12 — bass presets sit in C0-C1 */
 #define ROW_H        14.0
 
 static int s_scroll_note = 60; /* center on C4 */
@@ -28,6 +28,14 @@ static int  s_drag_did_move = 0;   /* nonzero if drag moved at least 1 cell */
 static int  s_right_dragging   = 0;
 static int  s_last_erase_step  = -1;
 static int  s_last_erase_note  = -1;
+
+/* Track + notes as of the last draw or our own last edit. When the notes
+ * change from outside the piano roll (track switch, preset, randomize, undo),
+ * the view scrolls to show as many of them as it can. */
+static const sq_track_t *s_seen_track = NULL;
+static int  s_seen_count = 0;
+static int  s_seen_lo = -1;
+static int  s_seen_hi = -1;
 
 static int is_black_key(int note)
 {
@@ -95,6 +103,46 @@ static int find_note_at(sq_track_t *track, int step, int note)
     return -1;
 }
 
+/* Count active steps with a note in [from, to]; lo/hi get the lowest/highest
+ * such note (both -1 if none) */
+static int track_notes_in(const sq_track_t *track, int from, int to, int *lo, int *hi)
+{
+    int count = 0;
+    *lo = -1;
+    *hi = -1;
+    for (uint32_t s = 0; s < track->length; s++) {
+        const sq_step_t *st = &track->steps[s];
+        if (st->velocity == 0 || st->note < from || st->note > to) continue;
+        if (*lo < 0 || st->note < *lo) *lo = st->note;
+        if (st->note > *hi) *hi = st->note;
+        count++;
+    }
+    return count;
+}
+
+static void remember_notes(const sq_track_t *track)
+{
+    s_seen_track = track;
+    s_seen_count = track_notes_in(track, 0, 127, &s_seen_lo, &s_seen_hi);
+}
+
+/* Scroll position whose view shows the most notes, centered on them, or -1 if
+ * the current view [bottom_note, top_note] already shows as many as any could */
+static int fit_scroll_note(const sq_track_t *track, int visible_rows,
+                           int bottom_note, int top_note)
+{
+    int lo, hi;
+    int best_n = track_notes_in(track, bottom_note, top_note, &lo, &hi);
+    int best_bottom = -1;
+    for (int b = BASE_NOTE; b + visible_rows <= BASE_NOTE + NOTE_RANGE; b++) {
+        int n = track_notes_in(track, b, b + visible_rows - 1, &lo, &hi);
+        if (n > best_n) { best_n = n; best_bottom = b; }
+    }
+    if (best_bottom < 0) return -1;
+    track_notes_in(track, best_bottom, best_bottom + visible_rows - 1, &lo, &hi);
+    return (lo + hi) / 2;
+}
+
 /* ─── Get current track (shared by handlers) ──────────────────────────────── */
 
 static sq_track_t *get_current_track(void)
@@ -130,10 +178,22 @@ static void on_draw(GtkDrawingArea *area, cairo_t *cr,
 
     /* Compute visible note range centered on s_scroll_note */
     int visible_rows = (int)(height / ROW_H);
-    int top_note = s_scroll_note + visible_rows / 2;
-    if (top_note > BASE_NOTE + NOTE_RANGE - 1) top_note = BASE_NOTE + NOTE_RANGE - 1;
+    int top_note = calc_top_note(height);
     int bottom_note = top_note - visible_rows + 1;
-    if (bottom_note < BASE_NOTE) { bottom_note = BASE_NOTE; top_note = bottom_note + visible_rows - 1; }
+
+    /* Notes changed outside the piano roll: scroll to show them */
+    int lo, hi;
+    int count = track_notes_in(track, 0, 127, &lo, &hi);
+    if (track != s_seen_track || count != s_seen_count ||
+        lo != s_seen_lo || hi != s_seen_hi) {
+        int scroll = fit_scroll_note(track, visible_rows, bottom_note, top_note);
+        if (scroll >= 0) {
+            s_scroll_note = scroll;
+            top_note = calc_top_note(height);
+            bottom_note = top_note - visible_rows + 1;
+        }
+    }
+    remember_notes(track);
 
     double grid_x = PIANO_KEY_W;
     double grid_w = (double)width - PIANO_KEY_W;
@@ -291,6 +351,7 @@ static void on_click(GtkGestureClick *gesture, int n_press,
         track->steps[step].velocity = 100;
         track->steps[step].note     = (uint8_t)note;
         track->steps[step].length   = 1.0f;
+        remember_notes(track);
 
         s_drag_step    = step;
         s_drag_note    = note;
@@ -351,6 +412,7 @@ static void on_drag_end(GtkGestureDrag *gesture, double offset_x,
                 st->velocity = 0;
                 st->note     = 0;
                 st->length   = 0;
+                remember_notes(track);
                 gtk_widget_queue_draw(g_gtk.piano_roll_area);
             }
         }
@@ -386,6 +448,7 @@ static void on_right_click(GtkGestureClick *gesture, int n_press,
         track->steps[existing].velocity = 0;
         track->steps[existing].note     = 0;
         track->steps[existing].length   = 0;
+        remember_notes(track);
         gtk_widget_queue_draw(g_gtk.piano_roll_area);
     }
     s_last_erase_step = step;
@@ -419,6 +482,7 @@ static void on_right_drag_update(GtkGestureDrag *gesture, double offset_x,
         track->steps[existing].velocity = 0;
         track->steps[existing].note     = 0;
         track->steps[existing].length   = 0;
+        remember_notes(track);
         gtk_widget_queue_draw(g_gtk.piano_roll_area);
     }
     s_last_erase_step = step;

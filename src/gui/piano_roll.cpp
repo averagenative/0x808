@@ -40,7 +40,7 @@ extern "C" {
 
 #define KEY_PANEL_W   50.0f    /* width of piano key labels */
 #define NOTE_HEIGHT   14.0f    /* height of each pitch row */
-#define MIN_NOTE      36       /* C2 */
+#define MIN_NOTE      12       /* C0 — bass presets sit in C0-C1 */
 #define MAX_NOTE      84       /* C6 */
 #define DEFAULT_VEL   100
 
@@ -53,6 +53,14 @@ static bool s_dragging    = false;
 static bool s_right_dragging = false;  /* right-click drag erase mode */
 static int  s_last_erase_step = -1;    /* last erased step (avoid re-logging) */
 static int  s_last_erase_note = -1;
+
+/* Track + notes as of the last frame. When the notes change from outside the
+ * piano roll (track switch, preset, randomize, undo), the view scrolls to show
+ * as many of them as it can. */
+static const sq_track_t *s_seen_track = nullptr;
+static int  s_seen_count = 0;
+static int  s_seen_lo = -1;
+static int  s_seen_hi = -1;
 
 /* --- Helpers ------------------------------------------------------------- */
 
@@ -94,6 +102,51 @@ static int find_note_at(sq_track_t *track, int step, int note)
     return -1;
 }
 
+/* Count active steps with a note in [from, to]; lo/hi get the lowest/highest
+ * such note (both -1 if none) */
+static int track_notes_in(const sq_track_t *track, int from, int to, int *lo, int *hi)
+{
+    int count = 0;
+    *lo = -1;
+    *hi = -1;
+    for (uint32_t s = 0; s < track->length; s++) {
+        const sq_step_t *st = &track->steps[s];
+        if (st->velocity == 0 || st->note < from || st->note > to) continue;
+        if (*lo < 0 || st->note < *lo) *lo = st->note;
+        if (st->note > *hi) *hi = st->note;
+        count++;
+    }
+    return count;
+}
+
+/* Visible pitch window for the current scroll position */
+static void view_range(int visible_rows, int *top_note, int *bot_note)
+{
+    int top = s_scroll_note + visible_rows / 2;
+    if (top > MAX_NOTE) top = MAX_NOTE;
+    int bot = top - visible_rows + 1;
+    if (bot < MIN_NOTE) { bot = MIN_NOTE; top = bot + visible_rows - 1; }
+    *top_note = top;
+    *bot_note = bot;
+}
+
+/* Scroll position whose view shows the most notes, centered on them, or -1 if
+ * the current view [bot_note, top_note] already shows as many as any could */
+static int fit_scroll_note(const sq_track_t *track, int visible_rows,
+                           int bot_note, int top_note)
+{
+    int lo, hi;
+    int best_n = track_notes_in(track, bot_note, top_note, &lo, &hi);
+    int best_bot = -1;
+    for (int b = MIN_NOTE; b + visible_rows - 1 <= MAX_NOTE; b++) {
+        int n = track_notes_in(track, b, b + visible_rows - 1, &lo, &hi);
+        if (n > best_n) { best_n = n; best_bot = b; }
+    }
+    if (best_bot < 0) return -1;
+    track_notes_in(track, best_bot, best_bot + visible_rows - 1, &lo, &hi);
+    return (lo + hi) / 2;
+}
+
 /* --- Draw ---------------------------------------------------------------- */
 
 void piano_roll_draw(sq_engine_t *engine,
@@ -109,15 +162,27 @@ void piano_roll_draw(sq_engine_t *engine,
     uint32_t num_steps = track->length;
     int current_step = g_visual_step;
 
-    /* How many pitch rows fit in the panel */
+    /* How many pitch rows fit in the grid area (header + padding excluded) */
     float header_h = 30.0f;
-    int visible_rows = (int)((h - header_h) / NOTE_HEIGHT);
+    int visible_rows = (int)((h - header_h - 8.0f) / NOTE_HEIGHT);
     if (visible_rows < 4) visible_rows = 4;
 
-    int top_note = s_scroll_note + visible_rows / 2;
-    int bot_note = s_scroll_note - visible_rows / 2;
-    if (top_note > MAX_NOTE) { top_note = MAX_NOTE; bot_note = top_note - visible_rows; }
-    if (bot_note < MIN_NOTE) { bot_note = MIN_NOTE; top_note = bot_note + visible_rows; }
+    int top_note, bot_note;
+    view_range(visible_rows, &top_note, &bot_note);
+
+    /* Notes changed outside the piano roll: scroll to show them */
+    {
+        int lo, hi;
+        int count = track_notes_in(track, 0, 127, &lo, &hi);
+        if (track != s_seen_track || count != s_seen_count ||
+            lo != s_seen_lo || hi != s_seen_hi) {
+            int scroll = fit_scroll_note(track, visible_rows, bot_note, top_note);
+            if (scroll >= 0) {
+                s_scroll_note = scroll;
+                view_range(visible_rows, &top_note, &bot_note);
+            }
+        }
+    }
 
     /* Set up ImGui window */
     ImGui::SetNextWindowPos(ImVec2(x, y));
@@ -347,6 +412,10 @@ void piano_roll_draw(sq_engine_t *engine,
         s_last_erase_step = -1;
         s_last_erase_note = -1;
     }
+
+    /* Record after this frame's edits so our own clicks never recenter */
+    s_seen_track = track;
+    s_seen_count = track_notes_in(track, 0, 127, &s_seen_lo, &s_seen_hi);
 
     ImGui::End();
 }

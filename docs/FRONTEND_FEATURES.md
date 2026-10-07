@@ -91,7 +91,7 @@ Each section describes what a compliant frontend MUST implement.
 
 ### 4.1 Layout
 - [ ] Piano key labels (left 50px) — C notes labeled, black/white key shading
-- [ ] Note range: C2-C6 (MIDI 36-84)
+- [ ] Note range: C0-C6 (MIDI 12-84)
 - [ ] Row height: 14px per note
 - [ ] Header: 30px with track info
 
@@ -112,6 +112,7 @@ Each section describes what a compliant frontend MUST implement.
 - [ ] Left-click + drag: extend note length
 - [ ] Right-click + drag: erase notes
 - [ ] Scroll wheel: vertical pitch scrolling (±2 notes per tick)
+- [ ] Auto-scroll: when the track's notes change from outside the piano roll (track switch, preset, randomize, undo), scroll to the window showing the most notes, centered on them; never moves if the current view already shows as many
 
 ## 5. Synth Editor
 
