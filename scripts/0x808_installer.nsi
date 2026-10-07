@@ -1,13 +1,13 @@
 ; 0x808 NSIS Installer Script
 ; Builds a Windows installer from Linux via makensis
 ;
-; Usage: makensis -DVER=1.4.0 0x808_installer.nsi
+; Usage: makensis -DVER=1.4.1 0x808_installer.nsi
 ;        (package_release.sh does this; VER defaults to the value below)
 
 !include "MUI2.nsh"
 
 !ifndef VER
-  !define VER "1.4.0"
+  !define VER "1.4.1"
 !endif
 !define VERFULL "${VER}.0"
 
