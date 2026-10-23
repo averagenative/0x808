@@ -1699,6 +1699,44 @@ bool VST3ProcessContextTranslator_enqueueEvent(CplugProcessContext* ctx, const C
         Steinberg_tresult result = queue->lpVtbl->addPoint(queue, frameIdx, normalised, &idx);
         return result == Steinberg_kResultOk;
     }
+#if CPLUG_WANT_MIDI_OUTPUT
+    case CPLUG_EVENT_MIDI:
+    {
+        // VST3 has no raw MIDI output, so translate notes into note events
+        struct Steinberg_Vst_IEventList* list = vst3ctx->data->outputEvents;
+        if (list == NULL)
+            return false;
+
+        uint8_t status  = event->midi.status & 0xf0;
+        uint8_t channel = event->midi.status & 0x0f;
+
+        struct Steinberg_Vst_Event e;
+        memset(&e, 0, sizeof(e));
+        e.busIndex     = 0;
+        e.sampleOffset = (Steinberg_int32)frameIdx;
+        if (status == 0x90 && event->midi.data2 > 0)
+        {
+            e.type                                = Steinberg_Vst_Event_EventTypes_kNoteOnEvent;
+            e.Steinberg_Vst_Event_noteOn.channel  = channel;
+            e.Steinberg_Vst_Event_noteOn.pitch    = event->midi.data1;
+            e.Steinberg_Vst_Event_noteOn.velocity = event->midi.data2 / 127.0f;
+            e.Steinberg_Vst_Event_noteOn.noteId   = -1;
+        }
+        else if (status == 0x80 || status == 0x90)
+        {
+            e.type                                 = Steinberg_Vst_Event_EventTypes_kNoteOffEvent;
+            e.Steinberg_Vst_Event_noteOff.channel  = channel;
+            e.Steinberg_Vst_Event_noteOff.pitch    = event->midi.data1;
+            e.Steinberg_Vst_Event_noteOff.velocity = event->midi.data2 / 127.0f;
+            e.Steinberg_Vst_Event_noteOff.noteId   = -1;
+        }
+        else
+        {
+            return false;
+        }
+        return list->lpVtbl->addEvent(list, &e) == Steinberg_kResultOk;
+    }
+#endif // CPLUG_WANT_MIDI_OUTPUT
     default:
         break;
     }

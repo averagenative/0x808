@@ -162,6 +162,13 @@ struct sq_plugin_gui {
 
     /* App state (shared logic) */
     sq_app_t app;
+
+    /* Plugin clock setting, owned by the plugin (true = follow the host) */
+    bool *host_sync;
+
+    /* Held while a frame reads or edits the engine, so the plugin can
+     * rebuild the engine (state load) without the GUI touching it */
+    SDL_mutex *engine_lock;
 };
 
 /* ─── Plugin file logger (Windows: file, Linux: stderr) ─────────────────── */
@@ -223,6 +230,13 @@ static void plugin_gui_handle_key(sq_plugin_gui_t *gui, SDL_Keycode sym,
     int sq_key = sdl_to_sq_key(sym);
     int sq_mod = sdl_to_sq_mod(kmod);
 
+    /* HOST clock: the host's transport owns play/stop and tempo */
+    if (*gui->host_sync &&
+        (sq_key == SQ_KEY_SPACE || (is_ctrl && sq_key == SQ_KEY_T))) {
+        sq_app_set_status(&gui->app, "Clock is HOST: use the host's transport", 120);
+        return;
+    }
+
     bool imgui_wants_kb = ImGui::GetIO().WantCaptureKeyboard;
     bool is_transport = (sq_key == SQ_KEY_SPACE);
     bool is_pattern_key = (!is_ctrl && sq_key >= SQ_KEY_1 && sq_key <= SQ_KEY_9);
@@ -273,6 +287,19 @@ static void plugin_gui_handle_key(sq_plugin_gui_t *gui, SDL_Keycode sym,
 
 static void plugin_gui_draw_ui(sq_plugin_gui_t *gui);
 static void plugin_gui_render_gl(int w, int h);
+
+/* Visual playhead: wall-clock time on the plugin's own clock. With the HOST
+ * clock the sequencer can start mid-pattern or jump, so show its step. */
+static void plugin_gui_update_playhead(sq_plugin_gui_t *gui)
+{
+    sq_engine_t *engine = gui->engine;
+    sq_app_update_playhead(&gui->app, engine,
+                           SDL_GetPerformanceCounter(),
+                           SDL_GetPerformanceFrequency());
+    if (*gui->host_sync && engine->transport.playing)
+        gui->app.visual_step = engine->transport.current_step;
+    g_visual_step = gui->app.visual_step;
+}
 
 static bool s_last_playing = false;
 
@@ -344,11 +371,7 @@ static void plugin_gui_draw_frame(sq_plugin_gui_t *gui)
                                   evt.type == SDL_KEYDOWN);
     }
 
-    /* Visual playhead from wall-clock time */
-    sq_app_update_playhead(&gui->app, engine,
-                           SDL_GetPerformanceCounter(),
-                           SDL_GetPerformanceFrequency());
-    g_visual_step = gui->app.visual_step;
+    plugin_gui_update_playhead(gui);
 
     /* Start ImGui frame */
     ImGui_ImplOpenGL3_NewFrame();
@@ -439,6 +462,7 @@ static void plugin_gui_draw_ui(sq_plugin_gui_t *gui)
         tp.status_timer = &gui->app.status_timer;
         tp.play_start_ticks = &play_ticks;
         tp.rec_config = &gui->app.rec_config;
+        tp.host_sync = gui->host_sync;
         toolbar_draw(&tp);
         gui->app.play_start_ticks = play_ticks;
     }
@@ -584,7 +608,9 @@ static int render_thread_func(void *userdata)
 
         Uint32 start = SDL_GetTicks();
 
+        SDL_LockMutex(gui->engine_lock);
         plugin_gui_draw_frame(gui);
+        SDL_UnlockMutex(gui->engine_lock);
 
         Uint32 elapsed = SDL_GetTicks() - start;
         Uint32 target_ms = 1000 / RENDER_FPS;
@@ -1007,18 +1033,12 @@ static pthread_mutex_t s_x11_frame_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void x11_draw_frame(sq_plugin_gui_t *gui, int w, int h)
 {
-    sq_engine_t *engine = gui->engine;
-
     g_win_width = w;
     g_win_height = h;
     g_visual_step = gui->app.visual_step;
     g_selected_track = gui->app.selected_track;
 
-    /* Visual playhead from wall-clock time */
-    sq_app_update_playhead(&gui->app, engine,
-                           SDL_GetPerformanceCounter(),
-                           SDL_GetPerformanceFrequency());
-    g_visual_step = gui->app.visual_step;
+    plugin_gui_update_playhead(gui);
 
     ImGui_ImplOpenGL3_NewFrame();
     plugin_gui_draw_ui(gui);
@@ -1060,6 +1080,7 @@ static void *x11_render_thread(void *userdata)
     while (gui->running.load()) {
         struct timespec now;
 
+        SDL_LockMutex(gui->engine_lock);
         pthread_mutex_lock(&s_x11_frame_lock);
         ImGui::SetCurrentContext(imgui);
 
@@ -1083,6 +1104,7 @@ static void *x11_render_thread(void *userdata)
             x11_draw_frame(gui, xs.w, xs.h);
         }
         pthread_mutex_unlock(&s_x11_frame_lock);
+        SDL_UnlockMutex(gui->engine_lock);
 
         if (!window_alive) {
             GLOG_WARN("Host destroyed the plugin window before detach");
@@ -1149,12 +1171,14 @@ static void x11_detach(sq_plugin_gui_t *gui)
  * Public API (called from plugin.c CPLUG callbacks)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-extern "C" sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine)
+extern "C" sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine, bool *host_sync)
 {
     sq_plugin_gui_t *gui = (sq_plugin_gui_t *)calloc(1, sizeof(sq_plugin_gui_t));
     if (!gui) return nullptr;
 
     gui->engine = engine;
+    gui->host_sync = host_sync;
+    gui->engine_lock = SDL_CreateMutex();
     gui->width  = 1280;
     gui->height = 720;
     gui->scale_factor = 1.0f;
@@ -1179,10 +1203,21 @@ extern "C" sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine)
     return gui;
 }
 
+extern "C" void plugin_gui_lock(sq_plugin_gui_t *gui)
+{
+    if (gui) SDL_LockMutex(gui->engine_lock);
+}
+
+extern "C" void plugin_gui_unlock(sq_plugin_gui_t *gui)
+{
+    if (gui) SDL_UnlockMutex(gui->engine_lock);
+}
+
 extern "C" void plugin_gui_destroy(sq_plugin_gui_t *gui)
 {
     if (!gui) return;
     plugin_gui_detach(gui);
+    SDL_DestroyMutex(gui->engine_lock);
     free(gui);
 }
 

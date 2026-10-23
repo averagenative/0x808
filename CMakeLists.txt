@@ -130,6 +130,7 @@ add_library(sq_engine STATIC
     src/engine/mixer.c
     src/engine/transport.c
     src/engine/sequencer.c
+    src/engine/midi_out.c
     src/engine/envelope.c
     src/engine/synth.c
     src/engine/export.c
@@ -504,6 +505,18 @@ if(BUILD_PLUGINS)
     )
 
     message(STATUS "Plugin targets: 0x808 VST3, 0x808 CLAP")
+
+    # Loads the built CLAP in a minimal host (MIDI out, host sync, state)
+    if(UNIX AND NOT APPLE)
+        find_package(Threads REQUIRED)
+        add_executable(plugin_clap_test tests/plugin_clap_test.c ${CMAKE_SOURCE_DIR}/deps/cJSON.c)
+        target_include_directories(plugin_clap_test PRIVATE
+            ${CMAKE_SOURCE_DIR}/deps/cplug ${CMAKE_SOURCE_DIR}/deps)
+        target_compile_definitions(plugin_clap_test PRIVATE
+            PLUGIN_CLAP_PATH="$<TARGET_FILE:sequencer_clap>")
+        target_link_libraries(plugin_clap_test PRIVATE ${CMAKE_DL_LIBS} m Threads::Threads)
+        add_dependencies(plugin_clap_test sequencer_clap)
+    endif()
 endif()
 
 # ─── Engine render test (offline WAV export, no audio device needed) ─────────
@@ -627,6 +640,10 @@ target_link_libraries(fuzz_sample_io PRIVATE sq_engine ${PLATFORM_LIBS})
 add_executable(plugin_load_test tests/plugin_load_test.c)
 target_include_directories(plugin_load_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(plugin_load_test PRIVATE sq_engine ${PLATFORM_LIBS})
+
+add_executable(midi_out_test tests/midi_out_test.c)
+target_include_directories(midi_out_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(midi_out_test PRIVATE sq_engine ${PLATFORM_LIBS})
 
 add_executable(snapshot_test tests/snapshot_test.c)
 target_include_directories(snapshot_test PRIVATE ${CMAKE_SOURCE_DIR}/src)

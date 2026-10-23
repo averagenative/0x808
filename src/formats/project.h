@@ -28,6 +28,24 @@ int project_save(const sq_engine_t *engine, const char *filepath);
  */
 int project_load(sq_engine_t *engine, const char *filepath);
 
+/*
+ * The JSON tree behind the two functions above, for callers that store a
+ * project somewhere other than a file (the plugin keeps it in the host's
+ * project). project_to_json() returns a tree the caller frees with
+ * cJSON_Delete(), or NULL on failure.
+ */
+struct cJSON;
+struct cJSON *project_to_json(const sq_engine_t *engine);
+
+/*
+ * Restore engine state from a project JSON tree. The engine is re-initialized
+ * at the tree's "sample_rate". If load_samples is NULL, samples load from the
+ * saved paths; otherwise the engine skips the paths and calls load_samples
+ * to load them. Returns 0 on success, -1 on failure.
+ */
+int project_from_json(sq_engine_t *engine, const struct cJSON *root,
+                      void (*load_samples)(sq_engine_t *engine));
+
 #ifdef __cplusplus
 }
 #endif

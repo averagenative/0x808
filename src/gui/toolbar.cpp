@@ -180,6 +180,8 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
 
     /* ── Transport: PLAY/STOP ──────────────────────────────────────── */
     bool was_playing = engine->transport.playing;
+    /* Plugin in HOST mode: the host's transport drives play/stop and tempo */
+    bool host_clock = p->host_sync && *p->host_sync;
     {
         if (!is_plugin) {
             /* Standalone: glow behind play button */
@@ -192,6 +194,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
             }
         }
     }
+    if (host_clock) ImGui::BeginDisabled();
     if (ImGui::Button(was_playing ? "STOP" : "PLAY", ImVec2(60, btn_h))) {
         bool new_state = !engine->transport.playing;
         engine->transport.playing = new_state;
@@ -213,6 +216,30 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
     }
     if (!is_plugin && was_playing)
         ImGui::PopStyleColor(2);
+    if (host_clock) {
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            SQ_TOOLTIP("Playback follows the host's transport");
+    }
+
+    /* ── Plugin clock: HOST (follow the host) or INT (own clock) ──── */
+    if (p->host_sync) {
+        ImGui::SameLine();
+        if (host_clock)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.55f, 0.20f, 1.0f));
+        if (ImGui::Button(host_clock ? "HOST" : "INT", ImVec2(45, btn_h)))
+            *p->host_sync = !*p->host_sync;
+        if (host_clock)
+            ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            if (host_clock)
+                SQ_TOOLTIP("Clock: HOST. The host's play/stop, tempo, and position "
+                           "drive the sequencer. Click to use the plugin's own clock.");
+            else
+                SQ_TOOLTIP("Clock: INT. The plugin plays on its own clock with "
+                           "PLAY and BPM. Click to follow the host.");
+        }
+    }
 
     ImGui::SameLine();
 
@@ -315,6 +342,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
     {
         ImGui::Text("BPM"); ImGui::SameLine();
         float bpm_f = (float)engine->transport.bpm;
+        if (host_clock) ImGui::BeginDisabled();
         ImGui::PushID("bpm_knob");
         ImVec2 kpos = ImGui::GetCursorScreenPos();
         if (knob_core_ext("##bpm", &bpm_f, 40.0f, 300.0f, 120.0f, 1.0f, kpos.x, kpos.y, knob_sz, knob_sz))
@@ -326,6 +354,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         ImGui::Text("%s", bpm_txt);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - knob_label_off);
         ImGui::PopID();
+        if (host_clock) ImGui::EndDisabled();
     }
 
     /* ── Tap Tempo button ─────────────────────────────────────────── */
@@ -334,6 +363,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
         static uint64_t s_tap_times[4] = {0};
         static int s_tap_count = 0;
 
+        if (host_clock) ImGui::BeginDisabled();
         if (ImGui::Button("TAP", ImVec2(36, btn_h))) {
             uint64_t now_us = (uint64_t)(
                 (double)SDL_GetPerformanceCounter() /
@@ -360,6 +390,7 @@ extern "C" void toolbar_draw(const sq_toolbar_params_t *p)
                 }
             }
         }
+        if (host_clock) ImGui::EndDisabled();
         if (ImGui::IsItemHovered()) SQ_TOOLTIP("Tap Tempo (Ctrl+T)");
     }
 

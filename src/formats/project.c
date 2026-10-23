@@ -314,12 +314,12 @@ static cJSON *effect_slot_to_json(const sq_effect_slot_t *slot)
 
 /* ─── Save ───────────────────────────────────────────────────────────────── */
 
-int project_save(const sq_engine_t *engine, const char *filepath)
+cJSON *project_to_json(const sq_engine_t *engine)
 {
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         LOG_ERROR("Failed to allocate root JSON object");
-        return -1;
+        return NULL;
     }
     cJSON_AddNumberToObject(root, "version", 1);
     cJSON_AddNumberToObject(root, "bpm", engine->transport.bpm);
@@ -346,7 +346,7 @@ int project_save(const sq_engine_t *engine, const char *filepath)
     if (!samples) {
         LOG_ERROR("Failed to allocate sample_paths JSON array");
         cJSON_Delete(root);
-        return -1;
+        return NULL;
     }
     for (uint32_t i = 0; i < engine->num_samples; i++) {
         const char *path = engine->samples[i].filepath[0]
@@ -379,7 +379,7 @@ int project_save(const sq_engine_t *engine, const char *filepath)
     if (!presets) {
         LOG_ERROR("Failed to allocate synth_presets JSON array");
         cJSON_Delete(root);
-        return -1;
+        return NULL;
     }
     for (uint32_t i = 0; i < engine->num_synth_presets; i++) {
         cJSON_AddItemToArray(presets, preset_to_json(&engine->synth_presets[i]));
@@ -391,7 +391,7 @@ int project_save(const sq_engine_t *engine, const char *filepath)
     if (!patterns) {
         LOG_ERROR("Failed to allocate patterns JSON array");
         cJSON_Delete(root);
-        return -1;
+        return NULL;
     }
     for (uint32_t p = 0; p < engine->num_patterns; p++) {
         const sq_pattern_t *pat = &engine->patterns[p];
@@ -434,6 +434,14 @@ int project_save(const sq_engine_t *engine, const char *filepath)
         cJSON_AddItemToArray(mfx, effect_slot_to_json(&engine->master_effects[i]));
     }
     cJSON_AddItemToObject(root, "master_effects", mfx);
+
+    return root;
+}
+
+int project_save(const sq_engine_t *engine, const char *filepath)
+{
+    cJSON *root = project_to_json(engine);
+    if (!root) return -1;
 
     /* Write to file */
     char *json_str = cJSON_Print(root);
@@ -698,14 +706,25 @@ int project_load(sq_engine_t *engine, const char *filepath)
     fclose(f);
 
     cJSON *root = cJSON_Parse(json_str);
-    const char *parse_err = cJSON_GetErrorPtr(); /* save before free */
-    free(json_str);
-
     if (!root) {
-        LOG_ERROR("Failed to parse JSON: %s", parse_err ? parse_err : "(unknown)");
+        /* The error pointer points into json_str: log before freeing it */
+        const char *parse_err = cJSON_GetErrorPtr();
+        LOG_ERROR("Failed to parse JSON: %.40s", parse_err ? parse_err : "(unknown)");
+        free(json_str);
         return -1;
     }
+    free(json_str);
 
+    int rc = project_from_json(engine, root, NULL);
+    cJSON_Delete(root);
+    if (rc == 0)
+        LOG_INFO("Project loaded: %s", filepath);
+    return rc;
+}
+
+int project_from_json(sq_engine_t *engine, const cJSON *root,
+                      void (*load_samples)(sq_engine_t *engine))
+{
     /* Preserve base_dir across re-init (sq_engine_init memsets to zero) */
     char saved_base_dir[512];
     memcpy(saved_base_dir, engine->base_dir, sizeof(saved_base_dir));
@@ -773,8 +792,11 @@ int project_load(sq_engine_t *engine, const char *filepath)
 
     /* Load samples (by path — try to find them).
      * Skip if samples are already loaded with matching names (e.g., autosave
-     * restoring after demo pattern already loaded the same kit). */
-    cJSON *samples = cJSON_GetObjectItem(root, "sample_paths");
+     * restoring after demo pattern already loaded the same kit). A caller
+     * with its own samples (the plugin's built-in kit) loads them instead. */
+    cJSON *samples = load_samples ? NULL : cJSON_GetObjectItem(root, "sample_paths");
+    if (load_samples)
+        load_samples(engine);
     if (samples && cJSON_IsArray(samples)) {
         int n = cJSON_GetArraySize(samples);
 
@@ -1107,9 +1129,8 @@ int project_load(sq_engine_t *engine, const char *filepath)
         }
     }
 
-    cJSON_Delete(root);
-    LOG_INFO("Project loaded: %s (samples=%d, presets=%d, patterns=%d)",
-             filepath, engine->num_samples, engine->num_synth_presets,
+    LOG_INFO("Project state applied (samples=%d, presets=%d, patterns=%d)",
+             engine->num_samples, engine->num_synth_presets,
              engine->num_patterns);
     /* Log first pattern tracks for debugging */
     if (engine->num_patterns > 0) {

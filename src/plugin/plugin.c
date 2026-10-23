@@ -11,6 +11,8 @@
 
 #include <cplug.h>
 #include <math.h>
+#include <stdatomic.h>
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -18,6 +20,11 @@
 #include "engine/engine.h"
 #include "engine/sampler.h"
 #include "engine/synth.h"
+#include "engine/envelope.h"
+#include "engine/midi_out.h"
+#include "formats/sf2.h"
+#include "formats/project.h"
+#include "cJSON.h"
 #include "formats/sample_io.h"
 #include "plugin/embedded_samples.h"
 
@@ -165,7 +172,60 @@ typedef struct {
 #else
     void             *gui;
 #endif
+
+    /* Host sync: when on, the host's transport drives the sequencer.
+     * host_sync is the setting (GUI thread writes it); the rest is
+     * audio-thread state. */
+    bool              host_sync;
+    bool              host_sync_active;     /* host_sync as of the last block */
+    bool              host_was_playing;
+    double            host_expected_beats;  /* where the host should be next */
+
+    /* Rebuilding the engine (state load, sample rate change) pauses the
+     * audio thread and the GUI; see engine_pause() */
+    atomic_int        engine_paused;
+    atomic_int        in_process;           /* audio thread is in cplug_process */
 } SqPlugin;
+
+
+/* ─── Pausing the engine while it's rebuilt ─────────────────────────────── */
+
+static void sleep_ms(int ms)
+{
+#ifdef _WIN32
+    Sleep((DWORD)ms);
+#else
+    struct timespec ts = { ms / 1000, (long)(ms % 1000) * 1000000L };
+    nanosleep(&ts, NULL);
+#endif
+}
+
+/*
+ * Hosts load state on their main thread while audio keeps running (REAPER
+ * does it on every undo). Loading re-initializes the engine and frees its
+ * samples and effect buffers, so first stop the audio thread from using it
+ * (cplug_process outputs silence while engine_paused is set) and hold off
+ * the GUI. The two flags work as a handshake: the loader sets engine_paused
+ * and then waits out in_process; the audio thread sets in_process and then
+ * checks engine_paused. Main thread only.
+ */
+static void engine_pause(SqPlugin *p)
+{
+    atomic_store(&p->engine_paused, 1);
+    while (atomic_load(&p->in_process))
+        sleep_ms(1);
+#ifndef SQ_PLUGIN_NO_GUI
+    plugin_gui_lock(p->gui);
+#endif
+}
+
+static void engine_resume(SqPlugin *p)
+{
+#ifndef SQ_PLUGIN_NO_GUI
+    plugin_gui_unlock(p->gui);
+#endif
+    atomic_store(&p->engine_paused, 0);
+}
 
 /* ─── Helper: find parameter def index by ID ─────────────────────────────── */
 
@@ -434,6 +494,7 @@ void *cplug_createPlugin(CplugHostContext *ctx)
 
     p->host = ctx;
     p->sample_rate = 44100.0;
+    p->host_sync = true;
 
     /* Initialize engine with default sample rate (host will call setSampleRate before processing) */
     sq_engine_init(&p->engine, 44100);
@@ -483,19 +544,47 @@ void cplug_getOutputBusName(void *ptr, uint32_t idx, char *buf, size_t buflen)
 uint32_t cplug_getLatencyInSamples(void *ptr) { (void)ptr; return 0; }
 uint32_t cplug_getTailInSamples(void *ptr)    { (void)ptr; return 0; }
 
+/* Rebuild the engine from a project JSON tree at the given sample rate,
+ * with the plugin's built-in samples. Call with the engine paused. */
+static int apply_project(SqPlugin *p, cJSON *project, uint32_t sample_rate)
+{
+    cJSON *sr = cJSON_CreateNumber((double)sample_rate);
+    if (cJSON_GetObjectItem(project, "sample_rate"))
+        cJSON_ReplaceItemInObject(project, "sample_rate", sr);
+    else
+        cJSON_AddItemToObject(project, "sample_rate", sr);
+    return project_from_json(&p->engine, project, load_embedded_samples);
+}
+
+static void set_current_pattern(SqPlugin *p, int pattern)
+{
+    if (pattern >= 0 && (uint32_t)pattern < p->engine.num_patterns)
+        p->engine.transport.current_pattern = pattern;
+}
+
 void cplug_setSampleRateAndBlockSize(void *ptr, double sampleRate, uint32_t maxBlockSize)
 {
     SqPlugin *p = (SqPlugin *)ptr;
     p->sample_rate    = sampleRate;
     p->max_block_size = maxBlockSize;
 
-    /* Re-init engine at new sample rate */
-    sq_engine_shutdown(&p->engine);
-    sq_engine_init(&p->engine, (uint32_t)sampleRate);
+    /* Re-init the engine at the new sample rate, keeping the project */
+    engine_pause(p);
+    int pattern = p->engine.transport.current_pattern;
+    cJSON *project = project_to_json(&p->engine);
+    if (project && apply_project(p, project, (uint32_t)sampleRate) == 0) {
+        set_current_pattern(p, pattern);
+    } else {
+        sq_engine_shutdown(&p->engine);
+        sq_engine_init(&p->engine, (uint32_t)sampleRate);
+        load_embedded_samples(&p->engine);
+        setup_plugin_demo_pattern(&p->engine);
+    }
+    cJSON_Delete(project);
 
-    /* Reload embedded samples and demo pattern after re-init */
-    load_embedded_samples(&p->engine);
-    setup_plugin_demo_pattern(&p->engine);
+    /* The engine stopped: host sync re-locates on the next playing block */
+    p->host_was_playing = false;
+    engine_resume(p);
 
     /* Allocate interleave conversion buffer */
     free(p->interleave_buf);
@@ -508,16 +597,127 @@ void cplug_setSampleRateAndBlockSize(void *ptr, double sampleRate, uint32_t maxB
     }
 }
 
+/* ─── Host transport sync ────────────────────────────────────────────────── */
+
+/* Playhead moves bigger than this (about a fifth of a step) are seeks or
+ * loop wraps; smaller ones are drift from tempo changes inside a block */
+#define HOST_JUMP_BEATS 0.05
+
+/*
+ * With host sync on, the host's play/stop, tempo, and playhead drive the
+ * sequencer. While the host plays straight through, the engine runs at the
+ * host tempo and is nudged onto the host's position each block. A play
+ * start, seek, or loop wrap re-locates it. With host sync off, the plugin
+ * runs its own clock like a hardware groove box and ignores the host.
+ */
+static void host_sync_update(SqPlugin *p, const CplugProcessContext *ctx)
+{
+    sq_engine_t *e = &p->engine;
+    bool sync = p->host_sync;
+
+    /* Switching modes stops whatever the other clock was playing */
+    if (sync != p->host_sync_active) {
+        if (e->transport.playing) sq_engine_stop(e);
+        p->host_sync_active = sync;
+        p->host_was_playing = false;
+    }
+    if (!sync) return;
+
+    if ((ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_BPM) && ctx->bpm > 0.0)
+        e->transport.bpm = ctx->bpm;
+
+    bool host_playing = (ctx->flags & CPLUG_FLAG_TRANSPORT_IS_PLAYING) != 0;
+    double block_beats = (double)ctx->numFrames * e->transport.bpm / 60.0
+                       / (double)e->sample_rate;
+    double beats;
+    if (ctx->flags & CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS)
+        beats = ctx->playheadBeats;
+    else
+        beats = p->host_was_playing ? p->host_expected_beats : 0.0;
+
+    /* Stopped, or in a count-in before the project start */
+    if (!host_playing || beats < 0.0) {
+        if (e->transport.playing) sq_engine_stop(e);
+        p->host_was_playing = false;
+        return;
+    }
+
+    if (!p->host_was_playing || fabs(beats - p->host_expected_beats) > HOST_JUMP_BEATS)
+        sq_engine_locate(e, beats, block_beats);
+    else
+        e->transport.current_beat += beats - p->host_expected_beats;
+
+    p->host_was_playing = true;
+    p->host_expected_beats = beats + block_beats;
+}
+
+/* Play an incoming note on the track it maps to (see engine/midi_out.h) */
+static void handle_midi_input(sq_engine_t *engine, const CplugEvent *event)
+{
+    uint8_t status  = event->midi.status & 0xF0;
+    int     channel = event->midi.status & 0x0F;
+    uint8_t note    = event->midi.data1;
+    uint8_t vel     = event->midi.data2;
+    bool note_on  = status == 0x90 && vel > 0;
+    bool note_off = status == 0x80 || (status == 0x90 && vel == 0);
+    if (!note_on && !note_off) return;
+
+    int pat = engine->transport.current_pattern;
+    if (pat < 0 || (uint32_t)pat >= engine->num_patterns) return;
+    sq_pattern_t *pattern = &engine->patterns[pat];
+    int t = sq_midi_find_track(pattern, channel, note);
+    if (t < 0) return;
+    sq_track_t *track = &pattern->tracks[t];
+
+    if (note_on) {
+        float v = (float)vel / 127.0f;
+        if (track->type == TRACK_SAMPLER && track->sample_index >= 0)
+            sampler_trigger(engine, track->sample_index, v, 0,
+                            track->volume, track->pan, t);
+        else if (track->type == TRACK_SYNTH && track->synth_preset >= 0)
+            synth_trigger(engine, track->synth_preset, v, 0,
+                          track->volume, track->pan, note, t);
+        else if (track->type == TRACK_SF2 && track->sf2_preset >= 0)
+            sf2_note_on(engine, track->sf2_preset, note, v * track->volume);
+        return;
+    }
+
+    /* Note off: drum samples play out; release this track's synth note */
+    if (track->type == TRACK_SYNTH) {
+        float freq = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
+        for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++) {
+            sq_synth_voice_t *voice = &engine->synth_voices[v];
+            int pi = voice->preset_index;
+            if (voice->active && voice->track_index == t &&
+                fabsf(voice->frequency - freq) < 0.1f &&
+                pi >= 0 && (uint32_t)pi < engine->num_synth_presets)
+                envelope_release(&voice->amp_env, &engine->synth_presets[pi].amp_env,
+                                 engine->sample_rate);
+        }
+    } else if (track->type == TRACK_SF2 && track->sf2_preset >= 0) {
+        sf2_note_off(engine, track->sf2_preset, note);
+    }
+}
+
 void cplug_process(void *ptr, CplugProcessContext *ctx)
 {
     SqPlugin *p = (SqPlugin *)ptr;
     sq_engine_t *engine = &p->engine;
 
-    /* ── Internal transport (independent from DAW host) ─────────── */
-    /* The plugin runs its own clock like a hardware groove box.
-     * GUI controls play/stop/BPM; the DAW just captures audio output.
-     * Host transport state (ctx->flags) is intentionally ignored.
-     * TODO: Add an "Internal / Host Sync" toggle if host-sync is needed. */
+    /* The engine is being rebuilt (state load): output silence */
+    atomic_store(&p->in_process, 1);
+    if (atomic_load(&p->engine_paused)) {
+        float **output = ctx->getAudioOutput(ctx, 0);
+        if (output && output[0] && output[1]) {
+            memset(output[0], 0, ctx->numFrames * sizeof(float));
+            memset(output[1], 0, ctx->numFrames * sizeof(float));
+        }
+        atomic_store(&p->in_process, 0);
+        return;
+    }
+
+    engine->midi_out_enabled = true;
+    host_sync_update(p, ctx);
 
     /* ── Event-driven process loop ──────────────────────────────── */
     CplugEvent event;
@@ -533,41 +733,8 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
             break;
 
         case CPLUG_EVENT_MIDI:
-        {
-            /* Forward MIDI note events to the engine's synth voices */
-            uint8_t status = event.midi.status & 0xF0;
-            uint8_t note   = event.midi.data1;
-            uint8_t vel    = event.midi.data2;
-
-            if (status == 0x90 && vel > 0) {
-                /* Note On — use synth_trigger() for proper voice init */
-                int pat = engine->transport.current_pattern;
-                if (pat < 0 || (uint32_t)pat >= engine->num_patterns) break;
-                for (uint32_t t = 0; t < engine->patterns[pat].num_tracks; t++) {
-                    if (engine->patterns[pat].tracks[t].type == TRACK_SYNTH) {
-                        synth_trigger(engine,
-                                      engine->patterns[pat].tracks[t].synth_preset,
-                                      (float)vel / 127.0f,
-                                      0, /* pitch_offset */
-                                      engine->patterns[pat].tracks[t].volume,
-                                      engine->patterns[pat].tracks[t].pan,
-                                      note, (int)t);
-                        break; /* only trigger on first synth track */
-                    }
-                }
-            }
-            else if (status == 0x80 || (status == 0x90 && vel == 0)) {
-                /* Note Off — release matching synth voices */
-                float freq = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
-                for (int v = 0; v < SQ_MAX_SYNTH_VOICES; v++) {
-                    if (engine->synth_voices[v].active &&
-                        fabsf(engine->synth_voices[v].frequency - freq) < 0.1f) {
-                        engine->synth_voices[v].amp_env.stage = ENV_RELEASE;
-                    }
-                }
-            }
+            handle_midi_input(engine, &event);
             break;
-        }
 
         case CPLUG_EVENT_PROCESS_AUDIO:
         {
@@ -576,6 +743,18 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
             /* Engine renders into interleaved buffer */
             if (num_frames <= p->interleave_buf_frames) {
                 sq_engine_process(engine, p->interleave_buf, num_frames);
+
+                /* The sequencer's notes go out on the MIDI output port */
+                for (uint32_t i = 0; i < engine->midi_out_count; i++) {
+                    const sq_midi_event_t *m = &engine->midi_out[i];
+                    CplugEvent out;
+                    memset(&out, 0, sizeof(out));
+                    out.midi.type   = CPLUG_EVENT_MIDI;
+                    out.midi.status = m->status;
+                    out.midi.data1  = m->data1;
+                    out.midi.data2  = m->data2;
+                    ctx->enqueueEvent(ctx, &out, frame + m->frame);
+                }
 
                 /* De-interleave into CPLUG's non-interleaved output */
                 float **output = ctx->getAudioOutput(ctx, 0);
@@ -595,6 +774,8 @@ void cplug_process(void *ptr, CplugProcessContext *ctx)
             break;
         }
     }
+
+    atomic_store(&p->in_process, 0);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -734,38 +915,135 @@ void cplug_parameterValueToString(void *ptr, uint32_t paramId, char *buf, size_t
  * State Persistence
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Simple binary state: save all param values */
+/*
+ * Saved state: STATE_MAGIC, then a JSON object
+ *   { "plugin":  { "host_sync": true, "current_pattern": 0 },
+ *     "project": { the same JSON as a .sqproj project file } }
+ * Before 1.5 the state was only an array of { id, value } parameter pairs;
+ * loading one of those still applies its parameters.
+ */
+#define STATE_MAGIC "0x808 plugin state 1\n"
+#define STATE_MAX_BYTES (64u * 1024u * 1024u)
+
+/* Pre-1.5 state entry */
 struct sq_param_state {
     uint32_t id;
     double   value;
 };
 
+/* Hosts' streams may take or return fewer bytes than asked for */
+static bool write_all(const void *stateCtx, cplug_writeProc writeProc,
+                      const char *data, size_t len)
+{
+    while (len > 0) {
+        int64_t n = writeProc(stateCtx, (void *)data, len);
+        if (n <= 0) return false;
+        data += n;
+        len  -= (size_t)n;
+    }
+    return true;
+}
+
+/* Read the whole stream into a NUL-terminated buffer (caller frees) */
+static char *read_all(const void *stateCtx, cplug_readProc readProc, size_t *out_len)
+{
+    size_t cap = 4096, len = 0;
+    char *buf = (char *)malloc(cap + 1);
+    if (!buf) return NULL;
+    for (;;) {
+        if (len == cap) {
+            if (cap >= STATE_MAX_BYTES) break;
+            char *grown = (char *)realloc(buf, cap * 2 + 1);
+            if (!grown) break;
+            buf = grown;
+            cap *= 2;
+        }
+        int64_t n = readProc(stateCtx, buf + len, cap - len);
+        if (n <= 0) break;
+        len += (size_t)n;
+    }
+    buf[len] = '\0';
+    *out_len = len;
+    return buf;
+}
+
 void cplug_saveState(void *userPlugin, const void *stateCtx, cplug_writeProc writeProc)
 {
     SqPlugin *p = (SqPlugin *)userPlugin;
-    struct sq_param_state state[NUM_PARAMS];
 
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        state[i].id    = PARAM_DEFS[i].id;
-        state[i].value = read_param_from_engine(p, PARAM_DEFS[i].id);
+    /* Read while audio and GUI keep running: at worst an edit made during
+     * the save is half in it, which the host's next save picks up */
+    cJSON *state = cJSON_CreateObject();
+    cJSON *plugin = cJSON_AddObjectToObject(state, "plugin");
+    cJSON_AddBoolToObject(plugin, "host_sync", p->host_sync);
+    cJSON_AddNumberToObject(plugin, "current_pattern", p->engine.transport.current_pattern);
+    cJSON *project = project_to_json(&p->engine);
+    if (project)
+        cJSON_AddItemToObject(state, "project", project);
+    char *json = cJSON_PrintUnformatted(state);
+    cJSON_Delete(state);
+    if (!json) {
+        PLOG_ERROR("Failed to serialize plugin state");
+        return;
     }
-    writeProc(stateCtx, state, sizeof(state));
+
+    if (!write_all(stateCtx, writeProc, STATE_MAGIC, strlen(STATE_MAGIC)) ||
+        !write_all(stateCtx, writeProc, json, strlen(json)))
+        PLOG_ERROR("Host stream refused the plugin state");
+    cJSON_free(json);
+}
+
+static void load_project_state(SqPlugin *p, const char *json)
+{
+    cJSON *state = cJSON_Parse(json);
+    if (!state) {
+        PLOG_ERROR("Plugin state isn't valid JSON; keeping the current project");
+        return;
+    }
+    cJSON *plugin  = cJSON_GetObjectItem(state, "plugin");
+    cJSON *project = cJSON_GetObjectItem(state, "project");
+
+    engine_pause(p);
+    if (cJSON_IsObject(project) &&
+        apply_project(p, project, p->engine.sample_rate) != 0)
+        PLOG_ERROR("Failed to restore the project from plugin state");
+    if (cJSON_IsObject(plugin)) {
+        cJSON *v = cJSON_GetObjectItem(plugin, "host_sync");
+        if (cJSON_IsBool(v)) p->host_sync = cJSON_IsTrue(v);
+        v = cJSON_GetObjectItem(plugin, "current_pattern");
+        if (cJSON_IsNumber(v)) set_current_pattern(p, v->valueint);
+    }
+    /* The engine stopped: host sync re-locates on the next playing block */
+    p->host_was_playing = false;
+    engine_resume(p);
+
+    cJSON_Delete(state);
+}
+
+static void load_legacy_params(SqPlugin *p, const char *data, size_t len)
+{
+    size_t count = len / sizeof(struct sq_param_state);
+    for (size_t i = 0; i < count; i++) {
+        struct sq_param_state entry;
+        memcpy(&entry, data + i * sizeof(entry), sizeof(entry));
+        if (param_index_from_id(entry.id) >= 0)
+            cplug_setParameterValue(p, entry.id, entry.value);
+    }
 }
 
 void cplug_loadState(void *userPlugin, const void *stateCtx, cplug_readProc readProc)
 {
     SqPlugin *p = (SqPlugin *)userPlugin;
-    struct sq_param_state state[NUM_PARAMS * 2]; /* extra space for forward compat */
+    size_t len = 0;
+    char *data = read_all(stateCtx, readProc, &len);
+    if (!data) return;
 
-    int64_t bytes = readProc(stateCtx, state, sizeof(state));
-    if (bytes <= 0) return;
-
-    size_t count = (size_t)bytes / sizeof(struct sq_param_state);
-    for (size_t i = 0; i < count && i < NUM_PARAMS * 2; i++) {
-        int idx = param_index_from_id(state[i].id);
-        if (idx >= 0)
-            cplug_setParameterValue(p, state[i].id, state[i].value);
-    }
+    size_t magic_len = strlen(STATE_MAGIC);
+    if (len >= magic_len && memcmp(data, STATE_MAGIC, magic_len) == 0)
+        load_project_state(p, data + magic_len);
+    else
+        load_legacy_params(p, data, len);
+    free(data);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -778,7 +1056,7 @@ void *cplug_createGUI(void *userPlugin)
 {
     PLOG_INFO("cplug_createGUI called: userPlugin=%p", userPlugin);
     SqPlugin *p = (SqPlugin *)userPlugin;
-    p->gui = plugin_gui_create(&p->engine);
+    p->gui = plugin_gui_create(&p->engine, &p->host_sync);
     PLOG_INFO("cplug_createGUI: gui=%p", (void*)p->gui);
     return p->gui;
 }

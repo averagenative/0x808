@@ -35,7 +35,7 @@ fi
 # Build all test targets
 echo "--- Building tests ---"
 cd "$BUILD_DIR"
-make -j$(nproc) engine_render_test export_test project_test fm_synth_test swing_humanize_test effects_test synth_test wavetable_test undo_test malformed_input_test edge_case_test gui_feature_test fuzz_project fuzz_sample_io plugin_load_test snapshot_test 2>&1 || fail "Build failed"
+make -j$(nproc) engine_render_test export_test project_test fm_synth_test swing_humanize_test midi_out_test effects_test synth_test wavetable_test undo_test malformed_input_test edge_case_test gui_feature_test fuzz_project fuzz_sample_io plugin_load_test plugin_clap_test snapshot_test 2>&1 || fail "Build failed"
 echo ""
 
 # Run tests from project root (tests load samples/ relative to CWD)
@@ -77,6 +77,13 @@ if [ -f "${BUILD_DIR}/swing_humanize_test" ]; then
     "${BUILD_DIR}/swing_humanize_test" > /dev/null 2>&1 && pass "swing_humanize_test" || fail "swing_humanize_test"
 else
     skip "swing_humanize_test (not built)"
+fi
+
+# MIDI output / sample-accurate timing / host-sync locate test
+if [ -f "${BUILD_DIR}/midi_out_test" ]; then
+    "${BUILD_DIR}/midi_out_test" > /dev/null 2>&1 && pass "midi_out_test" || fail "midi_out_test"
+else
+    skip "midi_out_test (not built)"
 fi
 
 # Effects DSP test
@@ -147,6 +154,13 @@ if [ -f "${BUILD_DIR}/plugin_load_test" ]; then
     "${BUILD_DIR}/plugin_load_test" > /dev/null 2>&1 && pass "plugin_load_test" || fail "plugin_load_test"
 else
     skip "plugin_load_test (not built)"
+fi
+
+# CLAP plugin in a minimal host: MIDI output, host sync, state (Linux)
+if [ -f "${BUILD_DIR}/plugin_clap_test" ]; then
+    "${BUILD_DIR}/plugin_clap_test" > /dev/null 2>&1 && pass "plugin_clap_test" || fail "plugin_clap_test"
+else
+    skip "plugin_clap_test (not built)"
 fi
 
 # Snapshot regression test

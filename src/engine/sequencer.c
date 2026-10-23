@@ -17,6 +17,7 @@
 #include "engine/sampler.h"
 #include "engine/synth.h"
 #include "engine/envelope.h"
+#include "engine/midi_out.h"
 #include "formats/sf2.h"
 
 /*
@@ -138,6 +139,17 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
             if (vel > 1.0f)  vel = 1.0f;
         }
 
+        /* MIDI note length: drum hits last half a step, synth notes their
+         * step length (one step if unset), ratchets half their interval */
+        double step_frames = (60.0 / engine->transport.bpm / 4.0) *
+                             (double)engine->sample_rate;
+        double midi_len = (track->type == TRACK_SAMPLER) ? step_frames * 0.5
+                        : (s->length > 0.0f ? s->length * step_frames : step_frames);
+        if (s->retrigger >= 2 && s->retrigger <= 4 &&
+            midi_len > step_frames / s->retrigger * 0.5)
+            midi_len = step_frames / s->retrigger * 0.5;
+        uint32_t note_len = (uint32_t)midi_len;
+
         /* Micro-timing offset + timing humanize → delay trigger */
         float total_offset = s->micro_offset;
         if (track->timing_humanize > 0.0f) {
@@ -160,6 +172,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
                         engine->retriggers[ri].vel_decay = 1.0f;
                         engine->retriggers[ri].pitch_offset = s->pitch_offset;
                         engine->retriggers[ri].note      = s->note;
+                        engine->retriggers[ri].note_len  = note_len;
                         break;
                     }
                 }
@@ -205,6 +218,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
             sampler_trigger(engine, track->sample_index,
                            vel, s->pitch_offset,
                            track->volume, track->pan, (int)t);
+            sq_midi_out_note(engine, (int)t, s->note, s->pitch_offset, vel, note_len);
             /* Apply sample clip start/end/reverse from track settings */
             if (track->sample_start > 0 || track->sample_end > 0 || track->sample_reverse) {
                 /* Find the voice we just triggered (most recently started) */
@@ -225,6 +239,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
                                    vel, s->pitch_offset,
                                    track->volume, track->pan, s->note,
                                    (int)t);
+            sq_midi_out_note(engine, (int)t, s->note, s->pitch_offset, vel, note_len);
 
             /* Apply parameter locks to the voice (not the preset).
              * param[0] = filter cutoff override (>0)
@@ -258,6 +273,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
             if (key < 0) key = 0;
             if (key > 127) key = 127;
             sf2_note_on(engine, track->sf2_preset, key, vel * track->volume);
+            sq_midi_out_note(engine, (int)t, s->note, s->pitch_offset, vel, note_len);
         }
 
         /* Schedule retriggers (note repeat / ratcheting) */
@@ -276,6 +292,7 @@ void sequencer_trigger_step(sq_engine_t *engine, int step)
                         engine->retriggers[ri].vel_decay = 0.75f;
                         engine->retriggers[ri].pitch_offset = s->pitch_offset;
                         engine->retriggers[ri].note      = s->note;
+                        engine->retriggers[ri].note_len  = note_len;
                         break;
                     }
                 }

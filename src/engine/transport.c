@@ -30,6 +30,20 @@
 /* Steps per beat — we use 16th note resolution (4 steps per quarter note) */
 #define STEPS_PER_BEAT 4
 
+/*
+ * Positions a hair short of a step boundary come from float error, or from
+ * a host playhead in fixed point (CLAP: 1/2^31 beat, about 5e-10). Rounding
+ * frames up past such a boundary would start the step a frame late, so:
+ *   - transport_frames_to_next_step() ignores the last BOUNDARY_TOL beats
+ *     before a boundary when it rounds up to whole frames, and
+ *   - a beat within BEAT_EPS of a boundary counts as on it.
+ * BEAT_EPS > BOUNDARY_TOL, so a segment that rounds down onto a boundary
+ * still lands on the new step. Both are far below a frame (1e-7 beats is
+ * 0.0024 frames at 120 BPM and 48 kHz).
+ */
+#define BEAT_EPS     1e-7
+#define BOUNDARY_TOL 1e-8
+
 void transport_init(sq_transport_t *transport)
 {
     transport->bpm             = 120.0;
@@ -58,6 +72,7 @@ void transport_init(sq_transport_t *transport)
  */
 static int beat_to_step(double beat, float swing)
 {
+    beat += BEAT_EPS;
     double sw = (double)swing * (1.0 / 6.0);
     int base_beat = (int)floor(beat);
     double frac = beat - (double)base_beat;
@@ -74,6 +89,44 @@ static int beat_to_step(double beat, float swing)
         step_in_beat = 3;
 
     return base_beat * STEPS_PER_BEAT + step_in_beat;
+}
+
+int transport_beat_to_step(double beat, float swing)
+{
+    return beat_to_step(beat, swing);
+}
+
+/* Inverse of beat_to_step(): odd steps start late by the swing offset */
+double transport_step_start_beat(int abs_step, float swing)
+{
+    int beat = abs_step / STEPS_PER_BEAT;
+    int step_in_beat = abs_step % STEPS_PER_BEAT;
+    if (step_in_beat < 0) {
+        step_in_beat += STEPS_PER_BEAT;
+        beat--;
+    }
+    double start = (double)beat + (double)step_in_beat / STEPS_PER_BEAT;
+    if (step_in_beat & 1)
+        start += (double)swing * (1.0 / 6.0);
+    return start;
+}
+
+uint32_t transport_frames_to_next_step(const sq_transport_t *transport,
+                                       uint32_t sample_rate)
+{
+    if (transport->bpm <= 0.0) return UINT32_MAX;
+
+    int step = beat_to_step(transport->current_beat, transport->swing);
+    double next = transport_step_start_beat(step + 1, transport->swing);
+    double frames = (next - BOUNDARY_TOL - transport->current_beat)
+                  * 60.0 / transport->bpm * (double)sample_rate;
+
+    /* Round up to land on the boundary, but not past a boundary that falls
+     * on a whole frame and only looks fractional from rounding error */
+    frames = ceil(frames);
+    if (frames < 1.0) return 1;
+    if (frames >= 4294967295.0) return UINT32_MAX;
+    return (uint32_t)frames;
 }
 
 int transport_advance(sq_transport_t *transport, uint32_t sample_rate,

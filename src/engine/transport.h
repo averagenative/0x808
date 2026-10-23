@@ -29,6 +29,22 @@ void transport_init(sq_transport_t *transport);
 int transport_advance(sq_transport_t *transport, uint32_t sample_rate,
                       uint32_t num_frames, uint32_t pattern_length);
 
+/*
+ * Absolute step number (not wrapped to the pattern) at a beat position,
+ * with swing applied.
+ */
+int transport_beat_to_step(double beat, float swing);
+
+/* Beat position where an absolute step begins, with swing applied. */
+double transport_step_start_beat(int abs_step, float swing);
+
+/*
+ * Frames from the current position until the next step begins (at least 1).
+ * Advancing by exactly this many frames lands on the new step.
+ */
+uint32_t transport_frames_to_next_step(const sq_transport_t *transport,
+                                       uint32_t sample_rate);
+
 #ifdef __cplusplus
 }
 #endif

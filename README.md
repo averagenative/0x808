@@ -72,6 +72,32 @@ The VST3 must keep its bundle structure: copy the entire `0x808.vst3/` directory
 
 The Windows installer handles this automatically.
 
+## Using the Plugin in a DAW
+
+Your patterns, arrangement, sounds, and settings are saved with the host's project, and each 0x808 instance keeps its own. The plugin plays its built-in 808 kit.
+
+The **HOST**/**INT** button next to **PLAY** sets which clock drives the sequencer.
+
+- **HOST** (default): the host's play/stop, tempo, and position drive the sequencer. Patterns line up with the host's bars (a 16-step pattern is one 4/4 bar), and seeking or looping in the host moves the playhead. **PLAY**, **BPM**, and **TAP** follow the host.
+- **INT**: the plugin plays on its own clock with its **PLAY** button and **BPM** knob, and ignores the host's transport.
+
+### MIDI output
+
+The plugin sends every note it plays on its MIDI output, so you can record patterns as MIDI or use them to play other instruments:
+
+| Tracks | Channel | Notes |
+|--------|---------|-------|
+| Drum tracks | 10 | General MIDI drum notes by kit slot: kick 36, snare 38, closed hi-hat 42, clap 39, open hi-hat 46, cowbell 56, rim 37, high tom 50 |
+| Synth and SoundFont tracks | 1, 2, 3, and so on, in track order (skipping 10) | The notes the track plays |
+
+A drum track that plays a sample from outside the kit sends note 60 plus its track number.
+
+To record the plugin's MIDI in REAPER, arm the plugin's track, right-click its record arm button, and choose **Record: output (MIDI)** from the **Record: output** submenu.
+
+### MIDI input
+
+Notes from the host use the same layout. A note on channel 10 plays the drum track with that note, and a note on another channel plays the synth track on that channel. If no synth track uses the channel, the note plays the first synth track.
+
 ## MIDI Input
 
 USB MIDI controllers are supported on all platforms (ALSA on Linux, WinMM on Windows, CoreMIDI on macOS). Controllers are auto-detected on plug-in and auto-reconnected if unplugged and replugged.
@@ -232,7 +258,7 @@ cmake --build build_win -j$(nproc)
 
 ## Testing
 
-16 test targets covering DSP, synthesis, effects, project I/O, undo, edge cases, fuzzing, plugin loading, and snapshot regression.
+18 test targets covering DSP, synthesis, effects, project I/O, undo, edge cases, fuzzing, plugin loading, MIDI output and host sync, and snapshot regression.
 
 ```bash
 # Run the full test suite

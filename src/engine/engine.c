@@ -15,6 +15,7 @@
 #include "engine/command_queue.h"
 #include "engine/mixer.h"
 #include "engine/transport.h"
+#include "engine/midi_out.h"
 #include "engine/sequencer.h"
 #include "engine/synth.h"
 #include "engine/envelope.h"
@@ -157,6 +158,160 @@ void sq_engine_shutdown(sq_engine_t *engine)
     engine->num_wt_banks = 0;
 }
 
+void sq_engine_stop(sq_engine_t *engine)
+{
+    engine->transport.playing = false;
+    /* Release all tracked notes */
+    for (int an = 0; an < SQ_MAX_ACTIVE_NOTES; an++) {
+        if (engine->active_notes[an].remaining > 0) {
+            int vi = engine->active_notes[an].voice_index;
+            if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
+                engine->synth_voices[vi].active) {
+                int pi = engine->synth_voices[vi].preset_index;
+                if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
+                    envelope_release(&engine->synth_voices[vi].amp_env,
+                                     &engine->synth_presets[pi].amp_env,
+                                     engine->sample_rate);
+                }
+            }
+            engine->active_notes[an].remaining = 0;
+            engine->active_notes[an].voice_index = -1;
+        }
+    }
+    /* Kill ALL voices immediately on stop */
+    for (int sv = 0; sv < SQ_MAX_VOICES; sv++)
+        engine->voices[sv].active = false;
+    for (int sv = 0; sv < SQ_MAX_SYNTH_VOICES; sv++)
+        engine->synth_voices[sv].active = false;
+    /* Clear retrigger queue */
+    for (int ri = 0; ri < SQ_MAX_RETRIGGERS; ri++)
+        engine->retriggers[ri].count = 0;
+}
+
+/* Transport wrap length: the longest track (polymeter), at least 16 steps */
+static uint32_t pattern_length_of(const sq_engine_t *engine, int pat_idx)
+{
+    uint32_t pattern_length = 16;
+    if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
+        const sq_pattern_t *p = &engine->patterns[pat_idx];
+        for (uint32_t t = 0; t < p->num_tracks; t++) {
+            if (p->tracks[t].length > pattern_length)
+                pattern_length = p->tracks[t].length;
+        }
+    }
+    return pattern_length;
+}
+
+void sq_engine_locate(sq_engine_t *engine, double beats, double trigger_window)
+{
+    sq_transport_t *tr = &engine->transport;
+    if (beats < 0.0) beats = 0.0;
+
+    /* Where the engine is now, to avoid playing a step twice when a host
+     * loop jumps back to the step the engine just reached on its own */
+    bool was_playing = tr->playing;
+    int old_pattern = tr->current_pattern;
+    int old_step = tr->current_step;
+    int old_abs = transport_beat_to_step(tr->current_beat, tr->swing);
+    double old_since = tr->current_beat - transport_step_start_beat(old_abs, tr->swing);
+
+    double pattern_beats = beats;
+    if (tr->mode == MODE_SONG && engine->arrangement.num_sections > 0) {
+        /* Walk the arrangement to the section under the playhead */
+        sq_arrangement_t *arr = &engine->arrangement;
+        double start = 0.0;
+        uint32_t s;
+        for (s = 0; s < arr->num_sections; s++) {
+            int pi = arr->sections[s].pattern_index;
+            int repeats = arr->sections[s].repeat_count;
+            if (repeats < 1) repeats = 1;
+            double pass = (double)pattern_length_of(engine, pi) / 4.0;
+            if (beats < start + pass * repeats) {
+                tr->current_section = (int)s;
+                tr->section_repeat = (int)((beats - start) / pass);
+                if (pi >= 0 && (uint32_t)pi < engine->num_patterns)
+                    tr->current_pattern = pi;
+                pattern_beats = beats - start;
+                break;
+            }
+            start += pass * repeats;
+        }
+        if (s == arr->num_sections) {
+            /* Past the end of the song */
+            if (was_playing) sq_engine_stop(engine);
+            tr->current_section = 0;
+            return;
+        }
+    }
+
+    uint32_t len = pattern_length_of(engine, tr->current_pattern);
+    int abs_step = transport_beat_to_step(pattern_beats, tr->swing);
+    double since = pattern_beats - transport_step_start_beat(abs_step, tr->swing);
+
+    tr->current_beat = pattern_beats;
+    tr->current_step = abs_step % (int)len;
+    tr->pattern_completed = false;
+    tr->playing = true;
+
+    bool just_played = was_playing && old_pattern == tr->current_pattern &&
+                       old_step == tr->current_step && old_since < trigger_window;
+    tr->step0_pending = since < trigger_window && !just_played;
+}
+
+/* Song/perform mode: switch patterns when the current one wraps */
+static void handle_pattern_completed(sq_engine_t *engine)
+{
+    if (engine->transport.mode == MODE_SONG) {
+        /* Song mode: advance through arrangement sections */
+        sq_arrangement_t *arr = &engine->arrangement;
+        if (arr->num_sections > 0) {
+            int sec = engine->transport.current_section;
+            if (sec >= 0 && (uint32_t)sec < arr->num_sections) {
+                engine->transport.section_repeat++;
+                int repeats = arr->sections[sec].repeat_count;
+                if (repeats < 1) repeats = 1;
+
+                if (engine->transport.section_repeat >= repeats) {
+                    /* Move to next section */
+                    engine->transport.section_repeat = 0;
+                    engine->transport.current_section++;
+
+                    if ((uint32_t)engine->transport.current_section >= arr->num_sections) {
+                        /* End of arrangement — stop */
+                        engine->transport.playing = false;
+                        engine->transport.current_section = 0;
+                    } else {
+                        /* Switch to next section's pattern */
+                        int next_pat = arr->sections[engine->transport.current_section].pattern_index;
+                        if (next_pat >= 0 && (uint32_t)next_pat < engine->num_patterns) {
+                            engine->transport.current_pattern = next_pat;
+                            engine->transport.current_beat = 0.0;
+                            engine->transport.current_step = 0;
+                        }
+                    }
+                }
+            }
+        }
+    } else if (engine->transport.mode == MODE_PERFORM) {
+        /* Perform mode: switch to queued section at pattern boundary */
+        if (engine->transport.queued_section >= 0) {
+            sq_arrangement_t *arr = &engine->arrangement;
+            int queued = engine->transport.queued_section;
+            if ((uint32_t)queued < arr->num_sections) {
+                engine->transport.current_section = queued;
+                int next_pat = arr->sections[queued].pattern_index;
+                if (next_pat >= 0 && (uint32_t)next_pat < engine->num_patterns) {
+                    engine->transport.current_pattern = next_pat;
+                    engine->transport.current_beat = 0.0;
+                    engine->transport.current_step = 0;
+                }
+            }
+            engine->transport.queued_section = -1;
+        }
+    }
+    /* MODE_PATTERN: just loops — no action needed */
+}
+
 void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
 {
     /*
@@ -167,34 +322,7 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
         while (cmd_queue_pop(&engine->cmd_queue, &cmd)) {
             switch (cmd.type) {
             case CMD_PLAY:  engine->transport.playing = true; break;
-            case CMD_STOP:
-                engine->transport.playing = false;
-                /* Release all tracked notes */
-                for (int an = 0; an < SQ_MAX_ACTIVE_NOTES; an++) {
-                    if (engine->active_notes[an].remaining > 0) {
-                        int vi = engine->active_notes[an].voice_index;
-                        if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
-                            engine->synth_voices[vi].active) {
-                            int pi = engine->synth_voices[vi].preset_index;
-                            if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
-                                envelope_release(&engine->synth_voices[vi].amp_env,
-                                                 &engine->synth_presets[pi].amp_env,
-                                                 engine->sample_rate);
-                            }
-                        }
-                        engine->active_notes[an].remaining = 0;
-                        engine->active_notes[an].voice_index = -1;
-                    }
-                }
-                /* Kill ALL voices immediately on stop */
-                for (int sv = 0; sv < SQ_MAX_VOICES; sv++)
-                    engine->voices[sv].active = false;
-                for (int sv = 0; sv < SQ_MAX_SYNTH_VOICES; sv++)
-                    engine->synth_voices[sv].active = false;
-                /* Clear retrigger queue */
-                for (int ri = 0; ri < SQ_MAX_RETRIGGERS; ri++)
-                    engine->retriggers[ri].count = 0;
-                break;
+            case CMD_STOP:  sq_engine_stop(engine); break;
             case CMD_SET_BPM: engine->transport.bpm = cmd.f64_val; break;
             case CMD_SET_VOLUME: engine->master_volume = cmd.f32_val; break;
             case CMD_SET_SWING: engine->transport.swing = cmd.f32_val; break;
@@ -371,163 +499,145 @@ void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames)
     }
 
     /*
-     * Step 1: Advance transport and check for step changes.
-     *
-     * We need to know the pattern length so the transport can wrap.
-     * Get it from the current pattern's first track.
+     * Steps 1-3: render the buffer in segments that end exactly where the
+     * next step, sequencer note-off, or retrigger is due, and handle those
+     * events between segments. Triggers land on the right sample instead
+     * of at the start of the buffer they fall in.
      */
-    uint32_t pattern_length = 16; /* default */
-    int pat_idx = engine->transport.current_pattern;
-    if (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns) {
-        sq_pattern_t *p = &engine->patterns[pat_idx];
-        /* Use the longest track length for transport wrap (polymeter support) */
-        for (uint32_t t = 0; t < p->num_tracks; t++) {
-            if (p->tracks[t].length > pattern_length)
-                pattern_length = p->tracks[t].length;
-        }
-    }
+    if (engine->midi_out_enabled)
+        sq_midi_out_begin(engine);
 
-    /* Trigger step 0 immediately on play start */
+    /* Trigger the start step immediately on play start (or host locate) */
+    engine->midi_frame = 0;
     if (engine->transport.step0_pending) {
         engine->transport.step0_pending = false;
-        sequencer_trigger_step(engine, 0);
+        if (engine->transport.playing)
+            sequencer_trigger_step(engine, engine->transport.current_step);
     }
 
-    int new_step = transport_advance(&engine->transport, engine->sample_rate,
-                                     num_frames, pattern_length);
+    uint32_t done = 0;
+    while (done < num_frames) {
+        if (engine->midi_out_enabled) {
+            if (engine->midi_was_playing && !engine->transport.playing)
+                sq_midi_out_flush(engine, done);
+            engine->midi_was_playing = engine->transport.playing;
+        }
 
-    /*
-     * Step 1b: Handle song/perform mode pattern transitions.
-     */
-    if (engine->transport.pattern_completed) {
-        engine->transport.pattern_completed = false;
+        uint32_t seg = num_frames - done;
+        if (engine->transport.playing) {
+            uint32_t to_step = transport_frames_to_next_step(&engine->transport,
+                                                             engine->sample_rate);
+            if (to_step < seg) seg = to_step;
+        }
+        for (int i = 0; i < SQ_MAX_ACTIVE_NOTES; i++) {
+            uint32_t r = engine->active_notes[i].remaining;
+            if (r > 0 && r < seg) seg = r;
+        }
+        for (int ri = 0; ri < SQ_MAX_RETRIGGERS; ri++) {
+            uint32_t r = engine->retriggers[ri].remaining;
+            if (engine->retriggers[ri].count > 0 && r > 0 && r < seg) seg = r;
+        }
 
-        if (engine->transport.mode == MODE_SONG) {
-            /* Song mode: advance through arrangement sections */
-            sq_arrangement_t *arr = &engine->arrangement;
-            if (arr->num_sections > 0) {
-                int sec = engine->transport.current_section;
-                if (sec >= 0 && (uint32_t)sec < arr->num_sections) {
-                    engine->transport.section_repeat++;
-                    int repeats = arr->sections[sec].repeat_count;
-                    if (repeats < 1) repeats = 1;
+        /*
+         * Step 1: Render all active voices through the mixer.
+         * mixer_process() clears the buffer, renders sampler voices,
+         * and applies master volume.
+         */
+        mixer_process(engine, output + (size_t)done * 2, seg);
+        if (engine->midi_out_enabled)
+            sq_midi_out_advance(engine, done, seg);
+        done += seg;
+        engine->midi_frame = done;
 
-                    if (engine->transport.section_repeat >= repeats) {
-                        /* Move to next section */
-                        engine->transport.section_repeat = 0;
-                        engine->transport.current_section++;
+        /*
+         * Step 2: Process active note timers for sequencer note-off.
+         * Decrement remaining samples; release voice when expired.
+         */
+        for (int i = 0; i < SQ_MAX_ACTIVE_NOTES; i++) {
+            sq_active_note_t *an = &engine->active_notes[i];
+            if (an->remaining == 0) continue;
 
-                        if ((uint32_t)engine->transport.current_section >= arr->num_sections) {
-                            /* End of arrangement — stop */
-                            engine->transport.playing = false;
-                            engine->transport.current_section = 0;
-                        } else {
-                            /* Switch to next section's pattern */
-                            int next_pat = arr->sections[engine->transport.current_section].pattern_index;
-                            if (next_pat >= 0 && (uint32_t)next_pat < engine->num_patterns) {
-                                engine->transport.current_pattern = next_pat;
-                                engine->transport.current_beat = 0.0;
-                                engine->transport.current_step = 0;
-                            }
+            if (an->remaining <= seg) {
+                /* Note expired — release the voice */
+                an->remaining = 0;
+                int vi = an->voice_index;
+                if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
+                    engine->synth_voices[vi].active) {
+                    int pi = engine->synth_voices[vi].preset_index;
+                    if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
+                        envelope_release(&engine->synth_voices[vi].amp_env,
+                                         &engine->synth_presets[pi].amp_env,
+                                         engine->sample_rate);
+                    }
+                }
+                an->voice_index = -1;
+            } else {
+                an->remaining -= seg;
+            }
+        }
+
+        /*
+         * Step 2b: Process retrigger queue (note repeat / ratcheting).
+         * Each retrigger fires a new voice at regular intervals within a step.
+         */
+        {
+            int pat_idx = engine->transport.current_pattern;
+            sq_pattern_t *pat = (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns)
+                                ? &engine->patterns[pat_idx] : NULL;
+            for (int ri = 0; ri < SQ_MAX_RETRIGGERS; ri++) {
+                sq_retrigger_t *rt = &engine->retriggers[ri];
+                if (rt->count == 0) continue;
+
+                if (rt->remaining <= seg) {
+                    /* Fire retrigger */
+                    rt->velocity *= rt->vel_decay;
+                    if (pat && rt->track < pat->num_tracks) {
+                        sq_track_t *trk = &pat->tracks[rt->track];
+                        if (trk->type == TRACK_SAMPLER && trk->sample_index >= 0) {
+                            sampler_trigger(engine, trk->sample_index,
+                                            rt->velocity, rt->pitch_offset,
+                                            trk->volume, trk->pan, (int)rt->track);
+                            sq_midi_out_note(engine, rt->track, rt->note,
+                                             rt->pitch_offset, rt->velocity,
+                                             rt->note_len);
+                        } else if (trk->type == TRACK_SYNTH && trk->synth_preset >= 0) {
+                            synth_trigger(engine, trk->synth_preset,
+                                          rt->velocity, rt->pitch_offset,
+                                          trk->volume, trk->pan, rt->note,
+                                          (int)rt->track);
+                            sq_midi_out_note(engine, rt->track, rt->note,
+                                             rt->pitch_offset, rt->velocity,
+                                             rt->note_len);
                         }
                     }
+                    rt->count--;
+                    rt->remaining = rt->interval;
+                } else {
+                    rt->remaining -= seg;
                 }
-            }
-        } else if (engine->transport.mode == MODE_PERFORM) {
-            /* Perform mode: switch to queued section at pattern boundary */
-            if (engine->transport.queued_section >= 0) {
-                sq_arrangement_t *arr = &engine->arrangement;
-                int queued = engine->transport.queued_section;
-                if ((uint32_t)queued < arr->num_sections) {
-                    engine->transport.current_section = queued;
-                    int next_pat = arr->sections[queued].pattern_index;
-                    if (next_pat >= 0 && (uint32_t)next_pat < engine->num_patterns) {
-                        engine->transport.current_pattern = next_pat;
-                        engine->transport.current_beat = 0.0;
-                        engine->transport.current_step = 0;
-                    }
-                }
-                engine->transport.queued_section = -1;
             }
         }
-        /* MODE_PATTERN: just loops — no action needed */
-    }
 
-    /*
-     * Step 2: If we crossed into a new step, trigger voices.
-     */
-    if (new_step >= 0) {
-        sequencer_trigger_step(engine, new_step);
-    }
-
-    /*
-     * Step 3: Render all active voices through the mixer.
-     * mixer_process() clears the buffer, renders sampler voices,
-     * and applies master volume.
-     */
-    mixer_process(engine, output, num_frames);
-
-    /*
-     * Step 3b: Process active note timers for sequencer note-off.
-     * Decrement remaining samples; release voice when expired.
-     */
-    for (int i = 0; i < SQ_MAX_ACTIVE_NOTES; i++) {
-        sq_active_note_t *an = &engine->active_notes[i];
-        if (an->remaining == 0) continue;
-
-        if (an->remaining <= num_frames) {
-            /* Note expired — release the voice */
-            an->remaining = 0;
-            int vi = an->voice_index;
-            if (vi >= 0 && vi < SQ_MAX_SYNTH_VOICES &&
-                engine->synth_voices[vi].active) {
-                int pi = engine->synth_voices[vi].preset_index;
-                if (pi >= 0 && (uint32_t)pi < engine->num_synth_presets) {
-                    envelope_release(&engine->synth_voices[vi].amp_env,
-                                     &engine->synth_presets[pi].amp_env,
-                                     engine->sample_rate);
-                }
-            }
-            an->voice_index = -1;
-        } else {
-            an->remaining -= num_frames;
+        /*
+         * Step 3: Advance the transport. If this segment ended on a step
+         * boundary, handle pattern changes and trigger the new step.
+         */
+        int new_step = transport_advance(&engine->transport, engine->sample_rate,
+                                         seg, pattern_length_of(engine,
+                                             engine->transport.current_pattern));
+        if (engine->transport.pattern_completed) {
+            engine->transport.pattern_completed = false;
+            handle_pattern_completed(engine);
         }
+        if (new_step >= 0 && engine->transport.playing)
+            sequencer_trigger_step(engine, new_step);
     }
 
-    /*
-     * Step 3c: Process retrigger queue (note repeat / ratcheting).
-     * Each retrigger fires a new voice at regular intervals within a step.
-     */
-    {
-        int pat_idx = engine->transport.current_pattern;
-        sq_pattern_t *pat = (pat_idx >= 0 && (uint32_t)pat_idx < engine->num_patterns)
-                            ? &engine->patterns[pat_idx] : NULL;
-        for (int ri = 0; ri < SQ_MAX_RETRIGGERS; ri++) {
-            sq_retrigger_t *rt = &engine->retriggers[ri];
-            if (rt->count == 0) continue;
-
-            if (rt->remaining <= num_frames) {
-                /* Fire retrigger */
-                rt->velocity *= rt->vel_decay;
-                if (pat && rt->track < pat->num_tracks) {
-                    sq_track_t *trk = &pat->tracks[rt->track];
-                    if (trk->type == TRACK_SAMPLER && trk->sample_index >= 0) {
-                        sampler_trigger(engine, trk->sample_index,
-                                        rt->velocity, rt->pitch_offset,
-                                        trk->volume, trk->pan, (int)rt->track);
-                    } else if (trk->type == TRACK_SYNTH && trk->synth_preset >= 0) {
-                        synth_trigger(engine, trk->synth_preset,
-                                      rt->velocity, rt->pitch_offset,
-                                      trk->volume, trk->pan, rt->note,
-                                      (int)rt->track);
-                    }
-                }
-                rt->count--;
-                rt->remaining = rt->interval;
-            } else {
-                rt->remaining -= num_frames;
-            }
-        }
+    if (engine->midi_out_enabled) {
+        if (engine->midi_was_playing && !engine->transport.playing)
+            sq_midi_out_flush(engine, num_frames);
+        engine->midi_was_playing = engine->transport.playing;
+        sq_midi_out_end(engine, num_frames);
     }
 
     /*

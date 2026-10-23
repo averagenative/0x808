@@ -17,8 +17,14 @@ extern "C" {
 
 typedef struct sq_plugin_gui sq_plugin_gui_t;
 
-/* Create a new plugin GUI instance (no window yet). */
-sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine);
+/* Create a new plugin GUI instance (no window yet). host_sync is the
+ * plugin's clock setting (true = follow the host), which the GUI toggles. */
+sq_plugin_gui_t *plugin_gui_create(sq_engine_t *engine, bool *host_sync);
+
+/* Keep the GUI off the engine while the plugin rebuilds it (state load).
+ * plugin_gui_lock() waits for the frame being drawn to finish. */
+void plugin_gui_lock(sq_plugin_gui_t *gui);
+void plugin_gui_unlock(sq_plugin_gui_t *gui);
 
 /* Destroy the plugin GUI instance, stopping render thread if running. */
 void plugin_gui_destroy(sq_plugin_gui_t *gui);

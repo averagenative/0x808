@@ -111,6 +111,8 @@ int sq_export_render(sq_engine_t *engine, const sq_export_config_t *config,
     sq_transport_t saved_transport = engine->transport;
     uint32_t saved_sr = engine->sample_rate;
 
+    /* Start from silence, and play step 0 of the first bar */
+    sq_engine_stop(engine);
     engine->sample_rate = sr;
     engine->transport.playing = true;
     engine->transport.current_beat = 0.0;
@@ -118,6 +120,7 @@ int sq_export_render(sq_engine_t *engine, const sq_export_config_t *config,
     engine->transport.current_step = 0;
     engine->transport.current_section = 0;
     engine->transport.section_repeat = 0;
+    engine->transport.step0_pending = true;
 
     if (export_arrangement) {
         engine->transport.mode = MODE_SONG;
@@ -140,6 +143,9 @@ int sq_export_render(sq_engine_t *engine, const sq_export_config_t *config,
         ptr += chunk * 2;
         rendered += chunk;
     }
+
+    /* Don't let a step triggered on the last frame keep sounding */
+    sq_engine_stop(engine);
 
     /* Restore transport state */
     engine->transport = saved_transport;

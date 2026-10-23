@@ -104,7 +104,7 @@ static const clap_plugin_audio_ports_t s_clap_audio_ports = {
     .get   = CLAPExtAudioPorts_get,
 };
 
-#if CPLUG_WANT_MIDI_INPUT
+#if CPLUG_WANT_MIDI_INPUT || CPLUG_WANT_MIDI_OUTPUT
 ////////////////////////////
 // clap_plugin_note_ports //
 ////////////////////////////
@@ -112,7 +112,7 @@ static const clap_plugin_audio_ports_t s_clap_audio_ports = {
 static uint32_t CLAPExtNotePorts_count(const clap_plugin_t* plugin, bool is_input)
 {
     cplug_log("CLAPExtNotePorts_count => %u", (unsigned)is_input);
-    return 1;
+    return is_input ? CPLUG_WANT_MIDI_INPUT : CPLUG_WANT_MIDI_OUTPUT;
 }
 
 static bool
@@ -126,7 +126,9 @@ CLAPExtNotePorts_get(const clap_plugin_t* plugin, uint32_t index, bool is_input,
     // FL Studio also doesn't support the plain MIDI dialect, but presumably will in future
     info->supported_dialects = CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_CLAP;
     info->preferred_dialect  = CLAP_NOTE_DIALECT_MIDI;
-    snprintf(info->name, sizeof(info->name), "%s", "MIDI Input");
+    if (!is_input)
+        info->supported_dialects = CLAP_NOTE_DIALECT_MIDI; // we send raw MIDI
+    snprintf(info->name, sizeof(info->name), "%s", is_input ? "MIDI Input" : "MIDI Output");
     return true;
 }
 
@@ -134,7 +136,7 @@ static const clap_plugin_note_ports_t s_clap_note_ports = {
     .count = CLAPExtNotePorts_count,
     .get   = CLAPExtNotePorts_get,
 };
-#endif // CPLUG_WANT_MIDI_INPUT
+#endif // CPLUG_WANT_MIDI_INPUT || CPLUG_WANT_MIDI_OUTPUT
 
 //////////////////
 // clap_latency //
@@ -595,6 +597,22 @@ bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const Cplu
         event.value       = paramEvent->parameter.value;
         return process->out_events->try_push(process->out_events, &event.header);
     }
+#if CPLUG_WANT_MIDI_OUTPUT
+    case CPLUG_EVENT_MIDI:
+    {
+        clap_event_midi_t event;
+        memset(&event, 0, sizeof(event));
+        event.header.size     = sizeof(event);
+        event.header.time     = frameIdx;
+        event.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        event.header.type     = CLAP_EVENT_MIDI;
+        event.port_index      = 0;
+        event.data[0]         = paramEvent->midi.status;
+        event.data[1]         = paramEvent->midi.data1;
+        event.data[2]         = paramEvent->midi.data2;
+        return process->out_events->try_push(process->out_events, &event.header);
+    }
+#endif
     default:
         break;
     }
@@ -754,7 +772,8 @@ static clap_process_status CLAPPlugin_process(const struct clap_plugin* plugin, 
         if (process->transport->flags & CLAP_TRANSPORT_IS_RECORDING)
             translator.cplugContext.flags |= CPLUG_FLAG_TRANSPORT_IS_RECORDING;
 
-        if (process->transport->song_pos_beats != 0)
+        // A song position of exactly 0 is still a position (play from the start)
+        if ((process->transport->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) || process->transport->song_pos_beats != 0)
         {
             translator.cplugContext.flags |= CPLUG_FLAG_TRANSPORT_HAS_PLAYHEAD_BEATS;
             double posBeats                = (double)process->transport->song_pos_beats / (double)CLAP_BEATTIME_FACTOR;
@@ -810,7 +829,7 @@ static const void* CLAPPlugin_get_extension(const struct clap_plugin* plugin, co
         return &s_clap_tail;
     if (!strcmp(id, CLAP_EXT_AUDIO_PORTS) && (numInputs || numOutputs))
         return &s_clap_audio_ports;
-#if CPLUG_WANT_MIDI_INPUT
+#if CPLUG_WANT_MIDI_INPUT || CPLUG_WANT_MIDI_OUTPUT
     if (!strcmp(id, CLAP_EXT_NOTE_PORTS))
         return &s_clap_note_ports;
 #endif

@@ -50,6 +50,10 @@ typedef struct {
 
     /* Settings panel toggle (caller-owned) */
     bool        *show_settings;
+
+    /* Plugin clock setting: true = follow the host transport (caller-owned,
+     * NULL in the standalone app) */
+    bool        *host_sync;
 } sq_toolbar_params_t;
 
 /*

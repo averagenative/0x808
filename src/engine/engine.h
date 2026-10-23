@@ -405,9 +405,29 @@ typedef struct {
     float    vel_decay;      /* multiply velocity by this each retrigger    */
     int8_t   pitch_offset;   /* pitch offset from original step             */
     uint8_t  note;           /* MIDI note (for synth tracks)                */
+    uint32_t note_len;       /* MIDI output note length in samples          */
 } sq_retrigger_t;
 
 #define SQ_MAX_RETRIGGERS 8
+
+/* ─── MIDI output (the sequencer's notes, for plugin hosts) ──────────────── */
+
+typedef struct {
+    uint32_t frame;          /* offset into the sq_engine_process() buffer  */
+    uint8_t  status;         /* 0x90 note-on / 0x80 note-off | channel      */
+    uint8_t  data1;          /* note number                                 */
+    uint8_t  data2;          /* velocity                                    */
+} sq_midi_event_t;
+
+#define SQ_MAX_MIDI_OUT 256
+
+typedef struct {
+    uint32_t remaining;      /* samples until note-off (0 = inactive)       */
+    uint8_t  channel;        /* 0-15                                        */
+    uint8_t  note;
+} sq_midi_pending_off_t;
+
+#define SQ_MAX_MIDI_PENDING 64
 
 /* ─── Engine: the top-level state container ───────────────────────────────── */
 
@@ -464,6 +484,19 @@ typedef struct {
     /* Retrigger queue (note repeat / ratcheting) */
     sq_retrigger_t retriggers[SQ_MAX_RETRIGGERS];
 
+    /* MIDI output. Off unless the host layer sets midi_out_enabled before
+     * each sq_engine_process() call (sq_engine_init() clears it). Each call
+     * replaces midi_out[] with that buffer's events, sorted by frame, so the
+     * host drains them after every call. */
+    bool                  midi_out_enabled;
+    sq_midi_event_t       midi_out[SQ_MAX_MIDI_OUT];
+    uint32_t              midi_out_count;
+    uint32_t              midi_out_carry;   /* events after midi_out_count that
+                                               belong at frame 0 of the next call */
+    sq_midi_pending_off_t midi_pending_offs[SQ_MAX_MIDI_PENDING];
+    uint32_t              midi_frame;       /* where in the buffer triggers land */
+    bool                  midi_was_playing; /* to flush notes when play stops   */
+
     /* Streaming recorder (writes to disk in real-time) */
     sq_recorder_t  recorder;
 
@@ -516,6 +549,21 @@ void sq_engine_shutdown(sq_engine_t *engine);
  * no malloc, no printf, no file I/O, no locks.
  */
 void sq_engine_process(sq_engine_t *engine, float *output, uint32_t num_frames);
+
+/*
+ * Stop playback: release sequencer notes, silence all voices, and clear the
+ * retrigger queue. Audio thread only (CMD_STOP and host sync call it).
+ */
+void sq_engine_stop(sq_engine_t *engine);
+
+/*
+ * Start playing from a position given in beats since the start of the
+ * pattern (or of the arrangement, in song mode). Used to follow a host's
+ * transport. The step under the playhead is triggered on the next process
+ * call only if it began less than trigger_window beats ago, so starting
+ * in the middle of a step doesn't play a late hit. Audio thread only.
+ */
+void sq_engine_locate(sq_engine_t *engine, double beats, double trigger_window);
 
 /* ─── Streaming recorder API ──────────────────────────────────────────────── */
 
