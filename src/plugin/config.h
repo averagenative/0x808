@@ -8,6 +8,8 @@
 #ifndef SQ_PLUGIN_CONFIG_H
 #define SQ_PLUGIN_CONFIG_H
 
+#include "../core/version.h"  /* hosts show the app version */
+
 #define CPLUG_IS_INSTRUMENT    1
 #define CPLUG_WANT_GUI         1
 #define CPLUG_GUI_RESIZABLE    1
@@ -18,7 +20,7 @@
 #define CPLUG_COMPANY_EMAIL  ""
 #define CPLUG_PLUGIN_NAME    "0x808"
 #define CPLUG_PLUGIN_URI     "https://github.com/averagenative/0x808"
-#define CPLUG_PLUGIN_VERSION "0.9.0"
+#define CPLUG_PLUGIN_VERSION SQ_VERSION_STRING
 
 /* VST3 categories — instrument + stereo */
 #define CPLUG_VST3_CATEGORIES "Instrument|Drum|Stereo"
