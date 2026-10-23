@@ -20,6 +20,13 @@
 #include <string.h>
 #include <stdlib.h>
 
+static sample_io_builtin_fn s_builtin_find;
+
+void sample_io_set_builtin(sample_io_builtin_fn find)
+{
+    s_builtin_find = find;
+}
+
 /* ─── Helper: detect format from file extension ───────────────────────────── */
 
 typedef enum {
@@ -69,10 +76,25 @@ int sample_io_load(const char *filepath, sq_sample_t *sample)
     drwav_uint64 total_frames = 0;
     float *decoded = NULL;
 
+    /* A built-in WAV is stored under its canonical path, not the one asked for */
+    const void *builtin = NULL;
+    size_t builtin_size = 0;
+    const char *canonical = NULL;
+    if (s_builtin_find)
+        builtin = s_builtin_find(filepath, &builtin_size, &canonical);
+    if (builtin) {
+        fmt = FORMAT_WAV;   /* built-in files are all WAV */
+        if (canonical) filepath = canonical;
+    }
+
     switch (fmt) {
     case FORMAT_WAV: {
-        decoded = drwav_open_file_and_read_pcm_frames_f32(
-            filepath, &channels, &sample_rate, &total_frames, NULL);
+        if (builtin)
+            decoded = drwav_open_memory_and_read_pcm_frames_f32(
+                builtin, builtin_size, &channels, &sample_rate, &total_frames, NULL);
+        else
+            decoded = drwav_open_file_and_read_pcm_frames_f32(
+                filepath, &channels, &sample_rate, &total_frames, NULL);
         break;
     }
     case FORMAT_MP3: {

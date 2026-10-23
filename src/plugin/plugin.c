@@ -26,10 +26,8 @@
 #include "formats/project.h"
 #include "cJSON.h"
 #include "formats/sample_io.h"
-#include "plugin/embedded_samples.h"
-
-/* dr_wav is already implemented in sample_io.c — just need declarations */
-#include "dr_wav.h"
+#include "engine/kits.h"
+#include "plugin/builtin_samples.h"
 
 #ifndef SQ_PLUGIN_NO_GUI
 #include "plugin/plugin_gui.h"
@@ -202,18 +200,39 @@ static void sleep_ms(int ms)
 
 /*
  * Hosts load state on their main thread while audio keeps running (REAPER
- * does it on every undo). Loading re-initializes the engine and frees its
- * samples and effect buffers, so first stop the audio thread from using it
- * (cplug_process outputs silence while engine_paused is set) and hold off
- * the GUI. The two flags work as a handshake: the loader sets engine_paused
- * and then waits out in_process; the audio thread sets in_process and then
- * checks engine_paused. Main thread only.
+ * does it on every undo), and kit changes swap samples from the GUI thread.
+ * Both free samples and buffers the audio thread may be using, so first
+ * keep the audio thread off the engine: cplug_process outputs silence while
+ * engine_paused is non-zero. The flags work as a handshake: the pausing
+ * thread raises engine_paused and then waits out in_process; the audio
+ * thread sets in_process and then checks engine_paused. engine_paused is a
+ * count because a kit load can happen inside a state load.
  */
-static void engine_pause(SqPlugin *p)
+static void audio_pause(SqPlugin *p)
 {
-    atomic_store(&p->engine_paused, 1);
+    atomic_fetch_add(&p->engine_paused, 1);
     while (atomic_load(&p->in_process))
         sleep_ms(1);
+}
+
+static void audio_resume(SqPlugin *p)
+{
+    atomic_fetch_sub(&p->engine_paused, 1);
+}
+
+/* sq_engine_t.audio_guard: kit loads pause the audio thread */
+static void engine_audio_guard(void *ctx, bool begin)
+{
+    if (begin)
+        audio_pause((SqPlugin *)ctx);
+    else
+        audio_resume((SqPlugin *)ctx);
+}
+
+/* Rebuilding the whole engine also holds off the GUI. Main thread only. */
+static void engine_pause(SqPlugin *p)
+{
+    audio_pause(p);
 #ifndef SQ_PLUGIN_NO_GUI
     plugin_gui_lock(p->gui);
 #endif
@@ -224,7 +243,7 @@ static void engine_resume(SqPlugin *p)
 #ifndef SQ_PLUGIN_NO_GUI
     plugin_gui_unlock(p->gui);
 #endif
-    atomic_store(&p->engine_paused, 0);
+    audio_resume(p);
 }
 
 /* ─── Helper: find parameter def index by ID ─────────────────────────────── */
@@ -330,29 +349,59 @@ static double read_param_from_engine(const SqPlugin *p, uint32_t id)
     }
 }
 
-/* ─── Embedded sample loading ─────────────────────────────────────────────── */
+/* ─── Built-in samples ────────────────────────────────────────────────────── */
 
-static void load_embedded_samples(sq_engine_t *engine)
+/*
+ * Every kit's samples are built into the plugin (builtin_samples.c is
+ * generated from the kit table), so kits load without sample files on disk.
+ * sample_io_load() asks here first: a path with a "samples/<kit>/<file>"
+ * tail is served from memory, whatever directory precedes it.
+ */
+static const sq_builtin_file_t *builtin_by_path(const char *rel)
 {
-    for (int i = 0; i < SQ_NUM_EMBEDDED_SAMPLES && engine->num_samples < SQ_MAX_SAMPLES; i++) {
-        unsigned int channels = 0, sample_rate = 0;
-        drwav_uint64 total_frames = 0;
-        float *decoded = drwav_open_memory_and_read_pcm_frames_f32(
-            SQ_EMBEDDED_SAMPLES[i].data,
-            SQ_EMBEDDED_SAMPLES[i].size,
-            &channels, &sample_rate, &total_frames, NULL);
-        if (!decoded) continue;
+    for (int i = 0; i < SQ_NUM_BUILTIN_SAMPLES; i++)
+        if (strcmp(SQ_BUILTIN_SAMPLES[i].path, rel) == 0)
+            return &SQ_BUILTIN_SAMPLES[i];
+    return NULL;
+}
 
-        int idx = (int)engine->num_samples;
-        engine->samples[idx].data         = decoded;
-        engine->samples[idx].num_frames   = (uint32_t)total_frames;
-        engine->samples[idx].num_channels = channels;
-        engine->samples[idx].sample_rate  = sample_rate;
-        strncpy(engine->samples[idx].name, SQ_EMBEDDED_SAMPLES[i].name,
-                SQ_SAMPLE_NAME_LEN - 1);
-        engine->samples[idx].name[SQ_SAMPLE_NAME_LEN - 1] = '\0';
-        engine->num_samples++;
+/* v1.5.0 saved the 808 kit under these names (kit slot order) */
+static const char *const V150_808_NAMES[8] = {
+    "808 Kick", "808 Snare", "808 HiHat", "808 Clap",
+    "808 OpenHH", "808 Cowbell", "808 Rimshot", "808 HiTom",
+};
+
+static const void *find_builtin_sample(const char *path, size_t *size,
+                                       const char **canonical_path)
+{
+    char norm[1024];
+    snprintf(norm, sizeof(norm), "%s", path);
+    for (char *c = norm; *c; c++)
+        if (*c == '\\') *c = '/';
+
+    const sq_builtin_file_t *f = NULL;
+    const char *rel = NULL;
+    for (const char *at = strstr(norm, "samples/"); at; at = strstr(at + 1, "samples/"))
+        if (at == norm || at[-1] == '/') rel = at;
+    if (rel) {
+        f = builtin_by_path(rel);
+    } else if (!strchr(norm, '/')) {
+        /* A bare name, from a v1.5.0 project */
+        for (int i = 0; i < 8 && !f; i++)
+            if (strcmp(norm, V150_808_NAMES[i]) == 0)
+                f = builtin_by_path(sq_kits[0].paths[i]);
     }
+    if (!f) return NULL;
+    *size = f->size;
+    *canonical_path = f->path;
+    return f->data;
+}
+
+/* The 808 kit, from the built-in samples */
+static void load_builtin_808(sq_engine_t *engine)
+{
+    if (sq_kit_load(engine, 0, "") != 0)
+        PLOG_ERROR("Built-in 808 kit failed to load");
 }
 
 /* ─── Demo beat pattern (mirrors standalone setup — Trap 808) ─────────────── */
@@ -496,11 +545,16 @@ void *cplug_createPlugin(CplugHostContext *ctx)
     p->sample_rate = 44100.0;
     p->host_sync = true;
 
+    /* Kits load from the samples built into the plugin */
+    sample_io_set_builtin(find_builtin_sample);
+
     /* Initialize engine with default sample rate (host will call setSampleRate before processing) */
     sq_engine_init(&p->engine, 44100);
+    p->engine.audio_guard = engine_audio_guard;
+    p->engine.audio_guard_ctx = p;
 
-    /* Load embedded 808 samples and set up demo pattern */
-    load_embedded_samples(&p->engine);
+    /* Load the 808 kit and set up demo pattern */
+    load_builtin_808(&p->engine);
     setup_plugin_demo_pattern(&p->engine);
 
     return p;
@@ -544,8 +598,8 @@ void cplug_getOutputBusName(void *ptr, uint32_t idx, char *buf, size_t buflen)
 uint32_t cplug_getLatencyInSamples(void *ptr) { (void)ptr; return 0; }
 uint32_t cplug_getTailInSamples(void *ptr)    { (void)ptr; return 0; }
 
-/* Rebuild the engine from a project JSON tree at the given sample rate,
- * with the plugin's built-in samples. Call with the engine paused. */
+/* Rebuild the engine from a project JSON tree at the given sample rate.
+ * Call with the engine paused. */
 static int apply_project(SqPlugin *p, cJSON *project, uint32_t sample_rate)
 {
     cJSON *sr = cJSON_CreateNumber((double)sample_rate);
@@ -553,7 +607,7 @@ static int apply_project(SqPlugin *p, cJSON *project, uint32_t sample_rate)
         cJSON_ReplaceItemInObject(project, "sample_rate", sr);
     else
         cJSON_AddItemToObject(project, "sample_rate", sr);
-    return project_from_json(&p->engine, project, load_embedded_samples);
+    return project_from_json(&p->engine, project);
 }
 
 static void set_current_pattern(SqPlugin *p, int pattern)
@@ -577,7 +631,9 @@ void cplug_setSampleRateAndBlockSize(void *ptr, double sampleRate, uint32_t maxB
     } else {
         sq_engine_shutdown(&p->engine);
         sq_engine_init(&p->engine, (uint32_t)sampleRate);
-        load_embedded_samples(&p->engine);
+        p->engine.audio_guard = engine_audio_guard;
+        p->engine.audio_guard_ctx = p;
+        load_builtin_808(&p->engine);
         setup_plugin_demo_pattern(&p->engine);
     }
     cJSON_Delete(project);

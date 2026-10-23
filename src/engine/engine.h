@@ -522,6 +522,13 @@ typedef struct {
 
     /* Base directory (where exe lives) for resolving output paths */
     char base_dir[512];
+
+    /* Host-layer hook, NULL in the standalone app: called with begin=true
+     * before the engine frees samples the audio thread may be playing (kit
+     * loads) and begin=false after, so the plugin can pause its audio
+     * thread. Like base_dir, it survives project loads. */
+    void (*audio_guard)(void *ctx, bool begin);
+    void *audio_guard_ctx;
 } sq_engine_t;
 
 /* ─── Engine API ──────────────────────────────────────────────────────────── */

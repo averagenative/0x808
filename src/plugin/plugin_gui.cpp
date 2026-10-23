@@ -423,6 +423,10 @@ static void plugin_gui_draw_ui(sq_plugin_gui_t *gui)
 {
     sq_engine_t *engine = gui->engine;
 
+    /* Shared components (RND) find the app state here; it's process-wide,
+     * so each instance sets it for its own frame */
+    gui_set_app(&gui->app);
+
     ImGui::NewFrame();
 
     float toolbar_h = 70.0f; /* 2 rows: transport + panels/patterns */

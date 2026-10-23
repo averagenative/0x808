@@ -335,21 +335,11 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
     const sq_kit_def_t *kit = &sq_kits[kit_index];
     LOG_INFO("Loading kit: %s (%d slots)", kit->name, kit->num_slots);
 
-    /* Stop all active sampler voices to prevent dangling pointers */
-    for (int v = 0; v < SQ_MAX_VOICES; v++) {
-        engine->voices[v].active = false;
-    }
-
-    /* Free existing samples that belong to the kit slots (indices 0..num_slots-1).
-     * We only replace the first kit->num_slots sample slots; any additional
-     * user-loaded samples above that are preserved. */
+    /* Decode the new kit before touching the engine. If none of it loads,
+     * keep the current kit rather than leave the drum tracks silent. */
     int slots_to_load = kit->num_slots;
-    for (int i = 0; i < slots_to_load && (uint32_t)i < engine->num_samples; i++) {
-        sample_io_free(&engine->samples[i]);
-        memset(&engine->samples[i], 0, sizeof(sq_sample_t));
-    }
-
-    /* Load new kit samples into the first slots */
+    sq_sample_t fresh[SQ_KIT_SLOTS];
+    memset(fresh, 0, sizeof(fresh));
     int loaded = 0;
     for (int i = 0; i < slots_to_load; i++) {
         char full_path[1024];
@@ -360,23 +350,23 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
             char resolved[1024];
             snprintf(full_path, sizeof(full_path), "%s%s", base_dir, kit->paths[i]);
             if (resolve_path(full_path, resolved, sizeof(resolved)) &&
-                sample_io_load(resolved, &engine->samples[i]) == 0) {
+                sample_io_load(resolved, &fresh[i]) == 0) {
                 loaded++;
-                LOG_INFO("  [%d] %s", i, engine->samples[i].name);
+                LOG_INFO("  [%d] %s", i, fresh[i].name);
                 continue;
             }
             /* Fall back to unresolved path */
-            if (sample_io_load(full_path, &engine->samples[i]) == 0) {
+            if (sample_io_load(full_path, &fresh[i]) == 0) {
                 loaded++;
-                LOG_INFO("  [%d] %s", i, engine->samples[i].name);
+                LOG_INFO("  [%d] %s", i, fresh[i].name);
                 continue;
             }
         }
 
-        /* Try relative to CWD */
-        if (sample_io_load(kit->paths[i], &engine->samples[i]) == 0) {
+        /* Try relative to CWD (or built in, for the plugin) */
+        if (sample_io_load(kit->paths[i], &fresh[i]) == 0) {
             loaded++;
-            LOG_INFO("  [%d] %s", i, engine->samples[i].name);
+            LOG_INFO("  [%d] %s", i, fresh[i].name);
             continue;
         }
 
@@ -387,15 +377,35 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
                      base_dir, kit->paths[i]);
             char resolved[1024];
             if (resolve_path(full_path, resolved, sizeof(resolved)) &&
-                sample_io_load(resolved, &engine->samples[i]) == 0) {
+                sample_io_load(resolved, &fresh[i]) == 0) {
                 loaded++;
-                LOG_INFO("  [%d] %s (bundle)", i, engine->samples[i].name);
+                LOG_INFO("  [%d] %s (bundle)", i, fresh[i].name);
                 continue;
             }
         }
 #endif
 
         LOG_WARN("  [%d] FAILED: %s", i, kit->paths[i]);
+    }
+    if (loaded == 0) {
+        LOG_ERROR("Kit '%s' not found; keeping the current kit", kit->name);
+        return -1;
+    }
+
+    /* Swap the new samples in. The audio thread may be playing the old
+     * ones, so the host layer gets to keep it off the engine meanwhile. */
+    sq_sample_t old[SQ_KIT_SLOTS];
+    memset(old, 0, sizeof(old));
+    if (engine->audio_guard) engine->audio_guard(engine->audio_guard_ctx, true);
+
+    /* Stop all active sampler voices to prevent dangling pointers */
+    for (int v = 0; v < SQ_MAX_VOICES; v++) {
+        engine->voices[v].active = false;
+    }
+    for (int i = 0; i < slots_to_load; i++) {
+        if ((uint32_t)i < engine->num_samples)
+            old[i] = engine->samples[i];
+        engine->samples[i] = fresh[i];
     }
 
     /* Ensure num_samples covers the kit slots */
@@ -419,6 +429,11 @@ int sq_kit_load(sq_engine_t *engine, int kit_index, const char *base_dir)
     }
 
     sq_current_kit = kit_index;
+    if (engine->audio_guard) engine->audio_guard(engine->audio_guard_ctx, false);
+
+    for (int i = 0; i < slots_to_load; i++)
+        sample_io_free(&old[i]);
+
     LOG_INFO("Kit '%s' loaded: %d/%d samples", kit->name, loaded, slots_to_load);
     return 0;
 }

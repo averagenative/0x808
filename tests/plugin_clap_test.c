@@ -15,6 +15,8 @@
  * 8. Pre-1.5 state (parameters only) still loads
  * 9. Loading state while another thread processes audio is safe
  * 10. Two instances play at once, each with its own pattern
+ * 11. Kits come from the samples built into the plugin: a project using the
+ *     909 kit plays its drums, and so does a v1.5.0 project
  *
  * usage: plugin_clap_test [path/to/0x808.clap]
  */
@@ -482,6 +484,59 @@ int main(int argc, char **argv)
         FAIL("instances should be independent: %d hats from the edited one, %d from the demo (want 0 and 16)",
              hats_a, hats_b);
     printf("  PASS: two instances play at once with their own patterns\n");
+
+    /* 11. Drum-only audio (synths muted) from the 909 kit, then from the
+     * names v1.5.0 saved the built-in 808 kit under */
+    static const char *const kit909[8] = {
+        "samples/909/kick.wav", "samples/909/snare.wav", "samples/909/hihat-closed-1.wav",
+        "samples/909/clap1.wav", "samples/909/hihat-open-1.wav", "samples/909/ride.wav",
+        "samples/909/rim.wav", "samples/909/tom-h.wav",
+    };
+    static const char *const v150[8] = {
+        "808 Kick", "808 Snare", "808 HiHat", "808 Clap",
+        "808 OpenHH", "808 Cowbell", "808 Rimshot", "808 HiTom",
+    };
+    const char *const *sets[2] = { kit909, v150 };
+    const char *want_first[2] = { "samples/909/kick.wav", "samples/808/01.BD.808.wav" };
+    for (int k = 0; k < 2; k++) {
+        cJSON *st11 = save_state();
+        cJSON *proj = cJSON_GetObjectItem(st11, "project");
+        cJSON *trks = cJSON_GetObjectItem(cJSON_GetArrayItem(
+            cJSON_GetObjectItem(proj, "patterns"), 0), "tracks");
+        cJSON *trk;
+        cJSON_ArrayForEach(trk, trks) {
+            cJSON *type = cJSON_GetObjectItem(trk, "type");
+            if (cJSON_IsNumber(type) && type->valueint != 0) {   /* not a sampler */
+                cJSON_DeleteItemFromObject(trk, "mute");
+                cJSON_AddBoolToObject(trk, "mute", 1);
+            }
+        }
+        cJSON_ReplaceItemInObject(proj, "sample_paths",
+                                  cJSON_CreateStringArray(sets[k], 8));
+        load_state_json(st11);
+        cJSON_Delete(st11);
+
+        wait_quiet();
+        float drum_peak = 0.0f;
+        beats = 0.0;
+        for (int blk = 0; blk < 4 * BEAT / BLOCK; blk++) {
+            float pk = process_block(beats);
+            if (pk > drum_peak) drum_peak = pk;
+            beats += (double)BLOCK / BEAT;
+        }
+        process_block(-1.0);
+        if (drum_peak < 0.01f)
+            FAIL("%s: the drums are silent (peak %.4f)", k ? "v1.5.0 names" : "909 kit", drum_peak);
+
+        cJSON *again11 = save_state();
+        cJSON *paths = cJSON_GetObjectItem(cJSON_GetObjectItem(again11, "project"), "sample_paths");
+        const char *first = cJSON_GetStringValue(cJSON_GetArrayItem(paths, 0));
+        if (!first || strcmp(first, want_first[k]) != 0)
+            FAIL("%s: saved sample path is \"%s\", want \"%s\"",
+                 k ? "v1.5.0 names" : "909 kit", first ? first : "(none)", want_first[k]);
+        cJSON_Delete(again11);
+    }
+    printf("  PASS: 909 kit and v1.5.0 projects play their drums from built-in samples\n");
 
     g_plugin->stop_processing(g_plugin);
     g_plugin->deactivate(g_plugin);

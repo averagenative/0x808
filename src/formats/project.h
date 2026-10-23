@@ -38,13 +38,10 @@ struct cJSON;
 struct cJSON *project_to_json(const sq_engine_t *engine);
 
 /*
- * Restore engine state from a project JSON tree. The engine is re-initialized
- * at the tree's "sample_rate". If load_samples is NULL, samples load from the
- * saved paths; otherwise the engine skips the paths and calls load_samples
- * to load them. Returns 0 on success, -1 on failure.
+ * Restore engine state from a project JSON tree, re-initializing the engine
+ * at the tree's "sample_rate". Returns 0 on success, -1 on failure.
  */
-int project_from_json(sq_engine_t *engine, const struct cJSON *root,
-                      void (*load_samples)(sq_engine_t *engine));
+int project_from_json(sq_engine_t *engine, const struct cJSON *root);
 
 #ifdef __cplusplus
 }

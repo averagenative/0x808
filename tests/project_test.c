@@ -8,12 +8,22 @@
 #include <math.h>
 #include "engine/engine.h"
 #include "formats/project.h"
+#include "engine/kits.h"
+#include <unistd.h>
 
 #ifdef _WIN32
 #define TEST_FILE "test_project.sqproj"
 #else
 #define TEST_FILE "/tmp/test_project.sqproj"
 #endif
+
+/* Counts sq_engine_t.audio_guard calls */
+static int s_guard_begins, s_guard_ends;
+static void count_guard(void *ctx, bool begin)
+{
+    (void)ctx;
+    if (begin) s_guard_begins++; else s_guard_ends++;
+}
 
 static void setup_engine(sq_engine_t *e) {
     sq_engine_init(e, 44100);
@@ -294,6 +304,43 @@ int main(void) {
                poisoned.num_samples);
         sq_engine_shutdown(&poisoned);
         remove(poisoned_path);
+    }
+
+    /* A kit that can't be found keeps the current kit (it used to free the
+     * current samples first and leave the drum tracks silent) */
+    {
+        sq_engine_t *kit_eng = calloc(1, sizeof(sq_engine_t));
+        sq_engine_init(kit_eng, 44100);
+        kit_eng->audio_guard = count_guard;
+        if (sq_kit_load(kit_eng, 0, "./") != 0 || kit_eng->num_samples < 8) {
+            fprintf(stderr, "FAIL: 808 kit should load from ./samples\n");
+            return 1;
+        }
+        if (s_guard_begins != 1 || s_guard_ends != 1) {
+            fprintf(stderr, "FAIL: kit swap should call the audio guard once each way (%d/%d)\n",
+                    s_guard_begins, s_guard_ends);
+            return 1;
+        }
+        float *kick = kit_eng->samples[0].data;
+
+        char cwd[1024];
+        if (!getcwd(cwd, sizeof(cwd)) || chdir("/") != 0) {
+            fprintf(stderr, "FAIL: chdir\n");
+            return 1;
+        }
+        int rc = sq_kit_load(kit_eng, 1, "/nonexistent/");
+        if (chdir(cwd) != 0) return 1;
+        if (rc == 0 || kit_eng->samples[0].data != kick || sq_current_kit != 0) {
+            fprintf(stderr, "FAIL: a missing kit should leave the current kit in place\n");
+            return 1;
+        }
+        if (s_guard_begins != 1) {
+            fprintf(stderr, "FAIL: a failed kit load shouldn't pause the audio\n");
+            return 1;
+        }
+        printf("PASS: a missing kit keeps the current samples\n");
+        sq_engine_shutdown(kit_eng);
+        free(kit_eng);
     }
 
     printf("\n=== ALL PROJECT SAVE/LOAD TESTS PASSED ===\n");

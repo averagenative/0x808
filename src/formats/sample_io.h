@@ -25,6 +25,17 @@ extern "C" {
 int sample_io_load(const char *filepath, sq_sample_t *sample);
 
 /*
+ * Built-in files: a host layer (the plugin, which carries its kits inside
+ * its binary) can serve WAV files that sample_io_load() finds by path before
+ * it looks on disk. find returns the file's bytes and size and sets
+ * *canonical_path to the path to store in the sample, or returns NULL to
+ * load from disk. Process-wide; NULL turns it off.
+ */
+typedef const void *(*sample_io_builtin_fn)(const char *path, size_t *size,
+                                           const char **canonical_path);
+void sample_io_set_builtin(sample_io_builtin_fn find);
+
+/*
  * Free the audio data inside a sample (the float buffer).
  * Does not free the sq_sample_t struct itself.
  */

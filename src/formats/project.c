@@ -715,19 +715,20 @@ int project_load(sq_engine_t *engine, const char *filepath)
     }
     free(json_str);
 
-    int rc = project_from_json(engine, root, NULL);
+    int rc = project_from_json(engine, root);
     cJSON_Delete(root);
     if (rc == 0)
         LOG_INFO("Project loaded: %s", filepath);
     return rc;
 }
 
-int project_from_json(sq_engine_t *engine, const cJSON *root,
-                      void (*load_samples)(sq_engine_t *engine))
+int project_from_json(sq_engine_t *engine, const cJSON *root)
 {
-    /* Preserve base_dir across re-init (sq_engine_init memsets to zero) */
+    /* Preserve host-layer fields across re-init (sq_engine_init memsets to zero) */
     char saved_base_dir[512];
     memcpy(saved_base_dir, engine->base_dir, sizeof(saved_base_dir));
+    void (*saved_guard)(void *, bool) = engine->audio_guard;
+    void *saved_guard_ctx = engine->audio_guard_ctx;
 
     /* Shutdown existing engine state */
     sq_engine_shutdown(engine);
@@ -739,6 +740,8 @@ int project_from_json(sq_engine_t *engine, const cJSON *root,
 
     /* Restore base_dir so kit reload and reset-to-defaults can find samples */
     memcpy(engine->base_dir, saved_base_dir, sizeof(engine->base_dir));
+    engine->audio_guard = saved_guard;
+    engine->audio_guard_ctx = saved_guard_ctx;
 
     /* BPM and volume */
     cJSON *bpm = cJSON_GetObjectItem(root, "bpm");
@@ -792,11 +795,8 @@ int project_from_json(sq_engine_t *engine, const cJSON *root,
 
     /* Load samples (by path — try to find them).
      * Skip if samples are already loaded with matching names (e.g., autosave
-     * restoring after demo pattern already loaded the same kit). A caller
-     * with its own samples (the plugin's built-in kit) loads them instead. */
-    cJSON *samples = load_samples ? NULL : cJSON_GetObjectItem(root, "sample_paths");
-    if (load_samples)
-        load_samples(engine);
+     * restoring after demo pattern already loaded the same kit). */
+    cJSON *samples = cJSON_GetObjectItem(root, "sample_paths");
     if (samples && cJSON_IsArray(samples)) {
         int n = cJSON_GetArraySize(samples);
 

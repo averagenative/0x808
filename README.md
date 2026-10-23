@@ -74,7 +74,7 @@ The Windows installer handles this automatically.
 
 ## Using the Plugin in a DAW
 
-Your patterns, arrangement, sounds, and settings are saved with the host's project, and each 0x808 instance keeps its own. The plugin plays its built-in 808 kit.
+Your patterns, arrangement, sounds, and settings are saved with the host's project, and each 0x808 instance keeps its own. Every kit is built into the plugin, so kits work without sample files next to it.
 
 The **HOST**/**INT** button next to **PLAY** sets which clock drives the sequencer.
 
